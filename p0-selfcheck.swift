@@ -88,6 +88,23 @@ struct P0SelfCheck {
         let specialResolved = BandAssignment.resolveTemplate(for: dateX, context: ctx, calendar: cal)
         assert(specialResolved?.name == "特別日", "Date-specific assignment should take priority over weekday default")
 
+        // --- タイブレーク: 重複行は id（uuidString）昇順の先頭を採用（weekday / date 両経路）---
+        let tieA = BandTemplate(name: "tieA")
+        let tieB = BandTemplate(name: "tieB")
+        ctx.insert(tieA)
+        ctx.insert(tieB)
+        // 挿入順は id と逆にして、挿入順でなく sort が効いていることを確かめる
+        ctx.insert(BandAssignment(id: UUID(uuidString: "FFFFFFFF-0000-0000-0000-000000000001")!, weekday: 7, template: tieB))
+        ctx.insert(BandAssignment(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, weekday: 7, template: tieA))
+        let saturday = cal.date(from: DateComponents(year: 2026, month: 7, day: 4))!  // 2026-07-04 土曜
+        assert(BandAssignment.resolveTemplate(for: saturday, context: ctx, calendar: cal)?.name == "tieA",
+               "Duplicate weekday rows should resolve to ascending-id winner")
+        let tieDate = cal.startOfDay(for: cal.date(from: DateComponents(year: 2026, month: 7, day: 8))!)
+        ctx.insert(BandAssignment(id: UUID(uuidString: "FFFFFFFF-0000-0000-0000-000000000002")!, date: tieDate, template: tieB))
+        ctx.insert(BandAssignment(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, date: tieDate, template: tieA))
+        assert(BandAssignment.resolveTemplate(for: tieDate, context: ctx, calendar: cal)?.name == "tieA",
+               "Duplicate date rows should resolve to ascending-id winner")
+
         // --- inverse 検証（テンプレ削除）: テンプレを削除すると割当の template が nil ---
         ctx.delete(specialTemplate)
         try ctx.save()
