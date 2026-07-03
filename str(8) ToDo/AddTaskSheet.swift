@@ -320,7 +320,7 @@ struct AddTaskSheet: View {
             isAllDay: false,
             place: selectedPlace,
             phase: selectedPhase,
-            status: .incomplete,
+            status: .active,
             rrule: rruleStr,
             notes: selectedNotes,
             isImportant: isImportant,

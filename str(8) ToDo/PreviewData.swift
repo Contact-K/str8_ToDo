@@ -12,7 +12,8 @@ enum PreviewData {
     /// インメモリの ModelContainer。サンプルタスクを数件投入済み。
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
-            TaskItem.self, Category.self, FixedSchedule.self, PlaceTag.self, DayStat.self
+            TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
+            Band.self, BandTemplate.self, BandAssignment.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: config)
@@ -32,9 +33,9 @@ enum PreviewData {
 
         let samples: [TaskItem] = [
             TaskItem(title: "線形代数の課題", category: study,
-                     startDate: at(10), duration: 3600, phase: .today, status: .incomplete),
+                     startDate: at(10), duration: 3600, phase: .today, status: .active),
             TaskItem(title: "ポモドーロ：統計レポート", category: study,
-                     startDate: at(14), duration: 25 * 60, phase: .now, status: .pending,
+                     startDate: at(14), duration: 25 * 60, phase: .now, status: .done,
                      completedAt: .now, unlockDate: TaskItem.nextMidnight()),
             TaskItem(title: "買い出し", category: life,
                      startDate: at(18, 30), duration: 1800, phase: .today, status: .approved,
@@ -42,6 +43,8 @@ enum PreviewData {
             TaskItem(title: "読みたい論文を探す", category: study, phase: .someday)
         ]
         samples.forEach { context.insert($0) }
+
+        BandTemplate.seedDefaultIfNeeded(context)
         return container
     }()
 }

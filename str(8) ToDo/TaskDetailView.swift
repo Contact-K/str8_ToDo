@@ -277,8 +277,8 @@ struct TaskDetailView: View {
             } else {
                 VStack(spacing: 10) {
                     switch task.status {
-                    case .incomplete:
-                        Button(action: markPending) {
+                    case .active:
+                        Button(action: markDone) {
                             HStack {
                                 Image(systemName: "checkmark.circle")
                                 Text("完了にする")
@@ -290,11 +290,11 @@ struct TaskDetailView: View {
                             .cornerRadius(8)
                         }
 
-                    case .pending:
+                    case .done:
                         Button(action: approve) {
                             HStack {
                                 Image(systemName: "checkmark.seal")
-                                Text("承認する")
+                                Text("承認して確定する")
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -307,7 +307,7 @@ struct TaskDetailView: View {
                         HStack {
                             Image(systemName: "checkmark.seal.fill")
                                 .foregroundColor(.green)
-                            Text("承認済み ✓")
+                            Text("確定済み ✓")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             Spacer()
@@ -327,13 +327,13 @@ struct TaskDetailView: View {
         save()
     }
 
-    private func markPending() {
-        task.markPending(soloUnlockDate: TaskItem.nextMidnight())
+    private func markDone() {
+        task.markDone()
         save()
     }
 
     private func approve() {
-        task.approve(by: "self-future")
+        task.approve(by: "self-future", context: modelContext)
         save()
     }
 

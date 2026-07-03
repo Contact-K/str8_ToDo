@@ -20,9 +20,11 @@ struct str_8__ToDoApp: App {
             let schema = Schema([
                 TaskItem.self,
                 Category.self,
-                FixedSchedule.self,
                 PlaceTag.self,
-                DayStat.self
+                DayStat.self,
+                Band.self,
+                BandTemplate.self,
+                BandAssignment.self
             ])
             let configuration = ModelConfiguration(
                 schema: schema,
@@ -38,6 +40,7 @@ struct str_8__ToDoApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task { BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext) }
         }
         .modelContainer(modelContainer)
     }

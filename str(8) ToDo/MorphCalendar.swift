@@ -4,9 +4,8 @@
 //
 //  カレンダーの月⇄週⇄日 Morph 遷移（P1 看板機能）。
 //
-//  設計（ノート準拠）:
-//  - 連続ピンチズームは採用せず、「離散トリガー＋PowerPoint Morph 風遷移」。
-//  - トリガーは2種類: ① ピル型セグメント ② ピンチ（しきい値を越えたら1段だけ離散入力）。
+//  設計（企画書 2026-07-02 準拠）:
+//  - トリガーはピル型セレクター＋セル/ヘッダの直接タップに一本化（ピンチは廃止）。
 //  - 各スケールで「日ブロック」を matchedGeometryEffect で共有し、
 //    共通する日付セルが位置・サイズを保ったままモーフする。
 //
@@ -89,8 +88,6 @@ struct CalendarRootView: View {
                         .transition(.opacity)
                 }
             }
-            .contentShape(Rectangle())
-            .gesture(pinch)
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -118,26 +115,12 @@ struct CalendarRootView: View {
         }
     }
 
-    // MARK: トリガー① ピンチ（離散）
-
-    /// しきい値を越えた瞬間に1段だけスケールを動かす離散ピンチ。
-    private var pinch: some Gesture {
-        MagnifyGesture(minimumScaleDelta: 0.05)
-            .onEnded { value in
-                if value.magnification > 1.25 {
-                    zoom(to: scale.zoomedIn)      // ピンチアウト＝拡大＝日方向へ
-                } else if value.magnification < 0.8 {
-                    zoom(to: scale.zoomedOut)     // ピンチイン＝縮小＝月方向へ
-                }
-            }
-    }
-
     private func zoom(to target: CalendarScale) {
         guard target != scale else { return }
         withAnimation(morphAnimation) { scale = target }
     }
 
-    // MARK: トリガー② ピル＋ツールバー
+    // MARK: トリガー: ピル＋ツールバー（＋セル/ヘッダの直接タップ）
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {

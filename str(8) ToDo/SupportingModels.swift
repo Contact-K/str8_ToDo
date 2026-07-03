@@ -2,7 +2,7 @@
 //  SupportingModels.swift
 //  str8ToDo
 //
-//  カテゴリ・固定スケジュール・場所タグ・日次集計キャッシュ。
+//  カテゴリ・場所タグ・日次集計キャッシュ。
 //
 
 import Foundation
@@ -32,36 +32,6 @@ final class Category {
         self.colorHex = colorHex
         self.symbolName = symbolName
         self.tasks = tasks
-    }
-}
-
-/// 毎日・毎週の固定枠（授業・バイトなど）。日ビューの背景レーンに敷く。
-@Model
-final class FixedSchedule {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    /// 0=日 ... 6=土。曜日の集合。
-    var weekdays: [Int]
-    /// 0:00 からの経過秒（開始）。
-    var startSeconds: Int
-    /// 同（終了）。
-    var endSeconds: Int
-    var colorHex: String
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        weekdays: [Int],
-        startSeconds: Int,
-        endSeconds: Int,
-        colorHex: String = "#9AA0A6"
-    ) {
-        self.id = id
-        self.title = title
-        self.weekdays = weekdays
-        self.startSeconds = startSeconds
-        self.endSeconds = endSeconds
-        self.colorHex = colorHex
     }
 }
 

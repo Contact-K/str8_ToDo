@@ -218,7 +218,7 @@ struct DayTaskBlock: View {
                     .font(.caption)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                    .strikethrough(task.status == .approved)
+                    .strikethrough(task.isDone)
 
                 if task.isImportant {
                     Image(systemName: "star.fill")
@@ -261,13 +261,13 @@ struct DayTaskBlock: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: taskBlockHeight())
-        .background(task.effectiveColor.opacity(task.status == .approved ? 0.4 : 0.8))
+        .background(task.effectiveColor.opacity(task.isDone ? 0.4 : 0.8))
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(task.effectiveColor, lineWidth: 1)
         )
-        .opacity(task.status == .approved ? 0.6 : 1.0)
+        .opacity(task.isDone ? 0.6 : 1.0)
         .padding(.horizontal, 12)
         .offset(x: timelineLeftWidth + 12)
         .onTapGesture(perform: onTap)
@@ -311,7 +311,7 @@ struct DayTaskChip: View {
             Text(task.title)
                 .font(.caption)
                 .lineLimit(1)
-                .strikethrough(task.status == .approved)
+                .strikethrough(task.isDone)
 
             if task.isImportant {
                 Image(systemName: "star.fill")
@@ -328,7 +328,7 @@ struct DayTaskChip: View {
         .padding(.vertical, 6)
         .background(Color(.systemGray5))
         .cornerRadius(4)
-        .opacity(task.status == .approved ? 0.6 : 1.0)
+        .opacity(task.isDone ? 0.6 : 1.0)
         .onTapGesture(perform: onTap)
     }
 }

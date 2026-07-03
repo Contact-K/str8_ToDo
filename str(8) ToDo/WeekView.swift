@@ -9,7 +9,6 @@ struct WeekView: View {
     var onPickDay: (Date) -> Void
 
     @Query private var tasks: [TaskItem]
-    @Query private var fixedSchedules: [FixedSchedule]
 
     @AppStorage(AppSettingsKey.weekStartMinutes) private var weekStartMinutes: Int = 0
     @AppStorage(AppSettingsKey.weekEndMinutes) private var weekEndMinutes: Int = 1440
@@ -78,19 +77,6 @@ struct WeekView: View {
             let startMinute = weekCalendar.component(.hour, from: startDate) * 60 + weekCalendar.component(.minute, from: startDate)
             return startMinute >= band.startMinute && startMinute < band.endMinute
         }
-    }
-
-    private func fixedScheduleColorForDayAndBand(_ date: Date, band: WeekBand) -> Color? {
-        let zeroBasedWeekday = weekCalendar.component(.weekday, from: date) - 1
-        let bandStartSeconds = band.startMinute * 60
-        let bandEndSeconds = band.endMinute * 60
-        for fs in fixedSchedules {
-            guard fs.weekdays.contains(zeroBasedWeekday) else { continue }
-            if fs.startSeconds < bandEndSeconds && fs.endSeconds > bandStartSeconds {
-                return Color(hex: fs.colorHex)
-            }
-        }
-        return nil
     }
 
     var body: some View {
@@ -186,14 +172,7 @@ struct WeekView: View {
         .padding(.horizontal, 3)   // パディングは frame の内側（外側サイズは変えない）
         .padding(.vertical, 3)
         .frame(width: dayWidth, height: bandHeight, alignment: .topLeading)
-        .background(
-            ZStack {
-                Color.gray.opacity(0.05)
-                if let fsColor = fixedScheduleColorForDayAndBand(day, band: band) {
-                    fsColor.opacity(0.12)
-                }
-            }
-        )
+        .background(Color.gray.opacity(0.05))
         .border(gridLine, width: 0.5)
         .clipped()
     }
@@ -206,6 +185,7 @@ struct WeekView: View {
                 .font(.system(size: 10))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .strikethrough(task.isDone)
             if task.isImportant {
                 Image(systemName: "star.fill")
                     .font(.system(size: 7))

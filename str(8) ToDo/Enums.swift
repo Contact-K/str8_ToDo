@@ -30,30 +30,36 @@ enum SortPhase: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// 承認プロトコルの状態機械。
-/// 未完了 → ペンディング（完了したが未承認）→ 承認済み（他者 or 未来の自分が承認）。
+/// 完了と承認の2層状態機械（2026-07-02 改訂）。
+/// active → done（自己チェック済み・UI上は完了）→ approved（確定。stats に乗るのはここだけ）。
 enum TaskStatus: String, Codable, CaseIterable, Identifiable {
-    case incomplete = "未完了"
-    case pending    = "ペンディング"
-    case approved   = "承認済み"
+    case active   = "active"
+    case done     = "done"
+    case approved = "approved"
 
     var id: String { rawValue }
 
-    var label: String { rawValue }
+    var label: String {
+        switch self {
+        case .active:   return "未完了"
+        case .done:     return "完了"
+        case .approved: return "確定"
+        }
+    }
 
     var systemImage: String {
         switch self {
-        case .incomplete: return "circle"
-        case .pending:    return "hourglass"
-        case .approved:   return "checkmark.seal.fill"
+        case .active:   return "circle"
+        case .done:     return "checkmark.circle"
+        case .approved: return "checkmark.seal.fill"
         }
     }
 
     var tint: Color {
         switch self {
-        case .incomplete: return .secondary
-        case .pending:    return .orange
-        case .approved:   return .green
+        case .active:   return .secondary
+        case .done:     return .blue
+        case .approved: return .green
         }
     }
 }

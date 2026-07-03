@@ -40,7 +40,7 @@ final class TaskItem {
 
     // MARK: - 承認プロトコル
 
-    /// 承認ステータス（未完了／ペンディング／承認済み）。
+    /// 承認ステータス（active／done＝自己チェック済み／approved＝確定）。
     var status: TaskStatus
 
     /// 完了操作をした日時（＝ペンディングに入った時刻）。
@@ -85,6 +85,15 @@ final class TaskItem {
     /// イベントのタイムゾーン識別子。
     var timeZoneIdentifier: String? = nil
 
+    /// 金額（支出・サブスクイベント用、P8 で UI 接続）。
+    var amount: Decimal? = nil
+
+    /// 支払方法タグ（クレカ名など）。
+    var paymentMethod: String? = nil
+
+    /// 実所要時間（秒）。タイマー完了時に記録（P4〜）。空きコマ提案（W2）の学習データ。
+    var actualDuration: TimeInterval? = nil
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -94,7 +103,7 @@ final class TaskItem {
         isAllDay: Bool = false,
         place: PlaceTag? = nil,
         phase: SortPhase = .someday,
-        status: TaskStatus = .incomplete,
+        status: TaskStatus = .active,
         completedAt: Date? = nil,
         approvedAt: Date? = nil,
         unlockDate: Date? = nil,
@@ -107,7 +116,10 @@ final class TaskItem {
         isImportant: Bool = false,
         colorHex: String? = nil,
         notificationOffsets: [Int] = [],
-        timeZoneIdentifier: String? = nil
+        timeZoneIdentifier: String? = nil,
+        amount: Decimal? = nil,
+        paymentMethod: String? = nil,
+        actualDuration: TimeInterval? = nil
     ) {
         self.id = id
         self.title = title
@@ -131,6 +143,9 @@ final class TaskItem {
         self.colorHex = colorHex
         self.notificationOffsets = notificationOffsets
         self.timeZoneIdentifier = timeZoneIdentifier
+        self.amount = amount
+        self.paymentMethod = paymentMethod
+        self.actualDuration = actualDuration
     }
 }
 
@@ -138,8 +153,8 @@ final class TaskItem {
 
 extension TaskItem {
 
-    /// チェックを付けられる最終状態か。
-    var isDone: Bool { status == .approved }
+    /// 自己チェック済みか（done / approved）。打ち消し線などUI上の「完了」条件。
+    var isDone: Bool { status != .active }
 
     /// 終了予定時刻（開始＋所要）。
     var endDate: Date? {
@@ -149,28 +164,44 @@ extension TaskItem {
 
     /// ソロモードで現在ロック中か（未来の自分待ち）。
     var isAwaitingFutureSelf: Bool {
-        guard status == .pending, let unlockDate else { return false }
+        guard status == .done, let unlockDate else { return false }
         return Date.now < unlockDate
     }
 
-    /// 完了操作：未完了 → ペンディング。
-    /// ソロモードでは unlockDate（翌日0:00）をセットし「未来の自分」に承認を託す。
-    func markPending(soloUnlockDate: Date?) {
-        guard status == .incomplete else { return }
-        status = .pending
+    /// 自己チェック：active → done。UI上は即「完了」。
+    /// unlockDate=翌日0:00 をセットし、確定（approved）は「未来の自分」に託す。
+    func markDone() {
+        guard status == .active else { return }
+        status = .done
         completedAt = .now
-        unlockDate = soloUnlockDate
+        unlockDate = TaskItem.nextMidnight()
     }
 
-    /// 承認確定：ペンディング → 承認済み。ロック中は拒否する。
+    /// 承認確定：done → approved。全承認経路（ソロ・ペア・リスト・週報）はここを通す。
+    /// ステータス遷移と同時に承認日の DayStat を upsert する（再承認は no-op＝二重カウントなし）。
     /// - Returns: 承認できたら true。
     @discardableResult
-    func approve(by approverID: String) -> Bool {
-        guard status == .pending else { return false }
-        if isAwaitingFutureSelf { return false }   // 未来の自分待ち：その場では承認不可
+    func approve(by approverID: String, context: ModelContext) -> Bool {
+        guard status == .done else { return false }   // 再承認・未完了は no-op
+        if isAwaitingFutureSelf { return false }      // 未来の自分待ち：その場では承認不可
         status = .approved
-        approvedAt = .now
+        let now = Date.now
+        approvedAt = now
         self.approverID = approverID
+
+        let day = Calendar.current.startOfDay(for: now)
+        let descriptor = FetchDescriptor<DayStat>(predicate: #Predicate { $0.day == day })
+        do {
+            if let stat = try context.fetch(descriptor).first {
+                stat.completedCount += 1
+            } else {
+                context.insert(DayStat(day: day, completedCount: 1))
+            }
+        } catch {
+            // fetch 失敗時に insert すると unique キーの upsert で既存行を 1 に上書きしてしまうため、
+            // その回の集計だけスキップする（DayStat は再構築可能なキャッシュ。P9 で rebuild を用意）。
+            assertionFailure("DayStat fetch failed: \(error)")
+        }
         return true
     }
 
