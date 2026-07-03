@@ -18,16 +18,6 @@ enum SortPhase: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var label: String { rawValue }
-
-    /// リスト画面でのざっくりした並び順（小さいほど手前）。
-    var order: Int {
-        switch self {
-        case .now:   return 0
-        case .today: return 1
-        case .week:  return 2
-        case .someday: return 3
-        }
-    }
 }
 
 /// 完了と承認の2層状態機械（2026-07-02 改訂）。

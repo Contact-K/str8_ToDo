@@ -43,11 +43,15 @@ final class PlaceTag {
     var latitude: Double?
     var longitude: Double?
 
-    init(id: UUID = UUID(), name: String, latitude: Double? = nil, longitude: Double? = nil) {
+    @Relationship(deleteRule: .nullify)
+    var tasks: [TaskItem]
+
+    init(id: UUID = UUID(), name: String, latitude: Double? = nil, longitude: Double? = nil, tasks: [TaskItem] = []) {
         self.id = id
         self.name = name
         self.latitude = latitude
         self.longitude = longitude
+        self.tasks = tasks
     }
 }
 

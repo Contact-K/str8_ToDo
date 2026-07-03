@@ -32,7 +32,7 @@ final class TaskItem {
     var isAllDay: Bool
 
     /// 場所タグ（任意）。
-    @Relationship(deleteRule: .nullify)
+    @Relationship(deleteRule: .nullify, inverse: \PlaceTag.tasks)
     var place: PlaceTag?
 
     /// 仕分けフェーズ（今すぐ／今日／今週／いつか）。
@@ -184,12 +184,9 @@ extension TaskItem {
     func approve(by approverID: String, context: ModelContext) -> Bool {
         guard status == .done else { return false }   // 再承認・未完了は no-op
         if isAwaitingFutureSelf { return false }      // 未来の自分待ち：その場では承認不可
-        status = .approved
-        let now = Date.now
-        approvedAt = now
-        self.approverID = approverID
 
-        let day = Calendar.current.startOfDay(for: now)
+        // ponytail: Calendar.current 固定。TZ を跨ぐ移動で日キーが割れる天井（対応するなら固定カレンダー注入）
+        let day = Calendar.current.startOfDay(for: .now)
         let descriptor = FetchDescriptor<DayStat>(predicate: #Predicate { $0.day == day })
         do {
             if let stat = try context.fetch(descriptor).first {
@@ -198,10 +195,16 @@ extension TaskItem {
                 context.insert(DayStat(day: day, completedCount: 1))
             }
         } catch {
-            // fetch 失敗時に insert すると unique キーの upsert で既存行を 1 に上書きしてしまうため、
-            // その回の集計だけスキップする（DayStat は再構築可能なキャッシュ。P9 で rebuild を用意）。
+            // fetch 失敗時は状態変更をせず false を返す（「承認済みなのに未集計」状態を防ぐ）。
+            // DayStat は再構築可能なキャッシュなので、その回の集計だけスキップする（P9 で rebuild を用意）。
             assertionFailure("DayStat fetch failed: \(error)")
+            return false
         }
+
+        status = .approved
+        let now = Date.now
+        approvedAt = now
+        self.approverID = approverID
         return true
     }
 

@@ -68,6 +68,44 @@ struct P0SelfCheck {
         let assignments = try ctx.fetch(FetchDescriptor<BandAssignment>())
         assert(assignments.count == 5)
 
+        // --- resolveTemplate: 月曜日（weekday=2）の割当テンプレが返る ---
+        let cal = Calendar.current
+        let monday = cal.date(from: DateComponents(year: 2026, month: 7, day: 6))!  // 2026-07-06 月曜
+        let resolvedTemplate = BandAssignment.resolveTemplate(for: monday, context: ctx, calendar: cal)
+        assert(resolvedTemplate?.name == "平日", "Monday should resolve to weekday template")
+
+        // --- resolveTemplate: 日曜日（weekday=1）は nil ---
+        let sunday = cal.date(from: DateComponents(year: 2026, month: 7, day: 5))!  // 2026-07-05 日曜
+        let sundayTemplate = BandAssignment.resolveTemplate(for: sunday, context: ctx, calendar: cal)
+        assert(sundayTemplate == nil, "Sunday should resolve to nil (no weekend assignment)")
+
+        // --- date 差し替え優先: 特定日に別テンプレを割り当て ---
+        let specialTemplate = BandTemplate(name: "特別日")
+        ctx.insert(specialTemplate)
+        let dateX = cal.startOfDay(for: monday)
+        let dateAssignment = BandAssignment(id: UUID(), date: dateX, template: specialTemplate)
+        ctx.insert(dateAssignment)
+        let specialResolved = BandAssignment.resolveTemplate(for: dateX, context: ctx, calendar: cal)
+        assert(specialResolved?.name == "特別日", "Date-specific assignment should take priority over weekday default")
+
+        // --- inverse 検証（テンプレ削除）: テンプレを削除すると割当の template が nil ---
+        ctx.delete(specialTemplate)
+        try ctx.save()
+        let targetID = dateAssignment.id
+        let afterDelete = try ctx.fetch(FetchDescriptor<BandAssignment>()).first { $0.id == targetID }
+        assert(afterDelete?.template == nil, "Template deletion should nullify assignment.template via inverse")
+
+        // --- inverse 検証（PlaceTag 削除）: PlaceTag を削除するとタスクの place が nil ---
+        let placeTag = PlaceTag(name: "Office")
+        ctx.insert(placeTag)
+        let taskWithPlace = TaskItem(title: "meeting", place: placeTag)
+        ctx.insert(taskWithPlace)
+        try ctx.save()
+        assert(taskWithPlace.place?.name == "Office", "TaskItem should have PlaceTag before deletion")
+        ctx.delete(placeTag)
+        try ctx.save()
+        assert(taskWithPlace.place == nil, "PlaceTag deletion should nullify task.place via inverse")
+
         print("P0 self-check: ALL PASS")
     }
 }

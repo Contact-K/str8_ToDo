@@ -43,10 +43,14 @@ final class BandTemplate {
     @Relationship(deleteRule: .cascade, inverse: \Band.template)
     var bands: [Band]
 
+    @Relationship(deleteRule: .nullify, inverse: \BandAssignment.template)
+    var assignments: [BandAssignment]
+
     init(id: UUID = UUID(), name: String, bands: [Band] = []) {
         self.id = id
         self.name = name
         self.bands = bands
+        self.assignments = []
     }
 
     /// 表示順に整列した枠。
@@ -62,13 +66,21 @@ final class BandAssignment {
     /// 特定日の差し替え（startOfDay をキーにする）。
     var date: Date?
 
-    @Relationship(deleteRule: .nullify)
     var template: BandTemplate?
 
-    init(id: UUID = UUID(), weekday: Int? = nil, date: Date? = nil, template: BandTemplate? = nil) {
+    /// 曜日デフォルト指定（date は nil）。
+    init(id: UUID = UUID(), weekday: Int, template: BandTemplate? = nil) {
         self.id = id
         self.weekday = weekday
-        self.date = date
+        self.date = nil
+        self.template = template
+    }
+
+    /// 特定日差し替え指定（weekday は nil、date は正規化）。
+    init(id: UUID = UUID(), date: Date, template: BandTemplate? = nil, calendar: Calendar = .current) {
+        self.id = id
+        self.weekday = nil
+        self.date = calendar.startOfDay(for: date)
         self.template = template
     }
 }
@@ -96,5 +108,33 @@ extension BandTemplate {
             context.insert(BandAssignment(weekday: weekday, template: weekdayTemplate))
         }
         try? context.save()
+    }
+}
+
+// MARK: - テンプレ解決
+
+extension BandAssignment {
+    /// 指定日の枠テンプレを解決する。date 指定（特定日差し替え）が weekday デフォルトより優先。
+    /// 重複行がある場合は id の昇順で先頭を採用（決定的タイブレーク）。
+    @MainActor
+    static func resolveTemplate(for day: Date, context: ModelContext, calendar: Calendar = .current) -> BandTemplate? {
+        // ponytail: 全件フェッチ。割当は高々数十行、遅くなったら #Predicate 化
+        let assignments = (try? context.fetch(FetchDescriptor<BandAssignment>())) ?? []
+        let dayStart = calendar.startOfDay(for: day)
+        let weekday = calendar.component(.weekday, from: day)
+
+        // date 指定（特定日差し替え）が優先
+        let dateMatches = assignments
+            .filter { $0.date == dayStart }
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+        if let match = dateMatches.first {
+            return match.template
+        }
+
+        // weekday デフォルト
+        let weekdayMatches = assignments
+            .filter { $0.weekday == weekday }
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+        return weekdayMatches.first?.template
     }
 }
