@@ -9,6 +9,7 @@ struct AddTaskSheet: View {
     @Query(sort: \Category.name) var categories: [Category]
 
     let defaultDate: Date
+    let prefillDuration: TimeInterval?
 
     @State private var selectedTitle: String = ""
     @State private var selectedCategory: Category? = nil
@@ -27,6 +28,7 @@ struct AddTaskSheet: View {
     @State private var selectedTimeZone: String = TimeZone.current.identifier
     @State private var customNotificationMinutes: Int = 0
     @State private var isSyncingTime: Bool = false
+    @State private var isTimePinned: Bool = false
 
     private let colorPresets: [String] = ["4F8DFD", "34C759", "FF9500", "FF2D55", "AF52DE", "8E8E93"]
     private let repeatOptions: [(String, String, String?)] = [
@@ -37,10 +39,13 @@ struct AddTaskSheet: View {
         ("monthly", "毎月", "FREQ=MONTHLY")
     ]
 
-    init(defaultDate: Date) {
+    init(defaultDate: Date, prefillDuration: TimeInterval? = nil) {
         self.defaultDate = defaultDate
+        self.prefillDuration = prefillDuration
         _selectedStartDate = State(initialValue: defaultDate)
-        _selectedEndDate = State(initialValue: defaultDate.addingTimeInterval(3600))
+        _selectedEndDate = State(initialValue: defaultDate.addingTimeInterval(prefillDuration ?? 3600))
+        _isTimeSpecified = State(initialValue: prefillDuration != nil)
+        _selectedDuration = State(initialValue: prefillDuration ?? 3600)
     }
 
     var body: some View {
@@ -166,6 +171,8 @@ struct AddTaskSheet: View {
                             selectedEndDate = selectedStartDate.addingTimeInterval(selectedDuration)
                             isSyncingTime = false
                         }
+
+                        Toggle("時刻厳守", isOn: $isTimePinned)
 
                         DatePicker(
                             "終了",
@@ -326,7 +333,8 @@ struct AddTaskSheet: View {
             isImportant: isImportant,
             colorHex: selectedColorHex,
             notificationOffsets: selectedNotifications.sorted(),
-            timeZoneIdentifier: isTimeSpecified ? selectedTimeZone : nil
+            timeZoneIdentifier: isTimeSpecified ? selectedTimeZone : nil,
+            isTimePinned: isTimePinned
         )
 
         modelContext.insert(task)

@@ -40,7 +40,13 @@ enum PreviewData {
             TaskItem(title: "買い出し", category: life,
                      startDate: at(18, 30), duration: 1800, phase: .today, status: .approved,
                      completedAt: .now, approvedAt: .now, approverID: "self-future"),
-            TaskItem(title: "読みたい論文を探す", category: study, phase: .someday)
+            TaskItem(title: "読みたい論文を探す", category: study, phase: .someday),
+            TaskItem(title: "朝ラン", category: life,
+                     startDate: Date.now.addingTimeInterval(-2 * 3600), duration: 1800,
+                     phase: .today, status: .done, completedAt: .now),
+            TaskItem(title: "歯医者", category: life,
+                     startDate: at(9), duration: 1800, phase: .today, status: .active,
+                     isTimePinned: true)
         ]
         samples.forEach { context.insert($0) }
 

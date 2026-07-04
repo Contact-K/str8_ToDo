@@ -29,6 +29,9 @@
 		FF0000000000000000000128 /* str_8__ToDoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000127 /* str_8__ToDoApp.swift */; };
 		FF000000000000000000012A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000129 /* Assets.xcassets */; };
 		FF000000000000000000012D /* BandModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000012C /* BandModels.swift */; };
+		FF000000000000000000012F /* TaskCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000012E /* TaskCardView.swift */; };
+		FF0000000000000000000131 /* DayAgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000130 /* DayAgendaView.swift */; };
+		FF0000000000000000000133 /* DayRowBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000132 /* DayRowBuilder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +59,9 @@
 		FF0000000000000000000127 /* str_8__ToDoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = str_8__ToDoApp.swift; sourceTree = "<group>"; };
 		FF0000000000000000000129 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FF000000000000000000012C /* BandModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandModels.swift; sourceTree = "<group>"; };
+		FF000000000000000000012E /* TaskCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000130 /* DayAgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayAgendaView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000132 /* DayRowBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayRowBuilder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,6 +102,8 @@
 				FF0000000000000000000107 /* CategoryPickerView.swift */,
 				FF0000000000000000000109 /* Color+Hex.swift */,
 				FF000000000000000000010B /* ContentView.swift */,
+				FF0000000000000000000130 /* DayAgendaView.swift */,
+				FF0000000000000000000132 /* DayRowBuilder.swift */,
 				FF000000000000000000010D /* DayView.swift */,
 				FF000000000000000000010F /* Enums.swift */,
 				FF0000000000000000000111 /* EventKitService.swift */,
@@ -104,6 +112,7 @@
 				FF0000000000000000000117 /* NotificationService.swift */,
 				FF0000000000000000000119 /* PreviewData.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
+				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
 				FF000000000000000000011F /* TaskItem.swift */,
 				FF0000000000000000000121 /* WeatherProvider.swift */,
@@ -192,6 +201,8 @@
 				FF0000000000000000000108 /* CategoryPickerView.swift in Sources */,
 				FF000000000000000000010A /* Color+Hex.swift in Sources */,
 				FF000000000000000000010C /* ContentView.swift in Sources */,
+				FF0000000000000000000131 /* DayAgendaView.swift in Sources */,
+				FF0000000000000000000133 /* DayRowBuilder.swift in Sources */,
 				FF000000000000000000010E /* DayView.swift in Sources */,
 				FF0000000000000000000110 /* Enums.swift in Sources */,
 				FF0000000000000000000112 /* EventKitService.swift in Sources */,
@@ -200,6 +211,7 @@
 				FF0000000000000000000118 /* NotificationService.swift in Sources */,
 				FF000000000000000000011A /* PreviewData.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
+				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
 				FF0000000000000000000120 /* TaskItem.swift in Sources */,
 				FF0000000000000000000122 /* WeatherProvider.swift in Sources */,

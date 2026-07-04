@@ -94,6 +94,9 @@ final class TaskItem {
     /// 実所要時間（秒）。タイマー完了時に記録（P4〜）。空きコマ提案（W2）の学習データ。
     var actualDuration: TimeInterval? = nil
 
+    /// 時刻厳守（開始時刻が動かせない予定）。
+    var isTimePinned: Bool = false
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -119,7 +122,8 @@ final class TaskItem {
         timeZoneIdentifier: String? = nil,
         amount: Decimal? = nil,
         paymentMethod: String? = nil,
-        actualDuration: TimeInterval? = nil
+        actualDuration: TimeInterval? = nil,
+        isTimePinned: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -146,6 +150,7 @@ final class TaskItem {
         self.amount = amount
         self.paymentMethod = paymentMethod
         self.actualDuration = actualDuration
+        self.isTimePinned = isTimePinned
     }
 }
 
