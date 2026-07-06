@@ -103,11 +103,15 @@ struct DayView: View {
         }
     }
 
-    private func dayHeaderText() -> String {
+    private static let headerFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "M月d日 (E)"
         formatter.locale = Locale(identifier: "ja_JP")
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func dayHeaderText() -> String {
+        Self.headerFormatter.string(from: date)
     }
 }
 

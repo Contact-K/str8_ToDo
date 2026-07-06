@@ -1,6 +1,6 @@
 //
 //  DayRowBuilder.swift
-//  str(8) ToDo
+//  str8ToDo
 //
 //  日ビューの行構築（枠見出し・タスク・空き・「今」の分単位マージ）。
 //  SwiftUI 非依存の純粋ロジック。p1-selfcheck.swift で検証する。
@@ -31,11 +31,20 @@ enum DayRow: Identifiable {
 
 enum DayRowBuilder {
     /// 終日タスク（先頭固定）＋ 枠見出し/時刻付きタスク/空き/「今」を
-    /// 0:00 からの経過分で安定ソートしてマージした行列を返す。
-    /// 同分のタイブレーク: 見出し(0) → 空き(1) → 今(2) → タスク(3)。
-    static func buildRows(allDayTasks: [TaskItem], timedTasks: [TaskItem], bands: [Band],
+    /// 表示日 day の 0:00 からの経過分で安定ソートしてマージした行列を返す。
+    /// 前日から跨ぐタスクは分0（0:00）位置にクランプする（時刻表示は実時刻のまま）。
+    /// 同分のタイブレーク: 見出し(0) → 空き(1) → 今(2) → タスク(3)。同時刻タスクは id 昇順。
+    static func buildRows(day: Date, allDayTasks: [TaskItem], timedTasks: [TaskItem], bands: [Band],
                           now: Date?, calendar: Calendar = .current) -> [DayRow] {
-        let timed = timedTasks.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+        let dayStart = calendar.startOfDay(for: day)
+        /// day の 0:00 からの経過分（前日は負になる）。
+        func minuteOfDay(_ date: Date) -> Int {
+            calendar.dateComponents([.minute], from: dayStart, to: date).minute ?? 0
+        }
+
+        let timed = timedTasks.sorted {
+            ($0.startDate ?? .distantPast, $0.id.uuidString) < ($1.startDate ?? .distantPast, $1.id.uuidString)
+        }
 
         var entries: [(minute: Int, priority: Int, row: DayRow)] = []
 
@@ -50,16 +59,17 @@ enum DayRowBuilder {
                let start = task.startDate {
                 let gapDuration = start.timeIntervalSince(prevEnd)
                 if gapDuration >= 30 * 60 {
-                    entries.append((minuteOfDay(prevEnd, calendar), 1, .gap(start: prevEnd, duration: gapDuration)))
+                    let gapMinute = min(1440, max(0, minuteOfDay(prevEnd)))
+                    entries.append((gapMinute, 1, .gap(start: prevEnd, duration: gapDuration)))
                 }
             }
             if let start = task.startDate {
-                entries.append((minuteOfDay(start, calendar), 3, .task(task)))
+                entries.append((max(0, minuteOfDay(start)), 3, .task(task)))
             }
         }
 
         if let now {
-            entries.append((minuteOfDay(now, calendar), 2, .nowSeparator))
+            entries.append((minuteOfDay(now), 2, .nowSeparator))
         }
 
         // 同 (分, 優先度) は挿入順を維持（offset を最終タイブレークに）
@@ -70,11 +80,5 @@ enum DayRowBuilder {
             .map(\.element.row)
 
         return allDayTasks.map(DayRow.task) + merged
-    }
-
-    /// その日の 0:00 からの経過分。
-    private static func minuteOfDay(_ date: Date, _ calendar: Calendar) -> Int {
-        let c = calendar.dateComponents([.hour, .minute], from: date)
-        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
     }
 }

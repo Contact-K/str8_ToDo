@@ -1,6 +1,6 @@
 //
 //  TaskCardView.swift
-//  str(8) ToDo
+//  str8ToDo
 //
 //  タスクカード。DayAgendaView 用の共有コンポーネント。
 //
@@ -10,6 +10,12 @@ import SwiftUI
 struct TaskCardView: View {
     let task: TaskItem
     var collapsed: Bool = false
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     var body: some View {
         if collapsed {
@@ -70,6 +76,8 @@ struct TaskCardView: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .opacity(task.isDone ? 0.6 : 1.0)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("タップで詳細を表示")
     }
 
     private var collapsedView: some View {
@@ -86,20 +94,24 @@ struct TaskCardView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .opacity(0.45)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("タップで展開")
     }
 
     private func timeRangeString() -> String? {
         if !task.isAllDay, let startDate = task.startDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            let startText = formatter.string(from: startDate)
+            let startText = Self.timeFormatter.string(from: startDate)
             if task.duration > 0 {
                 let endDate = startDate.addingTimeInterval(task.duration)
-                let endText = formatter.string(from: endDate)
+                let endText = Self.timeFormatter.string(from: endDate)
                 return "\(startText) - \(endText)"
             } else {
                 return startText
@@ -119,51 +131,4 @@ struct TaskCardView: View {
     }
     .padding()
     .modelContainer(PreviewData.container)
-}
-
-extension PreviewData {
-    static func sampleTask1() -> TaskItem {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
-        return TaskItem(
-            title: "線形代数の課題",
-            category: nil,
-            startDate: start,
-            duration: 3600,
-            phase: .today,
-            status: .active
-        )
-    }
-
-    static func sampleTask2() -> TaskItem {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let start = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
-        return TaskItem(
-            title: "会議",
-            category: nil,
-            startDate: start,
-            duration: 1800,
-            phase: .today,
-            status: .active,
-            isImportant: true,
-            isTimePinned: true
-        )
-    }
-
-    static func sampleTask3() -> TaskItem {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let start = cal.date(bySettingHour: 15, minute: 30, second: 0, of: today)!
-        return TaskItem(
-            title: "完了済みタスク",
-            category: nil,
-            startDate: start,
-            duration: 900,
-            phase: .today,
-            status: .done,
-            completedAt: .now
-        )
-    }
 }

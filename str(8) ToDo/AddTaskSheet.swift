@@ -334,7 +334,7 @@ struct AddTaskSheet: View {
             colorHex: selectedColorHex,
             notificationOffsets: selectedNotifications.sorted(),
             timeZoneIdentifier: isTimeSpecified ? selectedTimeZone : nil,
-            isTimePinned: isTimePinned
+            isTimePinned: isTimeSpecified && isTimePinned
         )
 
         modelContext.insert(task)

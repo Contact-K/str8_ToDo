@@ -54,3 +54,52 @@ enum PreviewData {
         return container
     }()
 }
+
+// MARK: - 単体サンプル（TaskCardView プレビュー用、コンテナ未挿入）
+
+extension PreviewData {
+    static func sampleTask1() -> TaskItem {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        return TaskItem(
+            title: "線形代数の課題",
+            category: nil,
+            startDate: start,
+            duration: 3600,
+            phase: .today,
+            status: .active
+        )
+    }
+
+    static func sampleTask2() -> TaskItem {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let start = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+        return TaskItem(
+            title: "会議",
+            category: nil,
+            startDate: start,
+            duration: 1800,
+            phase: .today,
+            status: .active,
+            isImportant: true,
+            isTimePinned: true
+        )
+    }
+
+    static func sampleTask3() -> TaskItem {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let start = cal.date(bySettingHour: 15, minute: 30, second: 0, of: today)!
+        return TaskItem(
+            title: "完了済みタスク",
+            category: nil,
+            startDate: start,
+            duration: 900,
+            phase: .today,
+            status: .done,
+            completedAt: .now
+        )
+    }
+}
