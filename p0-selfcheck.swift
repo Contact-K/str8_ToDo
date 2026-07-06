@@ -105,12 +105,12 @@ struct P0SelfCheck {
         assert(BandAssignment.resolveTemplate(for: tieDate, context: ctx, calendar: cal)?.name == "tieA",
                "Duplicate date rows should resolve to ascending-id winner")
 
-        // --- inverse 検証（テンプレ削除）: テンプレを削除すると割当の template が nil ---
+        // --- cascade 検証（テンプレ削除）: テンプレを削除すると割当も削除される ---
         ctx.delete(specialTemplate)
         try ctx.save()
         let targetID = dateAssignment.id
         let afterDelete = try ctx.fetch(FetchDescriptor<BandAssignment>()).first { $0.id == targetID }
-        assert(afterDelete?.template == nil, "Template deletion should nullify assignment.template via inverse")
+        assert(afterDelete == nil, "Template deletion should cascade-delete its assignments")
 
         // --- inverse 検証（PlaceTag 削除）: PlaceTag を削除するとタスクの place が nil ---
         let placeTag = PlaceTag(name: "Office")

@@ -4,16 +4,13 @@ import SwiftData
 struct CalendarSettingsView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Category.name) var categories: [Category]
+    @Query(sort: \BandTemplate.name) private var templates: [BandTemplate]
+    @Query private var assignments: [BandAssignment]
 
     @AppStorage(AppSettingsKey.syncSystemCalendar) var syncSystemCalendar = AppSettingsKey.syncSystemCalendarDefault
     @AppStorage(AppSettingsKey.syncWeather) var syncWeather = AppSettingsKey.syncWeatherDefault
     @AppStorage(AppSettingsKey.enableNotifications) var enableNotifications = AppSettingsKey.enableNotificationsDefault
-    @AppStorage(AppSettingsKey.weekStartMinutes) var weekStartMinutes = AppSettingsKey.weekStartMinutesDefault
-    @AppStorage(AppSettingsKey.weekEndMinutes) var weekEndMinutes = AppSettingsKey.weekEndMinutesDefault
-    @AppStorage(AppSettingsKey.weekBandIntervalHours) var weekBandIntervalHours = AppSettingsKey.weekBandIntervalHoursDefault
 
-    @State private var startDate = Date()
-    @State private var endDate = Date()
     @State private var eventKit = EventKitService()
     @State private var weather = WeatherProvider()
 
@@ -137,39 +134,38 @@ struct CalendarSettingsView: View {
                     }
             }
 
-            // MARK: - 週ビュー表示時間セクション
-            Section(header: Text("週ビュー表示時間")) {
-                HStack {
-                    Text("開始時刻")
-                    Spacer()
-                    DatePicker("", selection: $startDate, displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .onChange(of: startDate) { oldValue, newValue in
-                            weekStartMinutes = minutesFromDate(newValue)
+            // MARK: - マイ時間割セクション
+            Section(header: Text("マイ時間割")) {
+                ForEach(templates) { template in
+                    NavigationLink(destination: BandTemplateEditorView(template: template)) {
+                        HStack {
+                            Text(template.name)
+                            Spacer()
+                            Text("\(template.bands.count)枠")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                    Text(hhmm(weekStartMinutes))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    }
+                }
+                .onDelete { offsets in
+                    offsets.map { templates[$0] }.forEach(modelContext.delete)
+                    try? modelContext.save()
                 }
 
-                HStack {
-                    Text("終了時刻")
-                    Spacer()
-                    DatePicker("", selection: $endDate, displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .onChange(of: endDate) { oldValue, newValue in
-                            weekEndMinutes = minutesFromDate(newValue)
-                        }
-                    Text(hhmm(weekEndMinutes))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                Button("テンプレートを追加") {
+                    modelContext.insert(BandTemplate(name: "新しいテンプレート"))
+                    try? modelContext.save()
                 }
+            }
 
-                HStack {
-                    Text("区切り間隔")
-                    Spacer()
-                    Stepper(value: $weekBandIntervalHours, in: 1...12) {
-                        Text("\(weekBandIntervalHours)時間おき")
+            // MARK: - 曜日割当セクション
+            Section(header: Text("曜日割当")) {
+                ForEach(1...7, id: \.self) { weekday in
+                    Picker(weekdayLabel(weekday), selection: weekdayTemplateBinding(weekday)) {
+                        Text("なし").tag(nil as UUID?)
+                        ForEach(templates) { template in
+                            Text(template.name).tag(template.id as UUID?)
+                        }
                     }
                 }
             }
@@ -213,26 +209,33 @@ struct CalendarSettingsView: View {
             }
         }
         .navigationTitle("カレンダー設定")
-        .onAppear {
-            startDate = dateFromMinutes(weekStartMinutes)
-            endDate = dateFromMinutes(weekEndMinutes)
-        }
     }
 
     // MARK: - ヘルパー
-    private func minutesFromDate(_ date: Date) -> Int {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+
+    private func weekdayLabel(_ weekday: Int) -> String {
+        ["日", "月", "火", "水", "木", "金", "土"][weekday - 1] + "曜日"
     }
 
-    private func dateFromMinutes(_ minutes: Int) -> Date {
-        let hour = minutes / 60
-        let minute = minutes % 60
-        var components = DateComponents()
-        components.hour = hour
-        components.minute = minute
-        return Calendar.current.date(from: components) ?? Date()
+    /// 曜日デフォルト割当の Picker バインディング。なし選択で削除、未存在なら作成。
+    private func weekdayTemplateBinding(_ weekday: Int) -> Binding<UUID?> {
+        Binding(
+            get: { assignments.first { $0.weekday == weekday }?.template?.id },
+            set: { newID in
+                let existing = assignments.filter { $0.weekday == weekday }
+                if let newID, let template = templates.first(where: { $0.id == newID }) {
+                    if let row = existing.first {
+                        row.template = template
+                        existing.dropFirst().forEach(modelContext.delete)  // 重複行は掃除
+                    } else {
+                        modelContext.insert(BandAssignment(weekday: weekday, template: template))
+                    }
+                } else {
+                    existing.forEach(modelContext.delete)
+                }
+                try? modelContext.save()
+            }
+        )
     }
 
     private func authStateColor() -> Color {
@@ -261,6 +264,97 @@ struct CalendarSettingsView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - 枠テンプレートエディタ（最小版、磨き込みは P9）
+
+struct BandTemplateEditorView: View {
+    @Bindable var template: BandTemplate
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        Form {
+            Section("テンプレート名") {
+                TextField("テンプレート名", text: $template.name)
+            }
+
+            Section("枠") {
+                ForEach(template.orderedBands) { band in
+                    BandRowEditor(band: band)
+                }
+                .onDelete { offsets in
+                    let bands = template.orderedBands
+                    offsets.map { bands[$0] }.forEach(modelContext.delete)
+                    try? modelContext.save()
+                }
+
+                Button("枠を追加") {
+                    // 末尾（最大 endMinutes）の後ろに60分枠を置く
+                    let start = min(template.bands.map(\.endMinutes).max() ?? 9 * 60, 1380)
+                    let band = Band(name: "枠\(template.bands.count + 1)",
+                                    startMinutes: start,
+                                    endMinutes: min(start + 60, 1440))
+                    band.template = template
+                    modelContext.insert(band)
+                    try? modelContext.save()
+                }
+            }
+        }
+        .navigationTitle(template.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 枠1行の編集（名前＋開始/終了時刻）。
+// ponytail: DatePicker は 24:00 を表現できないため終了 24:00 は 0:00 と表示される（保存値は維持）
+struct BandRowEditor: View {
+    @Bindable var band: Band
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("枠名", text: $band.name)
+
+            HStack {
+                // 終了<開始 と隣接枠との重複はクランプで防ぐ（最低5分幅）
+                DatePicker("開始",
+                           selection: minuteBinding($band.startMinutes, clamp: {
+                               max(neighborBounds.lower, min($0, band.endMinutes - 5))
+                           }),
+                           displayedComponents: .hourAndMinute)
+                DatePicker("終了",
+                           selection: minuteBinding($band.endMinutes, clamp: {
+                               min(neighborBounds.upper, max($0, band.startMinutes + 5))
+                           }),
+                           displayedComponents: .hourAndMinute)
+            }
+            .font(.caption)
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// startMinutes ソートでの前枠 endMinutes / 次枠 startMinutes（隣接枠との重複防止の境界）。
+    private var neighborBounds: (lower: Int, upper: Int) {
+        let siblings = band.template?.orderedBands ?? [band]
+        guard let idx = siblings.firstIndex(where: { $0.id == band.id }) else { return (0, 1440) }
+        let lower = idx > 0 ? siblings[idx - 1].endMinutes : 0
+        let upper = idx + 1 < siblings.count ? siblings[idx + 1].startMinutes : 1440
+        return (lower, upper)
+    }
+
+    private func minuteBinding(_ minutes: Binding<Int>, clamp: @escaping (Int) -> Int) -> Binding<Date> {
+        Binding(
+            get: {
+                var components = DateComponents()
+                components.hour = (minutes.wrappedValue % 1440) / 60
+                components.minute = minutes.wrappedValue % 60
+                return Calendar.current.date(from: components) ?? .now
+            },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                minutes.wrappedValue = clamp((components.hour ?? 0) * 60 + (components.minute ?? 0))
+            }
+        )
     }
 }
 

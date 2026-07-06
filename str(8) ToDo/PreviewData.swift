@@ -51,6 +51,23 @@ enum PreviewData {
         samples.forEach { context.insert($0) }
 
         BandTemplate.seedDefaultIfNeeded(context)
+
+        // RRULE ルーティーンサンプル（月水金の朝ジョギング）
+        context.insert(TaskItem(title: "朝のジョギング", category: life,
+                                startDate: at(6, 30), duration: 1800, phase: .today, status: .active,
+                                rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR"))
+
+        // 特定日差し替えサンプル: 今週の木曜を「特別日」テンプレに
+        let special = BandTemplate(name: "特別日", bands: [
+            Band(name: "集中", startMinutes: 9 * 60, endMinutes: 13 * 60),
+            Band(name: "自由", startMinutes: 13 * 60, endMinutes: 18 * 60)
+        ])
+        context.insert(special)
+        let weekday = cal.component(.weekday, from: today)
+        if let thursday = cal.date(byAdding: .day, value: 5 - weekday, to: today) {
+            context.insert(BandAssignment(date: thursday, template: special))
+        }
+
         return container
     }()
 }

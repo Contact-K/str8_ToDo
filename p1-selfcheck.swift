@@ -24,11 +24,11 @@ struct P1SelfCheck {
 
         // デフォルト平日テンプレと同じ5枠
         let bands = [
-            Band(name: "朝",   startMinutes: 6 * 60,  endMinutes: 9 * 60,  order: 0),
-            Band(name: "午前", startMinutes: 9 * 60,  endMinutes: 12 * 60, order: 1),
-            Band(name: "昼",   startMinutes: 12 * 60, endMinutes: 13 * 60, order: 2),
-            Band(name: "午後", startMinutes: 13 * 60, endMinutes: 18 * 60, order: 3),
-            Band(name: "夜",   startMinutes: 18 * 60, endMinutes: 24 * 60, order: 4)
+            Band(name: "朝",   startMinutes: 6 * 60,  endMinutes: 9 * 60),
+            Band(name: "午前", startMinutes: 9 * 60,  endMinutes: 12 * 60),
+            Band(name: "昼",   startMinutes: 12 * 60, endMinutes: 13 * 60),
+            Band(name: "午後", startMinutes: 13 * 60, endMinutes: 18 * 60),
+            Band(name: "夜",   startMinutes: 18 * 60, endMinutes: 24 * 60)
         ]
 
         func index(of id: String, in rows: [DayRow]) -> Int {

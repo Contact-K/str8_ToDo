@@ -19,18 +19,15 @@ final class Band {
     var startMinutes: Int
     /// 同（終了）。24:00 = 1440。
     var endMinutes: Int
-    /// テンプレ内の表示順。
-    var order: Int
 
     /// 所属テンプレ（BandTemplate.bands の逆参照）。
     var template: BandTemplate?
 
-    init(id: UUID = UUID(), name: String, startMinutes: Int, endMinutes: Int, order: Int) {
+    init(id: UUID = UUID(), name: String, startMinutes: Int, endMinutes: Int) {
         self.id = id
         self.name = name
         self.startMinutes = startMinutes
         self.endMinutes = endMinutes
-        self.order = order
     }
 }
 
@@ -43,7 +40,7 @@ final class BandTemplate {
     @Relationship(deleteRule: .cascade, inverse: \Band.template)
     var bands: [Band]
 
-    @Relationship(deleteRule: .nullify, inverse: \BandAssignment.template)
+    @Relationship(deleteRule: .cascade, inverse: \BandAssignment.template)
     var assignments: [BandAssignment]
 
     init(id: UUID = UUID(), name: String, bands: [Band] = []) {
@@ -53,8 +50,10 @@ final class BandTemplate {
         self.assignments = []
     }
 
-    /// 表示順に整列した枠。
-    var orderedBands: [Band] { bands.sorted { $0.order < $1.order } }
+    /// 時刻順に整列した枠（startMinutes 昇順、同分は id 昇順で決定的）。
+    var orderedBands: [Band] {
+        bands.sorted { ($0.startMinutes, $0.id.uuidString) < ($1.startMinutes, $1.id.uuidString) }
+    }
 }
 
 /// テンプレ割当。date 指定（特定日の差し替え）が weekday デフォルトより優先される。
@@ -97,11 +96,11 @@ extension BandTemplate {
         guard ((try? context.fetch(descriptor)) ?? []).isEmpty else { return }
 
         let weekdayTemplate = BandTemplate(name: "平日", bands: [
-            Band(name: "朝",   startMinutes: 6 * 60,  endMinutes: 9 * 60,  order: 0),
-            Band(name: "午前", startMinutes: 9 * 60,  endMinutes: 12 * 60, order: 1),
-            Band(name: "昼",   startMinutes: 12 * 60, endMinutes: 13 * 60, order: 2),
-            Band(name: "午後", startMinutes: 13 * 60, endMinutes: 18 * 60, order: 3),
-            Band(name: "夜",   startMinutes: 18 * 60, endMinutes: 24 * 60, order: 4)
+            Band(name: "朝",   startMinutes: 6 * 60,  endMinutes: 9 * 60),
+            Band(name: "午前", startMinutes: 9 * 60,  endMinutes: 12 * 60),
+            Band(name: "昼",   startMinutes: 12 * 60, endMinutes: 13 * 60),
+            Band(name: "午後", startMinutes: 13 * 60, endMinutes: 18 * 60),
+            Band(name: "夜",   startMinutes: 18 * 60, endMinutes: 24 * 60)
         ])
         context.insert(weekdayTemplate)
         for weekday in 2...6 {   // 月〜金

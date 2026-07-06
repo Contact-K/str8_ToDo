@@ -225,4 +225,28 @@ extension TaskItem {
         if let catHex = category?.colorHex { return Color(hex: catHex) }
         return .accentColor
     }
+
+    /// 最小 RRULE 展開：その日 day に出現するか。startDate 当日は常に true。
+    /// rrule ありなら startDate 翌日以降も周期一致で true（開始日より前は false）。
+    // ponytail: AddTaskSheet が書く4パターンのみ対応。INTERVAL/UNTIL 等は未対応
+    func occurs(on day: Date, calendar: Calendar = .current) -> Bool {
+        guard let startDate else { return false }
+        if calendar.isDate(startDate, inSameDayAs: day) { return true }
+        guard let rrule else { return false }
+        guard calendar.startOfDay(for: day) > calendar.startOfDay(for: startDate) else { return false }
+
+        if rrule == "FREQ=DAILY" { return true }
+        if rrule.hasPrefix("FREQ=WEEKLY;BYDAY=") {
+            let codes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+            let byday = rrule.dropFirst("FREQ=WEEKLY;BYDAY=".count).split(separator: ",").map(String.init)
+            return byday.contains(codes[calendar.component(.weekday, from: day) - 1])
+        }
+        if rrule == "FREQ=WEEKLY" {
+            return calendar.component(.weekday, from: day) == calendar.component(.weekday, from: startDate)
+        }
+        if rrule == "FREQ=MONTHLY" {
+            return calendar.component(.day, from: day) == calendar.component(.day, from: startDate)
+        }
+        return false
+    }
 }

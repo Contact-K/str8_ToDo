@@ -76,10 +76,12 @@ struct CalendarRootView: View {
                 case .week:
                     WeekView(selectedDate: $selectedDate, morph: morph, categoryFilter: categoryFilter, onSelectTask: { task in
                         selectedTask = task
-                    }) { day in
+                    }, onPickDay: { day in
                         selectedDate = cal.startOfDay(for: day)
                         zoom(to: .day)
-                    }
+                    }, onOpenSettings: {
+                        showSettings = true
+                    })
                     .transition(.opacity)
                 case .day:
                     DayPane(date: $selectedDate, morph: morph, categoryFilter: categoryFilter, onSelectTask: { task in
