@@ -97,6 +97,15 @@ final class TaskItem {
     /// 時刻厳守（開始時刻が動かせない予定）。
     var isTimePinned: Bool = false
 
+    /// リストの並び順。
+    var sortIndex: Int = 0
+
+    /// 仕分け済みスタンプ（その日の startOfDay）。デッキの再開判定に使う。
+    var lastSortedDay: Date? = nil
+
+    /// 先送り期限。この日時まではデッキに出さない。
+    var snoozeUntil: Date? = nil
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -123,7 +132,10 @@ final class TaskItem {
         amount: Decimal? = nil,
         paymentMethod: String? = nil,
         actualDuration: TimeInterval? = nil,
-        isTimePinned: Bool = false
+        isTimePinned: Bool = false,
+        sortIndex: Int = 0,
+        lastSortedDay: Date? = nil,
+        snoozeUntil: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -151,6 +163,9 @@ final class TaskItem {
         self.paymentMethod = paymentMethod
         self.actualDuration = actualDuration
         self.isTimePinned = isTimePinned
+        self.sortIndex = sortIndex
+        self.lastSortedDay = lastSortedDay
+        self.snoozeUntil = snoozeUntil
     }
 }
 

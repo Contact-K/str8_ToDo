@@ -41,6 +41,11 @@ enum PreviewData {
                      startDate: at(18, 30), duration: 1800, phase: .today, status: .approved,
                      completedAt: .now, approvedAt: .now, approverID: "self-future"),
             TaskItem(title: "読みたい論文を探す", category: study, phase: .someday),
+            // 浮遊タスク: 未仕分け2件 + snooze 中1件
+            TaskItem(title: "部屋の掃除", category: life, phase: .today, sortIndex: 1),
+            TaskItem(title: "参考書を注文", category: study, phase: .someday, sortIndex: 2),
+            TaskItem(title: "美容院を予約", category: life, phase: .someday, sortIndex: 3,
+                     snoozeUntil: cal.date(byAdding: .day, value: 2, to: today)),
             TaskItem(title: "朝ラン", category: life,
                      startDate: Date.now.addingTimeInterval(-2 * 3600), duration: 1800,
                      phase: .today, status: .done, completedAt: .now),

@@ -162,7 +162,7 @@ struct AddTaskSheet: View {
                             Text("所要時間")
                             Spacer()
                             Stepper(value: $selectedDuration, in: 0...(24 * 3600), step: 300) {
-                                Text(formatDuration(selectedDuration))
+                                Text(durationText(selectedDuration))
                             }
                         }
                         .onChange(of: selectedDuration) {
@@ -347,18 +347,6 @@ struct AddTaskSheet: View {
         dismiss()
     }
 
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds) / 60
-        if minutes < 60 {
-            return "\(minutes)分"
-        }
-        let hours = minutes / 60
-        let remainingMinutes = minutes % 60
-        if remainingMinutes == 0 {
-            return "\(hours)時間"
-        }
-        return "\(hours)時間\(remainingMinutes)分"
-    }
 }
 
 #Preview {

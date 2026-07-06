@@ -34,6 +34,10 @@
 		FF0000000000000000000133 /* DayRowBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000132 /* DayRowBuilder.swift */; };
 		FF0000000000000000000135 /* WeekLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000134 /* WeekLayout.swift */; };
 		FF0000000000000000000137 /* CapsuleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000136 /* CapsuleOverlay.swift */; };
+		FF0000000000000000000139 /* SortDeckEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000138 /* SortDeckEngine.swift */; };
+		FF000000000000000000013B /* SortDeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000013A /* SortDeckView.swift */; };
+		FF000000000000000000013D /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000013C /* TodoListView.swift */; };
+		FF000000000000000000013F /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000013E /* Formatting.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +70,10 @@
 		FF0000000000000000000132 /* DayRowBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayRowBuilder.swift; sourceTree = "<group>"; };
 		FF0000000000000000000134 /* WeekLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekLayout.swift; sourceTree = "<group>"; };
 		FF0000000000000000000136 /* CapsuleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleOverlay.swift; sourceTree = "<group>"; };
+		FF0000000000000000000138 /* SortDeckEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortDeckEngine.swift; sourceTree = "<group>"; };
+		FF000000000000000000013A /* SortDeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortDeckView.swift; sourceTree = "<group>"; };
+		FF000000000000000000013C /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
+		FF000000000000000000013E /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,14 +120,18 @@
 				FF000000000000000000010D /* DayView.swift */,
 				FF000000000000000000010F /* Enums.swift */,
 				FF0000000000000000000111 /* EventKitService.swift */,
+				FF000000000000000000013E /* Formatting.swift */,
 				FF0000000000000000000113 /* LocationPickerView.swift */,
 				FF0000000000000000000115 /* MorphCalendar.swift */,
 				FF0000000000000000000117 /* NotificationService.swift */,
 				FF0000000000000000000119 /* PreviewData.swift */,
+				FF0000000000000000000138 /* SortDeckEngine.swift */,
+				FF000000000000000000013A /* SortDeckView.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
 				FF000000000000000000011F /* TaskItem.swift */,
+				FF000000000000000000013C /* TodoListView.swift */,
 				FF0000000000000000000121 /* WeatherProvider.swift */,
 				FF0000000000000000000134 /* WeekLayout.swift */,
 				FF0000000000000000000123 /* WeekView.swift */,
@@ -213,14 +225,18 @@
 				FF000000000000000000010E /* DayView.swift in Sources */,
 				FF0000000000000000000110 /* Enums.swift in Sources */,
 				FF0000000000000000000112 /* EventKitService.swift in Sources */,
+				FF000000000000000000013F /* Formatting.swift in Sources */,
 				FF0000000000000000000114 /* LocationPickerView.swift in Sources */,
 				FF0000000000000000000116 /* MorphCalendar.swift in Sources */,
 				FF0000000000000000000118 /* NotificationService.swift in Sources */,
 				FF000000000000000000011A /* PreviewData.swift in Sources */,
+				FF0000000000000000000139 /* SortDeckEngine.swift in Sources */,
+				FF000000000000000000013B /* SortDeckView.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
 				FF0000000000000000000120 /* TaskItem.swift in Sources */,
+				FF000000000000000000013D /* TodoListView.swift in Sources */,
 				FF0000000000000000000122 /* WeatherProvider.swift in Sources */,
 				FF0000000000000000000135 /* WeekLayout.swift in Sources */,
 				FF0000000000000000000124 /* WeekView.swift in Sources */,

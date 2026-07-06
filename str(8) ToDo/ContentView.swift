@@ -10,6 +10,12 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @Query private var allTasks: [TaskItem]
+    /// 仕分けデッキを完走した日（dayKey）。スタンプは SortDeckView が完走時に押す。
+    @AppStorage("lastSortPromptDay") private var lastSortPromptDay = 0
+    @State private var showMorningDeck = false
+
     var body: some View {
         TabView {
             Tab("カレンダー", systemImage: "calendar") {
@@ -22,10 +28,7 @@ struct ContentView: View {
                 )
             }
             Tab("リスト", systemImage: "checklist") {
-                ComingSoonView(
-                    title: "ToDo リスト",
-                    detail: "朝の仕分けカードの出力を常時見られるビュー。\n今日／いつか(1週間)／いつか(1ヶ月)。"
-                )
+                TodoListView()
             }
             Tab("承認", systemImage: "checkmark.seal") {
                 ComingSoonView(
@@ -39,6 +42,16 @@ struct ContentView: View {
                     detail: "科目管理・集中統計・目標とストリーク。"
                 )
             }
+        }
+        .onChange(of: scenePhase) {
+            guard scenePhase == .active else { return }
+            // 未完走ならスタンプされないので、次のフォアグラウンドで残りを自動再提示する
+            if lastSortPromptDay != dayKey(.now), !SortDeckEngine.deckTasks(from: allTasks).isEmpty {
+                showMorningDeck = true
+            }
+        }
+        .sheet(isPresented: $showMorningDeck) {
+            SortDeckView(tasks: allTasks)
         }
     }
 }

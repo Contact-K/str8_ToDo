@@ -145,7 +145,7 @@ struct TaskDetailView: View {
                                 Text("終了: \(formatDate(endDate))")
                                     .font(.subheadline)
                             }
-                            Text("所要: \(formatDuration(task.duration))")
+                            Text("所要: \(durationText(task.duration))")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -359,19 +359,6 @@ struct TaskDetailView: View {
         formatter.timeStyle = .short
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: date)
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds / 60)
-        if minutes < 60 {
-            return "\(minutes)分"
-        }
-        let hours = minutes / 60
-        let mins = minutes % 60
-        if mins == 0 {
-            return "\(hours)時間"
-        }
-        return "\(hours)時間\(mins)分"
     }
 
     private func simplifyRRule(_ rrule: String) -> String {
