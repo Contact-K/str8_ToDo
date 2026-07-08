@@ -1,0 +1,43 @@
+//
+//  FocusSession.swift
+//  str8ToDo
+//
+//  集中セッションの記録。砂時計タイマーの完了で1行作られ、
+//  紐付けタスクの actualDuration に累積する（W2 の学習データ）。
+//
+
+import Foundation
+import SwiftData
+
+@Model
+final class FocusSession {
+    @Attribute(.unique) var id: UUID
+    var start: Date
+    var end: Date
+    /// TaskItem への弱い参照（リレーションにしない=削除に強い）。
+    var taskID: UUID?
+    /// 科目（P10 用）。常に nil で作る。
+    var subjectID: UUID?
+    // ponytail: roomID/participantCount は P14 で追加
+
+    init(id: UUID = UUID(), start: Date, end: Date, taskID: UUID? = nil, subjectID: UUID? = nil) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.taskID = taskID
+        self.subjectID = subjectID
+    }
+
+    /// セッションを保存し、紐付けタスクがあれば actualDuration に経過を累積する。
+    @MainActor
+    @discardableResult
+    static func record(start: Date, end: Date, task: TaskItem?, context: ModelContext) -> FocusSession {
+        let session = FocusSession(start: start, end: end, taskID: task?.id)
+        context.insert(session)
+        if let task {
+            task.actualDuration = (task.actualDuration ?? 0) + end.timeIntervalSince(start)
+        }
+        try? context.save()
+        return session
+    }
+}

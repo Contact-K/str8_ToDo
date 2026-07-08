@@ -22,10 +22,7 @@ struct ContentView: View {
                 CalendarRootView()
             }
             Tab("タイマー", systemImage: "hourglass") {
-                ComingSoonView(
-                    title: "砂時計タイマー",
-                    detail: "立てる→寝かす→伏せてスタート。\nCoreMotion + AlarmKit（P1以降）。"
-                )
+                TimerView()
             }
             Tab("リスト", systemImage: "checklist") {
                 TodoListView()

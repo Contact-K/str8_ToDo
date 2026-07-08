@@ -13,7 +13,7 @@ enum PreviewData {
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
             TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
-            Band.self, BandTemplate.self, BandAssignment.self
+            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: config)
@@ -72,6 +72,10 @@ enum PreviewData {
         if let thursday = cal.date(byAdding: .day, value: 5 - weekday, to: today) {
             context.insert(BandAssignment(date: thursday, template: special))
         }
+
+        // 集中セッションサンプル（昨日の25分ポモドーロ）
+        context.insert(FocusSession(start: today.addingTimeInterval(-15 * 3600),
+                                    end: today.addingTimeInterval(-15 * 3600 + 25 * 60)))
 
         return container
     }()
