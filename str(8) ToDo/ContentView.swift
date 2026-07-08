@@ -16,6 +16,11 @@ struct ContentView: View {
     @AppStorage("lastSortPromptDay") private var lastSortPromptDay = 0
     @State private var showMorningDeck = false
 
+    /// ponytail: stats 側の控えめ表示+導線はこのタブバッジで満たす。
+    private var pendingCount: Int {
+        allTasks.filter { $0.status == .done }.count
+    }
+
     var body: some View {
         TabView {
             Tab("カレンダー", systemImage: "calendar") {
@@ -28,11 +33,9 @@ struct ContentView: View {
                 TodoListView()
             }
             Tab("承認", systemImage: "checkmark.seal") {
-                ComingSoonView(
-                    title: "承認プロトコル",
-                    detail: "完了は他者（または未来の自分）の物理ハンコで承認。\nMultipeerConnectivity + NearbyInteraction。"
-                )
+                ApprovalQueueView()
             }
+            .badge(pendingCount)
             Tab("Study Hub", systemImage: "books.vertical") {
                 ComingSoonView(
                     title: "Study Hub",

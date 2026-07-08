@@ -199,11 +199,16 @@ extension TaskItem {
 
     /// 承認確定：done → approved。全承認経路（ソロ・ペア・リスト・週報）はここを通す。
     /// ステータス遷移と同時に承認日の DayStat を upsert する（再承認は no-op＝二重カウントなし）。
+    /// ペア承認（他人承認）は翌日ロックをバイパスして即確定（オーナー決定#8）。
+    /// - Parameters:
+    ///   - approverID: 承認した相手の識別子。
+    ///   - context: ModelContext。
+    ///   - bypassesLock: true のときだけ `isAwaitingFutureSelf` チェックをスキップ。
     /// - Returns: 承認できたら true。
     @discardableResult
-    func approve(by approverID: String, context: ModelContext) -> Bool {
+    func approve(by approverID: String, context: ModelContext, bypassesLock: Bool = false) -> Bool {
         guard status == .done else { return false }   // 再承認・未完了は no-op
-        if isAwaitingFutureSelf { return false }      // 未来の自分待ち：その場では承認不可
+        if !bypassesLock && isAwaitingFutureSelf { return false }      // 未来の自分待ち：その場では承認不可
 
         // ponytail: Calendar.current 固定。TZ を跨ぐ移動で日キーが割れる天井（対応するなら固定カレンダー注入）
         let day = Calendar.current.startOfDay(for: .now)

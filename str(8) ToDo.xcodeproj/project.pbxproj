@@ -42,6 +42,11 @@
 		FF0000000000000000000143 /* HourglassMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000142 /* HourglassMotion.swift */; };
 		FF0000000000000000000145 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000144 /* TimerView.swift */; };
 		FF0000000000000000000147 /* AlarmService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000146 /* AlarmService.swift */; };
+		FF0000000000000000000149 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000148 /* ApprovalQueueView.swift */; };
+		FF000000000000000000014B /* ChopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014A /* ChopDetector.swift */; };
+		FF000000000000000000014D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014C /* PeerSession.swift */; };
+		FF000000000000000000014F /* ProximityGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014E /* ProximityGate.swift */; };
+		FF0000000000000000000151 /* ApprovalMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000150 /* ApprovalMessage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +87,11 @@
 		FF0000000000000000000142 /* HourglassMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourglassMotion.swift; sourceTree = "<group>"; };
 		FF0000000000000000000144 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000146 /* AlarmService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmService.swift; sourceTree = "<group>"; };
+		FF0000000000000000000148 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
+		FF000000000000000000014A /* ChopDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChopDetector.swift; sourceTree = "<group>"; };
+		FF000000000000000000014C /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
+		FF000000000000000000014E /* ProximityGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityGate.swift; sourceTree = "<group>"; };
+		FF0000000000000000000150 /* ApprovalMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalMessage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,10 +127,13 @@
 				A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */,
 				FF0000000000000000000101 /* AddTaskSheet.swift */,
 				FF0000000000000000000146 /* AlarmService.swift */,
+				FF0000000000000000000148 /* ApprovalQueueView.swift */,
+				FF0000000000000000000150 /* ApprovalMessage.swift */,
 				FF0000000000000000000103 /* AppSettings.swift */,
 				FF000000000000000000012C /* BandModels.swift */,
 				FF0000000000000000000105 /* CalendarSettingsView.swift */,
 				FF0000000000000000000136 /* CapsuleOverlay.swift */,
+				FF000000000000000000014A /* ChopDetector.swift */,
 				FF0000000000000000000107 /* CategoryPickerView.swift */,
 				FF0000000000000000000109 /* Color+Hex.swift */,
 				FF000000000000000000010B /* ContentView.swift */,
@@ -136,8 +149,10 @@
 				FF0000000000000000000115 /* MorphCalendar.swift */,
 				FF0000000000000000000117 /* NotificationService.swift */,
 				FF0000000000000000000119 /* PreviewData.swift */,
+				FF000000000000000000014C /* PeerSession.swift */,
 				FF0000000000000000000138 /* SortDeckEngine.swift */,
 				FF000000000000000000013A /* SortDeckView.swift */,
+				FF000000000000000000014E /* ProximityGate.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
@@ -226,10 +241,13 @@
 			files = (
 				FF0000000000000000000102 /* AddTaskSheet.swift in Sources */,
 				FF0000000000000000000147 /* AlarmService.swift in Sources */,
+				FF0000000000000000000149 /* ApprovalQueueView.swift in Sources */,
+				FF0000000000000000000151 /* ApprovalMessage.swift in Sources */,
 				FF0000000000000000000104 /* AppSettings.swift in Sources */,
 				FF000000000000000000012D /* BandModels.swift in Sources */,
 				FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */,
 				FF0000000000000000000137 /* CapsuleOverlay.swift in Sources */,
+				FF000000000000000000014B /* ChopDetector.swift in Sources */,
 				FF0000000000000000000108 /* CategoryPickerView.swift in Sources */,
 				FF000000000000000000010A /* Color+Hex.swift in Sources */,
 				FF000000000000000000010C /* ContentView.swift in Sources */,
@@ -245,8 +263,10 @@
 				FF0000000000000000000116 /* MorphCalendar.swift in Sources */,
 				FF0000000000000000000118 /* NotificationService.swift in Sources */,
 				FF000000000000000000011A /* PreviewData.swift in Sources */,
+				FF000000000000000000014D /* PeerSession.swift in Sources */,
 				FF0000000000000000000139 /* SortDeckEngine.swift in Sources */,
 				FF000000000000000000013B /* SortDeckView.swift in Sources */,
+				FF000000000000000000014F /* ProximityGate.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
@@ -338,6 +358,8 @@
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -376,6 +398,8 @@
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

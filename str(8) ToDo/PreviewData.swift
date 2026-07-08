@@ -48,7 +48,8 @@ enum PreviewData {
                      snoozeUntil: cal.date(byAdding: .day, value: 2, to: today)),
             TaskItem(title: "朝ラン", category: life,
                      startDate: Date.now.addingTimeInterval(-2 * 3600), duration: 1800,
-                     phase: .today, status: .done, completedAt: .now),
+                     phase: .today, status: .done, completedAt: .now,
+                     unlockDate: cal.date(byAdding: .day, value: -1, to: today)),
             TaskItem(title: "歯医者", category: life,
                      startDate: at(9), duration: 1800, phase: .today, status: .active,
                      isTimePinned: true)
