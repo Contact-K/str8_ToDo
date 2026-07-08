@@ -185,6 +185,27 @@ struct P4SelfCheck {
         let decision8 = TimerRestore.decide(snapshot: snapshot7, now: baseTime)
         assert(decision8 == .invalid, "plannedEnd<sessionStart は invalid（end<start セッション防止）")
 
+        // runStartedAt キーが存在しない（一時停止状態の復元）→ .resume
+        var snapshot8 = snapshot1
+        snapshot8.removeValue(forKey: "runStartedAt")
+        let decision9 = TimerRestore.decide(snapshot: snapshot8, now: baseTime)
+        if case .resume(_, let accum, let runStarted, _, _, _) = decision9 {
+            assert(runStarted == nil, "runStartedAt 欠落は nil として復元")
+            assert(accum == accumulated, "accumulated は保持される")
+        } else {
+            fatalError("runStartedAt 欠落は .resume（一時停止状態）")
+        }
+
+        // linkedTaskID キーが存在しない（紐付けなし）→ .resume（linkedTaskID = nil）
+        var snapshot9 = snapshot1
+        snapshot9.removeValue(forKey: "linkedTaskID")
+        let decision10 = TimerRestore.decide(snapshot: snapshot9, now: plannedEnd.addingTimeInterval(-1))
+        if case .resume(_, _, _, _, let linkedID, _) = decision10 {
+            assert(linkedID == nil, "linkedTaskID 欠落は nil として復元")
+        } else {
+            fatalError("linkedTaskID 欠落は .resume")
+        }
+
         print("P4 self-check: ALL PASS")
     }
 }

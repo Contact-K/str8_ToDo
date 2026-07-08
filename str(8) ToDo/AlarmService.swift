@@ -22,11 +22,20 @@ struct TimerAlarmMetadata: AlarmMetadata {}
 @MainActor
 enum AlarmService {
 
+    private static var generations: [UUID: Int] = [:]
+
     /// fireDate に鳴るアラームを登録する。未許可なら要求し、拒否なら何もしない。
     static func schedule(id: UUID, fireDate: Date, title: String) {
         #if canImport(AlarmKit)
+        // 冒頭で同期的に世代をキャプチャ
+        let currentGen = generations[id, default: 0] &+ 1
+        generations[id] = currentGen
+
         Task {
             do {
+                // 最初の await の前に世代チェック
+                if generations[id] != currentGen { return }
+
                 let manager = AlarmManager.shared
                 switch manager.authorizationState {
                 case .notDetermined:
@@ -36,6 +45,9 @@ enum AlarmService {
                 default:
                     return
                 }
+
+                // requestAuthorization 後に世代チェック
+                if generations[id] != currentGen { return }
 
                 let stopButton = AlarmButton(text: "停止", textColor: .white, systemImageName: "stop.fill")
                 let alert = AlarmPresentation.Alert(
@@ -51,6 +63,11 @@ enum AlarmService {
                     attributes: attributes
                 )
                 _ = try await manager.schedule(id: id, configuration: configuration)
+
+                // スケジュール完了後、世代が変わっていたら登録済みアラームをキャンセル
+                if generations[id] != currentGen {
+                    try? manager.cancel(id: id)
+                }
             } catch {
                 // シミュレータ等で失敗しても UI は通常動作
             }
@@ -60,7 +77,17 @@ enum AlarmService {
 
     static func cancel(id: UUID) {
         #if canImport(AlarmKit)
+        generations[id] = (generations[id] ?? 0) &+ 1
         try? AlarmManager.shared.cancel(id: id)
+        #endif
+    }
+
+    /// アラーム権限が明示的に拒否されているか（UI の警告表示用）。
+    static var isAuthorizationDenied: Bool {
+        #if canImport(AlarmKit)
+        return AlarmManager.shared.authorizationState == .denied
+        #else
+        return false
         #endif
     }
 }

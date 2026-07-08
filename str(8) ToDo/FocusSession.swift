@@ -35,9 +35,16 @@ final class FocusSession {
         let session = FocusSession(start: start, end: end, taskID: task?.id)
         context.insert(session)
         if let task {
-            task.actualDuration = (task.actualDuration ?? 0) + end.timeIntervalSince(start)
+            let duration = end.timeIntervalSince(start)
+            // ponytail: 時計変更による負値・巨大値の混入防止。0〜24時間にクランプ
+            let clampedDuration = max(0, min(duration, 24 * 3600))
+            task.actualDuration = (task.actualDuration ?? 0) + clampedDuration
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("FocusSession.record: context.save() failed: \(error)")
+        }
         return session
     }
 }

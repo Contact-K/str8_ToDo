@@ -107,7 +107,7 @@
 2. **タイマー本体+UI**(`HourglassMotion.swift` / `TimerView.swift` 新規): カウントダウン、タスク紐付け+ポモドーロプリセット(25/5/15分)、縦ドラッグで分増減+ハプティックティック、砂時計ビジュアル。完了で `FocusSession` @Model(start / end / taskID? / subjectID?=nil)を記録し、紐付けタスクの `actualDuration` に反映(W2 の学習データ蓄積がここから始まる)。
 3. **AlarmKit + Live Activity**(`AlarmService.swift` 新規): 開始時に AlarmManager にスケジュール(サイレント/Focus 貫通)、早期停止でキャンセル。Widget Extension の Live Activity でロック画面/Dynamic Island にカウントダウン。`NSMotionUsageDescription` / `NSAlarmKitUsageDescription` を追加。
 
-**受け入れ基準(実機)**: 伏せて開始・起こして終了。ロック+サイレントでもアラームが鳴る。Live Activity がカウントダウンする。FocusSession が永続化され、actualDuration がタスクに載る。シミュレータでは UI と手動開始/停止のみ確認可。
+**受け入れ基準(実機)**: 伏せて開始・起こして終了。ロック+サイレントでもアラームが鳴る。Live Activity のカウントダウン表示は P11（Widget Extension）で実装。FocusSession が永続化され、actualDuration がタスクに載る。シミュレータでは UI と手動開始/停止のみ確認可。
 
 ---
 

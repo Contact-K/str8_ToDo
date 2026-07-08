@@ -29,6 +29,7 @@ struct TimerView: View {
     @State private var accumulated: TimeInterval = 0
     @State private var now: Date = .now
     @State private var showHUD = false
+    @State private var isAlarmAuthDenied = false
 
     /// View 再生成で変わらないよう @State（cancel が schedule と同じ ID を指す）。
     @State private var alarmID = UUID()
@@ -66,15 +67,28 @@ struct TimerView: View {
 
                 if !isSessionActive {
                     presets
-                    taskPicker
                 }
+
+                taskPicker
 
                 controls
 
-                if motion.isAvailable && !isSessionActive {
-                    Text("伏せて開始（起こすと一時停止・長押しでキャンセル）")
+                if isAlarmAuthDenied {
+                    Label("アラーム権限が未許可のため、ロック中は音が鳴りません", systemImage: "bell.slash")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.orange)
+                }
+
+                if motion.isAvailable && !isSessionActive {
+                    if motion.phase == .armed {
+                        Label("待機中 — 伏せると開始", systemImage: "bell.ring")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    } else if motion.phase == .setting {
+                        Label("画面を上にして置くと待機", systemImage: "iphone.landscape")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
@@ -102,11 +116,17 @@ struct TimerView: View {
             }
             .onAppear {
                 motion.start()
+                isAlarmAuthDenied = AlarmService.isAuthorizationDenied
                 restoreSnapshot()
             }
             .onDisappear { motion.stop() }
             .onChange(of: motion.phase) {
                 syncWithMotion()
+            }
+            .onChange(of: linkedTaskID) {
+                if isSessionActive {
+                    saveSnapshot()
+                }
             }
         }
     }
@@ -185,17 +205,20 @@ struct TimerView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .accessibilityLabel("タイマーを開始")
+                    .sensoryFeedback(.impact(flexibility: .soft), trigger: isSessionActive)
             } else {
                 Button(isRunning ? "一時停止" : "再開") {
                     isRunning ? pauseRun() : resumeRun()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .sensoryFeedback(.impact(flexibility: .soft), trigger: isRunning)
 
                 Button("終了") { finish() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .accessibilityLabel("タイマーを終了して記録")
+                    .sensoryFeedback(.success, trigger: isSessionActive)
 
                 Button("キャンセル") { cancelSession() }
                     .buttonStyle(.bordered)
@@ -210,14 +233,19 @@ struct TimerView: View {
 
     private func saveSnapshot() {
         guard let start = sessionStart else { return }
-        let snapshot: [String: Any] = [
+        // ponytail: NSNull は plist 型ではないため、nil のキーは辞書に含めない
+        var snapshot: [String: Any] = [
             "sessionStart": start.timeIntervalSinceReferenceDate,
             "accumulated": accumulated,
-            "runStartedAt": runStartedAt?.timeIntervalSinceReferenceDate ?? NSNull(),
             "selectedMinutes": selectedMinutes,
-            "linkedTaskID": linkedTaskID?.uuidString ?? NSNull(),
             "alarmID": alarmID.uuidString
         ]
+        if let runStartedAt {
+            snapshot["runStartedAt"] = runStartedAt.timeIntervalSinceReferenceDate
+        }
+        if let linkedTaskID {
+            snapshot["linkedTaskID"] = linkedTaskID.uuidString
+        }
         UserDefaults.standard.set(snapshot, forKey: "timer.session")
     }
 
@@ -233,7 +261,11 @@ struct TimerView: View {
 
         switch decision {
         case .invalid:
-            // パース失敗・不正値→クリア
+            // パース失敗・不正値→古いアラームがあればキャンセルしてクリア
+            if let alarmIDStr = snapshot["alarmID"] as? String,
+               let alarmUUID = UUID(uuidString: alarmIDStr) {
+                AlarmService.cancel(id: alarmUUID)
+            }
             clearSnapshot()
 
         case .resume(let sessionStart, let accumulated, let runStartedAt, let selectedMinutes, let linkedTaskID, let alarmID):
@@ -258,6 +290,12 @@ struct TimerView: View {
 
     // MARK: - セッション制御
 
+    /// 状態変更と保存を集約: 状態変更後に自動的に saveSnapshot() を呼ぶ。
+    private func updateSession(_ mutate: () -> Void) {
+        mutate()
+        saveSnapshot()
+    }
+
     /// モーションのフェーズ遷移を UI 状態へ反映（実機のみ発火）。
     private func syncWithMotion() {
         switch motion.phase {
@@ -275,29 +313,32 @@ struct TimerView: View {
     }
 
     private func startRun() {
-        sessionStart = .now
-        runStartedAt = .now
-        accumulated = 0
-        now = .now
+        updateSession {
+            sessionStart = .now
+            runStartedAt = .now
+            accumulated = 0
+            now = .now
+        }
         AlarmService.schedule(id: alarmID, fireDate: .now.addingTimeInterval(remaining),
                               title: "タイマー終了")
-        saveSnapshot()
     }
 
     private func pauseRun() {
         guard let started = runStartedAt else { return }
-        accumulated += Date.now.timeIntervalSince(started)
-        runStartedAt = nil
+        updateSession {
+            accumulated += Date.now.timeIntervalSince(started)
+            runStartedAt = nil
+        }
         AlarmService.cancel(id: alarmID)
-        saveSnapshot()
     }
 
     private func resumeRun() {
-        runStartedAt = .now
-        now = .now
+        updateSession {
+            runStartedAt = .now
+            now = .now
+        }
         AlarmService.schedule(id: alarmID, fireDate: .now.addingTimeInterval(remaining),
                               title: "タイマー終了")
-        saveSnapshot()
     }
 
     /// 完了（時間切れ or 手動終了）: FocusSession を記録。
