@@ -7,5 +7,25 @@
 		<string>_str8-approve._tcp</string>
 		<string>_str8-approve._udp</string>
 	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>str(8) ToDo Backup</string>
+			<key>UTTypeIdentifier</key>
+			<string>str8.todo.str8backup</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>str8</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct CalendarSettingsView: View {
     @Environment(\.modelContext) var modelContext
@@ -10,9 +11,23 @@ struct CalendarSettingsView: View {
     @AppStorage(AppSettingsKey.syncSystemCalendar) var syncSystemCalendar = AppSettingsKey.syncSystemCalendarDefault
     @AppStorage(AppSettingsKey.syncWeather) var syncWeather = AppSettingsKey.syncWeatherDefault
     @AppStorage(AppSettingsKey.enableNotifications) var enableNotifications = AppSettingsKey.enableNotificationsDefault
+    @AppStorage(AppSettingsKey.lastBackupExportDate) var lastBackupExportDate = 0.0
 
     @State private var eventKit = EventKitService()
     @State private var weather = WeatherProvider()
+
+    // バックアップ関連の状態管理
+    @State private var exportDocument: Str8BackupDocument?
+    @State private var showExporter = false
+    @State private var showImporter = false
+    @State private var showExportPassphrasePrompt = false
+    @State private var showImportPassphrasePrompt = false
+    @State private var passphraseInput = ""
+    @State private var passphraseConfirm = ""
+    @State private var pendingImportData: Data?
+    @State private var showRestoreConfirmation = false
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
 
     var body: some View {
         Form {
@@ -207,8 +222,117 @@ struct CalendarSettingsView: View {
                     }
                 }
             }
+
+            // MARK: - バックアップセクション
+            Section(header: Text("バックアップ")) {
+                // エクスポートボタン
+                Button(action: {
+                    passphraseInput = ""
+                    passphraseConfirm = ""
+                    showExportPassphrasePrompt = true
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.up.doc")
+                        Text("エクスポート (.str8)")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
+
+                // インポートボタン
+                Button(action: {
+                    showImporter = true
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.down.doc")
+                        Text("インポート")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
+
+                // 最終エクスポート日時表示
+                HStack {
+                    Text("最終エクスポート")
+                    Spacer()
+                    if lastBackupExportDate > 0 {
+                        Text(Date(timeIntervalSinceReferenceDate: lastBackupExportDate), style: .date)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("未実施")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // 30日超過時の警告
+                if shouldShowBackupWarning() {
+                    Label("最後のバックアップから30日以上経っています", systemImage: "exclamationmark.circle")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
         }
         .navigationTitle("カレンダー設定")
+        .fileExporter(
+            isPresented: $showExporter,
+            document: exportDocument,
+            contentType: .str8,
+            defaultFilename: exportDefaultFileName()
+        ) { result in
+            handleExportResult(result)
+        }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.str8],
+            onCompletion: handleImportSelection
+        )
+        .alert("エクスポート用のパスフレーズ", isPresented: $showExportPassphrasePrompt) {
+            SecureField("パスフレーズ", text: $passphraseInput)
+            SecureField("パスフレーズ（確認）", text: $passphraseConfirm)
+            Button("キャンセル", role: .cancel) {}
+            Button("エクスポート") {
+                if passphraseInput.isEmpty {
+                    errorMessage = "パスフレーズを入力してください"
+                    showErrorAlert = true
+                } else if passphraseInput != passphraseConfirm {
+                    errorMessage = "パスフレーズが一致しません"
+                    showErrorAlert = true
+                } else {
+                    performExport(passphrase: passphraseInput)
+                }
+            }
+        } message: {
+            Text("バックアップを保護するため、パスフレーズを2回入力してください")
+        }
+        .alert("復元の確認", isPresented: $showRestoreConfirmation) {
+            Button("キャンセル", role: .cancel) {
+                pendingImportData = nil
+            }
+            Button("消去して復元", role: .destructive) {
+                passphraseInput = ""
+                showImportPassphrasePrompt = true
+            }
+        } message: {
+            Text("現在のデータを全て消去して復元します。取り消せません。")
+        }
+        .alert("復元用のパスフレーズ", isPresented: $showImportPassphrasePrompt) {
+            SecureField("パスフレーズ", text: $passphraseInput)
+            Button("キャンセル", role: .cancel) {
+                pendingImportData = nil
+            }
+            Button("復元") {
+                performRestore(passphrase: passphraseInput)
+            }
+        } message: {
+            Text("バックアップを復元するため、パスフレーズを入力してください")
+        }
+        .alert("エラー", isPresented: $showErrorAlert) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "不明なエラーが発生しました")
+        }
     }
 
     // MARK: - ヘルパー
@@ -265,6 +389,108 @@ struct CalendarSettingsView: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    // MARK: - バックアップヘルパー関数
+
+    private func performExport(passphrase: String) {
+        do {
+            let data = try BackupService.export(context: modelContext, passphrase: passphrase)
+            exportDocument = Str8BackupDocument(data: data)
+            showExporter = true
+        } catch {
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+    }
+
+    private func handleExportResult(_ result: Result<URL, Error>) {
+        switch result {
+        case .success:
+            // 実際に保存できた時だけ「最終エクスポート」を更新（保存ダイアログのキャンセルは対象外）
+            lastBackupExportDate = Date().timeIntervalSinceReferenceDate
+        case .failure(let error):
+            errorMessage = "エクスポートに失敗しました: \(error.localizedDescription)"
+            showErrorAlert = true
+        }
+    }
+
+    /// ファイル選択直後にセキュリティスコープ内で読み込んでおく（スコープ解放後に URL を読まない）。
+    private func handleImportSelection(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            guard url.startAccessingSecurityScopedResource() else {
+                errorMessage = "ファイルにアクセスできませんでした"
+                showErrorAlert = true
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+
+            do {
+                pendingImportData = try Data(contentsOf: url)
+                showRestoreConfirmation = true
+            } catch {
+                errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
+                showErrorAlert = true
+            }
+        case .failure(let error):
+            errorMessage = "ファイル選択に失敗しました: \(error.localizedDescription)"
+            showErrorAlert = true
+        }
+    }
+
+    private func performRestore(passphrase: String) {
+        guard let data = pendingImportData else { return }
+        pendingImportData = nil
+
+        do {
+            try BackupService.restore(data: data, passphrase: passphrase, context: modelContext)
+        } catch {
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+    }
+
+    private func shouldShowBackupWarning() -> Bool {
+        guard lastBackupExportDate > 0 else { return true }
+        let lastBackupDate = Date(timeIntervalSinceReferenceDate: lastBackupExportDate)
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? .now
+        return lastBackupDate < thirtyDaysAgo
+    }
+
+    private func exportDefaultFileName() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return "str8-backup-\(formatter.string(from: Date())).str8"
+    }
+}
+
+// MARK: - FileDocument for Backup Export
+
+struct Str8BackupDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.str8] }
+
+    var data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.data = data
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
+// MARK: - UTType Extension
+
+extension UTType {
+    static let str8 = UTType(exportedAs: "str8.todo.str8backup", conformingTo: .data)
 }
 
 // MARK: - 枠テンプレートエディタ（最小版、磨き込みは P9）

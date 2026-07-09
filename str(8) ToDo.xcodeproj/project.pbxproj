@@ -47,6 +47,7 @@
 		FF000000000000000000014D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014C /* PeerSession.swift */; };
 		FF000000000000000000014F /* ProximityGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014E /* ProximityGate.swift */; };
 		FF0000000000000000000151 /* ApprovalMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000150 /* ApprovalMessage.swift */; };
+		FF0000000000000000000153 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000152 /* BackupService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -92,6 +93,7 @@
 		FF000000000000000000014C /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
 		FF000000000000000000014E /* ProximityGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityGate.swift; sourceTree = "<group>"; };
 		FF0000000000000000000150 /* ApprovalMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalMessage.swift; sourceTree = "<group>"; };
+		FF0000000000000000000152 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +132,7 @@
 				FF0000000000000000000148 /* ApprovalQueueView.swift */,
 				FF0000000000000000000150 /* ApprovalMessage.swift */,
 				FF0000000000000000000103 /* AppSettings.swift */,
+				FF0000000000000000000152 /* BackupService.swift */,
 				FF000000000000000000012C /* BandModels.swift */,
 				FF0000000000000000000105 /* CalendarSettingsView.swift */,
 				FF0000000000000000000136 /* CapsuleOverlay.swift */,
@@ -244,6 +247,7 @@
 				FF0000000000000000000149 /* ApprovalQueueView.swift in Sources */,
 				FF0000000000000000000151 /* ApprovalMessage.swift in Sources */,
 				FF0000000000000000000104 /* AppSettings.swift in Sources */,
+				FF0000000000000000000153 /* BackupService.swift in Sources */,
 				FF000000000000000000012D /* BandModels.swift in Sources */,
 				FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */,
 				FF0000000000000000000137 /* CapsuleOverlay.swift in Sources */,
