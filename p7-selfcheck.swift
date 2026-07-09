@@ -183,6 +183,22 @@ func testTravelRefreshKey() {
     print("testTravelRefreshKey: passed（5分粒度トリガー）")
 }
 
+// MARK: - Test 6: cacheTTL（出発直前は鮮度優先）
+
+@MainActor
+func testCacheTTL() {
+    let now = Date()
+    assert(DepartureService.cacheTTL(start: now.addingTimeInterval(3599), now: now) == 300,
+           "59分59秒先: TTL 5分")
+    assert(DepartureService.cacheTTL(start: now.addingTimeInterval(3601), now: now) == 1800,
+           "1時間1秒先: TTL 30分")
+    // 過去でもクラッシュしない（1時間以内扱いで 5分）
+    assert(DepartureService.cacheTTL(start: now.addingTimeInterval(-3600), now: now) == 300,
+           "過去: クラッシュせず TTL 5分")
+
+    print("testCacheTTL: passed（TTL 境界）")
+}
+
 // MARK: - Main
 
 @main
@@ -194,6 +210,7 @@ struct P7SelfCheck {
         testDepartureGate()
         testDayRowBuilder()
         testTravelRefreshKey()
+        testCacheTTL()
 
         print("p7-selfcheck: all passed")
     }

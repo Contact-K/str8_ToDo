@@ -22,7 +22,6 @@ struct WeekView: View {
     @Query private var weatherCache: [WeatherCache]
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var bandFrames: [BandFrameInfo] = []
-    @State private var departureService = DepartureService()
     @State private var travelETAs: [UUID: TimeInterval] = [:]
 
     // Dynamic Type に追随する行高パラメータ
@@ -82,6 +81,13 @@ struct WeekView: View {
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 220)
 
+                    // 週共通の天気鮮度ラベル（7列個別には出さない）
+                    if let fetchedAt = latestWeatherFetch(days: days) {
+                        Text("天気 \(Self.freshnessFormatter.string(from: fetchedAt))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if let onOpenSettings {
                         Button(action: onOpenSettings) {
                             Image(systemName: "gearshape")
@@ -124,25 +130,11 @@ struct WeekView: View {
         }
     }
 
-    /// 週内の時刻固定+座標ありタスクのうちゲートを通るものだけ ETA を取得。
+    /// 週内の時刻固定タスクの ETA を取得（ゲート判定は DepartureService.eta が唯一の判定点）。
     @MainActor
     private func refreshTravelETAs() async {
-        let now = Date.now
-        var newETAs: [UUID: TimeInterval] = [:]
-        for day in weekDays {
-            for task in pinnedTasks(on: day) {
-                guard DepartureGate.shouldRequestRoute(
-                    start: task.startDate,
-                    hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
-                    isTimePinned: task.isTimePinned,
-                    now: now
-                ) else { continue }
-                if let eta = await departureService.eta(for: task, now: now) {
-                    newETAs[task.id] = eta
-                }
-            }
-        }
-        travelETAs = newETAs
+        let candidates = weekDays.flatMap { pinnedTasks(on: $0) }
+        travelETAs = await DepartureService.shared.etas(for: candidates, now: .now)
     }
 
     // MARK: - タスク抽出
@@ -375,6 +367,20 @@ struct WeekView: View {
     }
 
     // MARK: - ヘルパー
+
+    private static let freshnessFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d HH:mm"
+        return f
+    }()
+
+    /// その週の WeatherCache のうち最新の fetchedAt（なければ nil）。
+    private func latestWeatherFetch(days: [Date]) -> Date? {
+        weatherCache
+            .filter { cache in days.contains { weekCalendar.isDate(cache.day, inSameDayAs: $0) } }
+            .map(\.fetchedAt)
+            .max()
+    }
 
     private func isToday(_ date: Date) -> Bool { weekCalendar.isDateInToday(date) }
 

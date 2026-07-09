@@ -29,85 +29,82 @@ enum DepartureGate {
     }
 }
 
-// MARK: - ETA キャッシュ
-
-private struct CachedETA {
-    let eta: TimeInterval
-    let fetchedAt: Date
-}
-
 // MARK: - DepartureService（MapKit）
 
 @MainActor
 @Observable
 final class DepartureService {
-    private var etaCache: [UUID: CachedETA] = [:]
-    private let cacheDuration: TimeInterval = 30 * 60  // 30 分有効
+    /// 全ビュー共有インスタンス（ETA キャッシュを一元化）。
+    static let shared = DepartureService()
+
+    /// eta: nil = 直近の要求が失敗（TTL 内は再要求しない）。
+    private var etaCache: [UUID: (eta: TimeInterval?, fetchedAt: Date)] = [:]
+
+    /// 実行中要求（await 跨ぎの二重要求防止。日/週ビューの .task 同時発火対策）。
+    private var inFlight: [UUID: Task<TimeInterval?, Never>] = [:]
+
+    /// キャッシュ TTL: 出発まで1時間以内なら5分（鮮度優先）、それ以外は30分。
+    static func cacheTTL(start: Date, now: Date) -> TimeInterval {
+        start.timeIntervalSince(now) <= 3600 ? 5 * 60 : 30 * 60
+    }
+
+    /// 候補タスク群の ETA をまとめて取得。ゲート判定は eta(for:now:) に集約されているので
+    /// 呼び出し側は候補タスクを渡すだけ。失敗（nil）は除外した辞書を返す。
+    func etas(for tasks: [TaskItem], now: Date) async -> [UUID: TimeInterval] {
+        var result: [UUID: TimeInterval] = [:]
+        for task in tasks {
+            if let eta = await eta(for: task, now: now) {
+                result[task.id] = eta
+            }
+        }
+        return result
+    }
 
     /// 現在位置から PlaceTag 座標へのルート（移動時間）を取得。
-    /// shouldRequestRoute で false なら呼ばないこと（UI側で事前チェック）。
-    /// キャッシュ有効期間内は再要求しない。エラー時は nil。
+    /// DepartureGate 判定はここが唯一の判定点（呼び出し側の事前チェック不要）。
+    /// TTL 内は成功/失敗問わず再要求しない。エラー時は nil。
     func eta(for task: TaskItem, now: Date) async -> TimeInterval? {
-        // キャッシュ確認
-        if let cached = etaCache[task.id] {
-            if now.timeIntervalSince(cached.fetchedAt) < cacheDuration {
-                return cached.eta
-            } else {
-                etaCache.removeValue(forKey: task.id)
-            }
+        guard let startDate = task.startDate,
+              DepartureGate.shouldRequestRoute(
+                start: startDate,
+                hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
+                isTimePinned: task.isTimePinned,
+                now: now
+              ) else { return nil }
+
+        // キャッシュ確認（失敗キャッシュも TTL 内は尊重して再要求しない）
+        if let cached = etaCache[task.id],
+           now.timeIntervalSince(cached.fetchedAt) < Self.cacheTTL(start: startDate, now: now) {
+            return cached.eta
         }
 
-        // ゲート判定（念のため）
-        guard let startDate = task.startDate else { return nil }
-        guard DepartureGate.shouldRequestRoute(
-            start: startDate,
-            hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
-            isTimePinned: task.isTimePinned,
-            now: now
-        ) else { return nil }
+        // 実行中要求があれば相乗り（await 中にキャッシュ未書き込みの窓があるため）
+        if let running = inFlight[task.id] {
+            return await running.value
+        }
 
-        // AppSettings から現在位置を取得
-        let (userLat, userLon) = getCurrentLocation()
-        guard userLat != 0 || userLon != 0 else { return nil }
-
-        // 目的地座標
+        // 現在位置（天気取得時に保存されたもの）。未保存なら要求しない。
+        guard let origin = LastKnownLocation.load() else { return nil }
         guard let destLat = task.place?.latitude, let destLon = task.place?.longitude else { return nil }
 
-        // MKDirections リクエスト
-        let sourcePlacemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: userLat, longitude: userLon))
-        let destinationPlacemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: destLat, longitude: destLon))
+        let taskID = task.id
+        let request = Task { [weak self] () -> TimeInterval? in
+            defer { self?.inFlight[taskID] = nil }
 
-        let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: sourcePlacemark)
-        request.destination = MKMapItem(placemark: destinationPlacemark)
-        // ponytail: walking と .automobile の選択。既定は .automobile（手段が明示されなければ車）。
-        request.transportType = .automobile
-        request.requestsAlternateRoutes = false
+            let mkRequest = MKDirections.Request()
+            mkRequest.source = MKMapItem(placemark: MKPlacemark(
+                coordinate: CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)))
+            mkRequest.destination = MKMapItem(placemark: MKPlacemark(
+                coordinate: CLLocationCoordinate2D(latitude: destLat, longitude: destLon)))
+            // ponytail: 移動手段は .automobile 固定。手段選択が要るなら TaskItem にフィールド追加から
+            mkRequest.transportType = .automobile
+            mkRequest.requestsAlternateRoutes = false
 
-        do {
-            let directions = MKDirections(request: request)
-            let response = try await directions.calculate()
-            if let route = response.routes.first {
-                let travelTime = route.expectedTravelTime
-                etaCache[task.id] = CachedETA(eta: travelTime, fetchedAt: now)
-                return travelTime
-            }
-        } catch {
-            // 経路計算失敗→nil（移動行を出さないだけ）
-            return nil
+            let eta = (try? await MKDirections(request: mkRequest).calculate())?.routes.first?.expectedTravelTime
+            self?.etaCache[taskID] = (eta: eta, fetchedAt: now)   // 失敗（nil）も同 TTL でキャッシュ
+            return eta
         }
-
-        return nil
-    }
-
-    /// AppSettings から現在位置（緯度・経度）を取得。未取得なら (0, 0)。
-    private func getCurrentLocation() -> (latitude: Double, longitude: Double) {
-        let defaults = UserDefaults.standard
-        let lat = defaults.double(forKey: AppSettingsKey.lastKnownLatitude)
-        let lon = defaults.double(forKey: AppSettingsKey.lastKnownLongitude)
-        return (lat, lon)
+        inFlight[taskID] = request
+        return await request.value
     }
 }
-
-// ponytail: MapKit 上流（位置情報取得）は別のサービス（LocationManager など）で担当。
-// DepartureService は AppSettings に保存された座標を読むだけ。

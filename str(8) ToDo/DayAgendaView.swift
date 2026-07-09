@@ -20,8 +20,9 @@ struct DayAgendaView: View {
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TaskItem]
     @State private var expandedIDs: Set<UUID> = []
-    @State private var departureService = DepartureService()
     @State private var travelData: [UUID: TimeInterval] = [:]
+    /// 日+位置単位の SunCalc キャッシュ（毎分の再計算を避ける）。key = "startOfDay-lat-lon"
+    @State private var sunCache: (key: String, times: (sunrise: Date, sunset: Date)?)? = nil
 
     private let cal = Calendar.current
 
@@ -125,38 +126,22 @@ struct DayAgendaView: View {
         )
     }
 
-    /// 太陽位置（日の出・日の入り）を計算。座標未取得なら nil。
+    /// 太陽位置（日の出・日の入り）。日+位置が同じ間はキャッシュを返す（毎分再計算しない）。
+    /// 座標未取得なら nil。
     private func calculateSunTimes() -> (sunrise: Date, sunset: Date)? {
-        let defaults = UserDefaults.standard
-        let lat = defaults.double(forKey: AppSettingsKey.lastKnownLatitude)
-        let lon = defaults.double(forKey: AppSettingsKey.lastKnownLongitude)
-        guard lat != 0 || lon != 0 else { return nil }
-        return SunCalc.sunTimes(on: date, latitude: lat, longitude: lon, calendar: cal)
+        guard let location = LastKnownLocation.load() else { return nil }
+        let key = "\(cal.startOfDay(for: date).timeIntervalSinceReferenceDate)-\(location.latitude)-\(location.longitude)"
+        if let cached = sunCache, cached.key == key { return cached.times }
+        let times = SunCalc.sunTimes(on: date, latitude: location.latitude, longitude: location.longitude, calendar: cal)
+        // ponytail: body 内から呼ばれるので更新は次ランループに逃がす（描画中の state 変更警告回避）
+        Task { @MainActor in sunCache = (key, times) }
+        return times
     }
 
-    /// 出発逆算データを非同期で更新。
+    /// 出発逆算データを更新（ゲート判定は DepartureService.eta が唯一の判定点）。
     @MainActor
     private func refreshTravelData(now: Date) async {
-        var newData: [UUID: TimeInterval] = [:]
-        let tasks = dayTasks()
-
-        for task in tasks {
-            guard let startDate = task.startDate,
-                  DepartureGate.shouldRequestRoute(
-                    start: startDate,
-                    hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
-                    isTimePinned: task.isTimePinned,
-                    now: now
-                  ) else {
-                continue
-            }
-
-            if let eta = await departureService.eta(for: task, now: now) {
-                newData[task.id] = eta
-            }
-        }
-
-        self.travelData = newData
+        travelData = await DepartureService.shared.etas(for: dayTasks(), now: now)
     }
 
     /// その日と重なるタスク。startDate が同日のもの＋前日以前に開始しその日に食い込む時刻付きタスク。

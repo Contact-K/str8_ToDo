@@ -23,3 +23,17 @@ enum AppSettingsKey {
     /// 最後に取得した現在地の経度（SunCalc/出発逆算が使う）
     static let lastKnownLongitude = "lastKnownLongitude"
 }
+
+// MARK: - 現在地ヘルパー
+
+enum LastKnownLocation {
+    /// 天気取得時に保存された現在地。未保存（キー不存在）なら nil。
+    /// (0,0) 実座標と区別するため存在チェックで判定する。
+    static func load() -> (latitude: Double, longitude: Double)? {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: AppSettingsKey.lastKnownLatitude) != nil,
+              defaults.object(forKey: AppSettingsKey.lastKnownLongitude) != nil else { return nil }
+        return (defaults.double(forKey: AppSettingsKey.lastKnownLatitude),
+                defaults.double(forKey: AppSettingsKey.lastKnownLongitude))
+    }
+}

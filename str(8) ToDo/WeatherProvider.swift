@@ -149,6 +149,12 @@ struct WeatherFreshnessLabel: View {
                 }
             }
 
+            // 過去日のキャッシュを掃除（バッチ削除は inverse 制約の教訓により使わず個別 delete）
+            let stalePredicate = #Predicate<WeatherCache> { $0.day < today }
+            if let stale = try? context.fetch(FetchDescriptor(predicate: stalePredicate)) {
+                for row in stale { context.delete(row) }
+            }
+
             try? context.save()
 
             status = .loaded
