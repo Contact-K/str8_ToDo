@@ -96,6 +96,11 @@ enum BackupService {
         var subjectID: UUID?
     }
 
+    /// 後方互換の規約：
+    /// - 後続のモデル/フィールドは必ず Optional（または default 付き init(from:)）で加算すること。
+    ///   非 Optional で足すと旧バージョンの .str8 が keyNotFound → corruptData になり読めなくなる。
+    /// - 既存フィールドの削除・リネームは formatVersion を上げて移行処理を書くこと。
+    /// - 未知キーは JSONDecoder が無視するため、加算だけなら旧アプリでも読める。
     struct BackupPayload: Codable {
         var formatVersion: Int
         var exportedAt: Date
@@ -361,9 +366,9 @@ enum BackupService {
         return result
     }
 
-    /// 暗号化ファイルを復号し、全モデルを挿入。既存データは全削除。
-    @MainActor
-    static func restore(data: Data, passphrase: String, context: ModelContext) throws {
+    /// 復号+デコード+バージョン検証のみ。ストアには書き込まない。
+    /// UI が復元確認前に exportedAt 等を表示するために使う。
+    static func readPayload(data: Data, passphrase: String) throws -> BackupPayload {
         // ファイルフォーマット検証
         guard data.count >= 5 else {
             throw BackupError.corruptData
@@ -389,6 +394,19 @@ enum BackupService {
             throw BackupError.unsupportedVersion(payload.formatVersion)
         }
 
+        return payload
+    }
+
+    /// 暗号化ファイルを復号し、全モデルを挿入。既存データは全削除。
+    @MainActor
+    static func restore(data: Data, passphrase: String, context: ModelContext) throws {
+        let payload = try readPayload(data: data, passphrase: passphrase)
+        try restore(payload: payload, context: context)
+    }
+
+    /// 全消去+挿入+save（save 失敗時は rollback して rethrow）。
+    @MainActor
+    static func restore(payload: BackupPayload, context: ModelContext) throws {
         // 全既存データ削除（参照する側から個別 delete。
         // バッチ削除 delete(model:) は inverse リレーション制約で失敗するため使わない）
         // save は挿入完了後に1回だけ：途中クラッシュでも旧データが残る（データ消失窓を作らない）。
@@ -496,6 +514,13 @@ enum BackupService {
             context.insert(session)
         }
 
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            // 「全削除+再挿入」の dirty 状態を共有 mainContext に残さない
+            // （残すと後続の無関係な save で破壊が確定する）。
+            context.rollback()
+            throw error
+        }
     }
 }

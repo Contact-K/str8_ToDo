@@ -25,6 +25,7 @@ struct CalendarSettingsView: View {
     @State private var passphraseInput = ""
     @State private var passphraseConfirm = ""
     @State private var pendingImportData: Data?
+    @State private var pendingPayload: BackupService.BackupPayload?
     @State private var showRestoreConfirmation = false
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
@@ -38,12 +39,7 @@ struct CalendarSettingsView: View {
                     Toggle("システムカレンダー同期", isOn: $syncSystemCalendar)
                         .onChange(of: syncSystemCalendar) { oldValue, newValue in
                             if newValue {
-                                Task {
-                                    if await eventKit.requestAccess() {
-                                        eventKit.sync(into: modelContext)
-                                        eventKit.observeChanges(into: modelContext)
-                                    }
-                                }
+                                syncCalendarNow()
                             }
                         }
                 }
@@ -64,12 +60,7 @@ struct CalendarSettingsView: View {
 
                 // 今すぐ同期ボタン
                 Button(action: {
-                    Task {
-                        if await eventKit.requestAccess() {
-                            eventKit.sync(into: modelContext)
-                            eventKit.observeChanges(into: modelContext)
-                        }
-                    }
+                    syncCalendarNow()
                 }) {
                     HStack {
                         Image(systemName: "arrow.clockwise")
@@ -84,9 +75,7 @@ struct CalendarSettingsView: View {
                     Toggle("天気を同期", isOn: $syncWeather)
                         .onChange(of: syncWeather) { oldValue, newValue in
                             if newValue {
-                                Task {
-                                    await weather.refresh()
-                                }
+                                refreshWeatherNow()
                             }
                         }
                 }
@@ -121,9 +110,7 @@ struct CalendarSettingsView: View {
 
                 // 天気を取得ボタン
                 Button(action: {
-                    Task {
-                        await weather.refresh()
-                    }
+                    refreshWeatherNow()
                 }) {
                     HStack {
                         Image(systemName: "cloud.fill")
@@ -291,7 +278,9 @@ struct CalendarSettingsView: View {
         .alert("エクスポート用のパスフレーズ", isPresented: $showExportPassphrasePrompt) {
             SecureField("パスフレーズ", text: $passphraseInput)
             SecureField("パスフレーズ（確認）", text: $passphraseConfirm)
-            Button("キャンセル", role: .cancel) {}
+            Button("キャンセル", role: .cancel) {
+                clearPassphrases()
+            }
             Button("エクスポート") {
                 if passphraseInput.isEmpty {
                     errorMessage = "パスフレーズを入力してください"
@@ -302,31 +291,34 @@ struct CalendarSettingsView: View {
                 } else {
                     performExport(passphrase: passphraseInput)
                 }
+                clearPassphrases()
             }
         } message: {
-            Text("バックアップを保護するため、パスフレーズを2回入力してください")
-        }
-        .alert("復元の確認", isPresented: $showRestoreConfirmation) {
-            Button("キャンセル", role: .cancel) {
-                pendingImportData = nil
-            }
-            Button("消去して復元", role: .destructive) {
-                passphraseInput = ""
-                showImportPassphrasePrompt = true
-            }
-        } message: {
-            Text("現在のデータを全て消去して復元します。取り消せません。")
+            Text("バックアップを保護するため、パスフレーズを2回入力してください。このパスフレーズは復元に必須です。忘れるとバックアップを開けません。")
         }
         .alert("復元用のパスフレーズ", isPresented: $showImportPassphrasePrompt) {
             SecureField("パスフレーズ", text: $passphraseInput)
             Button("キャンセル", role: .cancel) {
                 pendingImportData = nil
+                clearPassphrases()
             }
-            Button("復元") {
-                performRestore(passphrase: passphraseInput)
+            Button("次へ") {
+                decryptPendingImport(passphrase: passphraseInput)
+                clearPassphrases()
             }
         } message: {
             Text("バックアップを復元するため、パスフレーズを入力してください")
+        }
+        .alert("復元の確認", isPresented: $showRestoreConfirmation) {
+            Button("キャンセル", role: .cancel) {
+                pendingImportData = nil
+                pendingPayload = nil
+            }
+            Button("消去して復元", role: .destructive) {
+                performRestore()
+            }
+        } message: {
+            Text("このバックアップの作成日時: \(pendingPayload.map { formattedDateTime($0.exportedAt) } ?? "不明")\n現在のデータを全て消去して復元します。取り消せません。")
         }
         .alert("エラー", isPresented: $showErrorAlert) {
             Button("OK") { errorMessage = nil }
@@ -390,6 +382,30 @@ struct CalendarSettingsView: View {
         return formatter.string(from: date)
     }
 
+    private func formattedDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    /// システムカレンダー同期（トグルON・今すぐ同期ボタン共通）。
+    private func syncCalendarNow() {
+        Task {
+            if await eventKit.requestAccess() {
+                eventKit.sync(into: modelContext)
+                eventKit.observeChanges(into: modelContext)
+            }
+        }
+    }
+
+    /// 天気取得（トグルON・取得ボタン共通）。
+    private func refreshWeatherNow() {
+        Task {
+            await weather.refresh()
+        }
+    }
+
     // MARK: - バックアップヘルパー関数
 
     private func performExport(passphrase: String) {
@@ -425,9 +441,18 @@ struct CalendarSettingsView: View {
             }
             defer { url.stopAccessingSecurityScopedResource() }
 
+            // OOM防止: 読み込み前にサイズを確認（50MB上限）
+            let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            guard fileSize <= 50 * 1024 * 1024 else {
+                errorMessage = "バックアップファイルが大きすぎます"
+                showErrorAlert = true
+                return
+            }
+
             do {
                 pendingImportData = try Data(contentsOf: url)
-                showRestoreConfirmation = true
+                passphraseInput = ""
+                showImportPassphrasePrompt = true
             } catch {
                 errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
                 showErrorAlert = true
@@ -438,16 +463,36 @@ struct CalendarSettingsView: View {
         }
     }
 
-    private func performRestore(passphrase: String) {
+    /// 復号+検証のみ行い、成功したら作成日時つきの復元確認へ進む。
+    private func decryptPendingImport(passphrase: String) {
         guard let data = pendingImportData else { return }
+        do {
+            pendingPayload = try BackupService.readPayload(data: data, passphrase: passphrase)
+            showRestoreConfirmation = true
+        } catch {
+            // ponytail: 誤パスフレーズは破棄してやり直し（再入力リトライはフロー多段化するため見送り）
+            pendingImportData = nil
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+    }
+
+    private func performRestore() {
+        guard let payload = pendingPayload else { return }
+        pendingPayload = nil
         pendingImportData = nil
 
         do {
-            try BackupService.restore(data: data, passphrase: passphrase, context: modelContext)
+            try BackupService.restore(payload: payload, context: modelContext)
         } catch {
             errorMessage = error.localizedDescription
             showErrorAlert = true
         }
+    }
+
+    private func clearPassphrases() {
+        passphraseInput = ""
+        passphraseConfirm = ""
     }
 
     private func shouldShowBackupWarning() -> Bool {

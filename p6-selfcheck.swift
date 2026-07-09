@@ -15,15 +15,25 @@
 import Foundation
 import SwiftData
 
-// MARK: - Test 1: リレーション付きシードデータ → export → restore
+// MARK: - 共通ヘルパー
 
+/// in-memory の ModelContext を作る。container を返り値に含めて生存させる。
 @MainActor
-func testRoundtrip() {
+func makeTestContext() -> (container: ModelContainer, ctx: ModelContext) {
     let schema = Schema([TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
                          Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: config)
-    let ctx = container.mainContext
+    return (container, container.mainContext)
+}
+
+// MARK: - Test 1: リレーション付きシードデータ → export → restore
+
+@MainActor
+func testRoundtrip() {
+    // container を捨てると mainContext が無効化されて SwiftData 内部でクラッシュする。スコープ末尾まで保持。
+    let (container, ctx) = makeTestContext()
+    defer { withExtendedLifetime(container) {} }
 
     // Category を作成
     let category = Category(id: UUID(), name: "仕事", colorHex: "#FF0000", symbolName: "briefcase.fill")
@@ -73,9 +83,17 @@ func testRoundtrip() {
 
     // export
     let passphrase = "test-passphrase"
+    let exportLowerBound = Date()
     let backupData = try! BackupService.export(context: ctx, passphrase: passphrase)
     assert(backupData.count > 0, "export: データが生成された")
     assert(backupData.prefix(4) == "STR8".data(using: .utf8), "export: magic check")
+
+    // readPayload: 書き込みなしで exportedAt が読める（UI の復元確認用）
+    // ISO8601 は秒未満を切り捨てるため ±1 秒の許容を入れる
+    let peeked = try! BackupService.readPayload(data: backupData, passphrase: passphrase)
+    assert(peeked.exportedAt >= exportLowerBound.addingTimeInterval(-1)
+           && peeked.exportedAt <= Date().addingTimeInterval(1),
+           "readPayload: exportedAt が export 時刻を返す")
 
     // 全消去（バッチ削除は inverse 制約で失敗するため個別 delete のヘルパーを使う）
     try! BackupService.deleteAllModels(context: ctx)
@@ -133,11 +151,9 @@ func testRoundtrip() {
 
 @MainActor
 func testWrongPassphrase() {
-    let schema = Schema([TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
-                         Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: config)
-    let ctx = container.mainContext
+    // container を捨てると mainContext が無効化されて SwiftData 内部でクラッシュする。スコープ末尾まで保持。
+    let (container, ctx) = makeTestContext()
+    defer { withExtendedLifetime(container) {} }
 
     let task = TaskItem(title: "テスト")
     ctx.insert(task)
@@ -167,11 +183,9 @@ func testWrongPassphrase() {
 
 @MainActor
 func testCorruptData() {
-    let schema = Schema([TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
-                         Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: config)
-    let ctx = container.mainContext
+    // container を捨てると mainContext が無効化されて SwiftData 内部でクラッシュする。スコープ末尾まで保持。
+    let (container, ctx) = makeTestContext()
+    defer { withExtendedLifetime(container) {} }
 
     let task = TaskItem(title: "テスト")
     ctx.insert(task)
@@ -201,11 +215,9 @@ func testCorruptData() {
 
 @MainActor
 func testUnsupportedVersion() {
-    let schema = Schema([TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
-                         Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: config)
-    let ctx = container.mainContext
+    // container を捨てると mainContext が無効化されて SwiftData 内部でクラッシュする。スコープ末尾まで保持。
+    let (container, ctx) = makeTestContext()
+    defer { withExtendedLifetime(container) {} }
 
     let task = TaskItem(title: "テスト")
     ctx.insert(task)
