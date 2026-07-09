@@ -42,6 +42,8 @@ struct CapsuleColumnOverlay: View {
     /// startDate 当日の出現だけ true（RRULE 展開の重複出現に morph ID を付けないため）。
     var isOrigin: (TaskItem) -> Bool = { _ in true }
     var onSelectTask: ((TaskItem) -> Void)? = nil
+    /// ETA があるタスクの移動セグメントを描画するための [taskID: timeInterval]。
+    var travelETAs: [UUID: TimeInterval] = [:]
 
     private let cal = Calendar.current
 
@@ -52,6 +54,18 @@ struct CapsuleColumnOverlay: View {
                 let endMinute = startMinute + Int(task.duration / 60)
                 let startY = capsuleY(forMinute: startMinute, rows: rows)
                 let endY = capsuleY(forMinute: endMinute, rows: rows)
+
+                // ponytail: 移動セグメント（departure〜start の範囲で点線ストローク、透明度低め）
+                if let eta = travelETAs[task.id] {
+                    let departureMinute = startMinute - Int(eta / 60)
+                    let departureY = capsuleY(forMinute: departureMinute, rows: rows)
+
+                    Path { path in
+                        path.move(to: CGPoint(x: columnMinX + columnWidth / 2, y: departureY))
+                        path.addLine(to: CGPoint(x: columnMinX + columnWidth / 2, y: startY))
+                    }
+                    .stroke(task.effectiveColor.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [3]))
+                }
 
                 capsuleBody(task)
                     .frame(width: max(columnWidth - 8, 20), height: max(endY - startY, 20))

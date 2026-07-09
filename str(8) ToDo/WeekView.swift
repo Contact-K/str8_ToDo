@@ -19,8 +19,11 @@ struct WeekView: View {
 
     @Environment(\.modelContext) private var context
     @Query private var tasks: [TaskItem]
+    @Query private var weatherCache: [WeatherCache]
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var bandFrames: [BandFrameInfo] = []
+    @State private var departureService = DepartureService()
+    @State private var travelETAs: [UUID: TimeInterval] = [:]
 
     // Dynamic Type に追随する行高パラメータ
     @ScaledMetric private var rowMinHeight: CGFloat = 44
@@ -115,6 +118,31 @@ struct WeekView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: DayRowBuilder.travelRefreshKey(date: selectedDate, now: .now, calendar: weekCalendar)) {
+            // 出発逆算 ETA を取得（週切替＋5分粒度で再実行。ゲートが24h以内に絞るので実質数件、実要求は30分キャッシュが抑える）
+            await refreshTravelETAs()
+        }
+    }
+
+    /// 週内の時刻固定+座標ありタスクのうちゲートを通るものだけ ETA を取得。
+    @MainActor
+    private func refreshTravelETAs() async {
+        let now = Date.now
+        var newETAs: [UUID: TimeInterval] = [:]
+        for day in weekDays {
+            for task in pinnedTasks(on: day) {
+                guard DepartureGate.shouldRequestRoute(
+                    start: task.startDate,
+                    hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
+                    isTimePinned: task.isTimePinned,
+                    now: now
+                ) else { continue }
+                if let eta = await departureService.eta(for: task, now: now) {
+                    newETAs[task.id] = eta
+                }
+            }
+        }
+        travelETAs = newETAs
     }
 
     // MARK: - タスク抽出
@@ -187,11 +215,21 @@ struct WeekView: View {
     }
 
     private func dayHeaderCell(_ day: Date, width: CGFloat) -> some View {
+        let cal = Calendar.current
+        let displayDay = cal.startOfDay(for: day)
+        let cache = weatherCache.first(where: { cal.isDate($0.day, inSameDayAs: displayDay) })
+
         let header = VStack(spacing: 4) {
             HStack(spacing: 3) {
-                Image(systemName: "cloud.sun")
-                    .font(.caption)
-                    .foregroundStyle(.gray.opacity(0.5))
+                if let cache = cache {
+                    Image(systemName: cache.symbolName)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Image(systemName: "cloud.sun")
+                        .font(.caption)
+                        .foregroundStyle(.gray.opacity(0.5))
+                }
                 Text(dayString(day))
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -329,7 +367,8 @@ struct WeekView: View {
                     columnWidth: first.rect.width,
                     morph: morph,
                     isOrigin: { isOriginOccurrence($0, day: day) },
-                    onSelectTask: onSelectTask
+                    onSelectTask: onSelectTask,
+                    travelETAs: travelETAs
                 )
             }
         }

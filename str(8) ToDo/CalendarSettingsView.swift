@@ -402,7 +402,7 @@ struct CalendarSettingsView: View {
     /// 天気取得（トグルON・取得ボタン共通）。
     private func refreshWeatherNow() {
         Task {
-            await weather.refresh()
+            await weather.refresh(context: modelContext)
         }
     }
 

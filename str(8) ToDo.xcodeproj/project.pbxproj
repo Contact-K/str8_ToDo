@@ -48,6 +48,8 @@
 		FF000000000000000000014F /* ProximityGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000014E /* ProximityGate.swift */; };
 		FF0000000000000000000151 /* ApprovalMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000150 /* ApprovalMessage.swift */; };
 		FF0000000000000000000153 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000152 /* BackupService.swift */; };
+		FF0000000000000000000155 /* SunCalc.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000154 /* SunCalc.swift */; };
+		FF0000000000000000000157 /* DepartureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000156 /* DepartureService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -94,6 +96,8 @@
 		FF000000000000000000014E /* ProximityGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityGate.swift; sourceTree = "<group>"; };
 		FF0000000000000000000150 /* ApprovalMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalMessage.swift; sourceTree = "<group>"; };
 		FF0000000000000000000152 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		FF0000000000000000000154 /* SunCalc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunCalc.swift; sourceTree = "<group>"; };
+		FF0000000000000000000156 /* DepartureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepartureService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +138,7 @@
 				FF0000000000000000000103 /* AppSettings.swift */,
 				FF0000000000000000000152 /* BackupService.swift */,
 				FF000000000000000000012C /* BandModels.swift */,
+				FF0000000000000000000156 /* DepartureService.swift */,
 				FF0000000000000000000105 /* CalendarSettingsView.swift */,
 				FF0000000000000000000136 /* CapsuleOverlay.swift */,
 				FF000000000000000000014A /* ChopDetector.swift */,
@@ -156,6 +161,7 @@
 				FF0000000000000000000138 /* SortDeckEngine.swift */,
 				FF000000000000000000013A /* SortDeckView.swift */,
 				FF000000000000000000014E /* ProximityGate.swift */,
+				FF0000000000000000000154 /* SunCalc.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
@@ -249,6 +255,7 @@
 				FF0000000000000000000104 /* AppSettings.swift in Sources */,
 				FF0000000000000000000153 /* BackupService.swift in Sources */,
 				FF000000000000000000012D /* BandModels.swift in Sources */,
+				FF0000000000000000000157 /* DepartureService.swift in Sources */,
 				FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */,
 				FF0000000000000000000137 /* CapsuleOverlay.swift in Sources */,
 				FF000000000000000000014B /* ChopDetector.swift in Sources */,
@@ -271,6 +278,7 @@
 				FF0000000000000000000139 /* SortDeckEngine.swift in Sources */,
 				FF000000000000000000013B /* SortDeckView.swift in Sources */,
 				FF000000000000000000014F /* ProximityGate.swift in Sources */,
+				FF0000000000000000000155 /* SunCalc.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,

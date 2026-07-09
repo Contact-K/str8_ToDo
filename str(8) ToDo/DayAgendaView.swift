@@ -20,6 +20,8 @@ struct DayAgendaView: View {
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TaskItem]
     @State private var expandedIDs: Set<UUID> = []
+    @State private var departureService = DepartureService()
+    @State private var travelData: [UUID: TimeInterval] = [:]
 
     private let cal = Calendar.current
 
@@ -62,6 +64,14 @@ struct DayAgendaView: View {
                             case .nowSeparator:
                                 nowSeparatorRow(now: now)
                                     .id(row.id)
+
+                            case .sun(let isSunrise, let time):
+                                sunRow(isSunrise: isSunrise, time: time)
+                                    .id(row.id)
+
+                            case .travel(let task, let departure, let eta):
+                                travelRow(task: task, departure: departure, eta: eta)
+                                    .id(row.id)
                             }
                         }
                     }
@@ -78,6 +88,10 @@ struct DayAgendaView: View {
                         proxy.scrollTo("now", anchor: .center)
                     }
                 }
+                .task(id: DayRowBuilder.travelRefreshKey(date: date, now: now, calendar: cal)) {
+                    // 出発逆算データを取得（date 変更＋5分粒度で再実行。実要求は30分キャッシュが抑える）
+                    await refreshTravelData(now: now)
+                }
             }
         }
     }
@@ -87,14 +101,62 @@ struct DayAgendaView: View {
     private func buildRows(isToday: Bool, now: Date) -> [DayRow] {
         let tasks = dayTasks()
         let bands = BandAssignment.resolveTemplate(for: date, context: context, calendar: cal)?.orderedBands ?? []
+
+        // 太陽位置を計算
+        let sunTimes = calculateSunTimes()
+
+        // 出発逆算データを集計
+        let travelList = tasks.compactMap { task -> (task: TaskItem, departure: Date, eta: TimeInterval)? in
+            guard let eta = travelData[task.id] else { return nil }
+            guard let startDate = task.startDate else { return nil }
+            let departure = startDate.addingTimeInterval(-eta)
+            return (task, departure, eta)
+        }.sorted { ($0.departure.timeIntervalSince(date)) < ($1.departure.timeIntervalSince(date)) }
+
         return DayRowBuilder.buildRows(
             day: date,
             allDayTasks: tasks.filter { $0.isAllDay },
             timedTasks: tasks.filter { !$0.isAllDay && $0.startDate != nil },
             bands: bands,
             now: isToday ? now : nil,
-            calendar: cal
+            calendar: cal,
+            sunTimes: sunTimes,
+            travel: travelList
         )
+    }
+
+    /// 太陽位置（日の出・日の入り）を計算。座標未取得なら nil。
+    private func calculateSunTimes() -> (sunrise: Date, sunset: Date)? {
+        let defaults = UserDefaults.standard
+        let lat = defaults.double(forKey: AppSettingsKey.lastKnownLatitude)
+        let lon = defaults.double(forKey: AppSettingsKey.lastKnownLongitude)
+        guard lat != 0 || lon != 0 else { return nil }
+        return SunCalc.sunTimes(on: date, latitude: lat, longitude: lon, calendar: cal)
+    }
+
+    /// 出発逆算データを非同期で更新。
+    @MainActor
+    private func refreshTravelData(now: Date) async {
+        var newData: [UUID: TimeInterval] = [:]
+        let tasks = dayTasks()
+
+        for task in tasks {
+            guard let startDate = task.startDate,
+                  DepartureGate.shouldRequestRoute(
+                    start: startDate,
+                    hasCoordinates: task.place?.latitude != nil && task.place?.longitude != nil,
+                    isTimePinned: task.isTimePinned,
+                    now: now
+                  ) else {
+                continue
+            }
+
+            if let eta = await departureService.eta(for: task, now: now) {
+                newData[task.id] = eta
+            }
+        }
+
+        self.travelData = newData
     }
 
     /// その日と重なるタスク。startDate が同日のもの＋前日以前に開始しその日に食い込む時刻付きタスク。
@@ -217,13 +279,90 @@ struct DayAgendaView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            // 次の出発逆算タスクがあれば表示
+            if let nextTravel = findNextTravelTask(now: now) {
+                Text("出発は\(formatTime(nextTravel.departure))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("今")
     }
 
+    private func sunRow(isSunrise: Bool, time: Date) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isSunrise ? "sunrise.fill" : "sunset.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+
+            Text(isSunrise ? "日の出" : "日の入り")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(formatTime(time))
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.orange.opacity(0.7))
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(isSunrise ? "日の出" : "日の入り") \(formatTime(time))")
+    }
+
+    private func travelRow(task: TaskItem, departure: Date, eta: TimeInterval) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "car.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("移動")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Text(formatDurationShort(eta))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Text("・\(formatTime(departure))に出発")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        )
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("移動 \(formatDurationShort(eta)) \(formatTime(departure))に出発")
+    }
+
     // MARK: - ヘルパー
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
+    private func formatTime(_ date: Date) -> String {
+        Self.timeFormatter.string(from: date)
+    }
 
     private func formatTimeRange(from startMin: Int, to endMin: Int) -> String {
         String(format: "%02d:%02d–%02d:%02d", startMin / 60, startMin % 60, endMin / 60, endMin % 60)
@@ -235,6 +374,17 @@ struct DayAgendaView: View {
             return String(format: "%.1fh", Double(totalMinutes) / 60)
         }
         return "\(totalMinutes)分"
+    }
+
+    /// 次の出発逆算タスク（now 以降で departure が最も近いもの）。
+    private func findNextTravelTask(now: Date) -> (task: TaskItem, departure: Date, eta: TimeInterval)? {
+        let tasks = dayTasks()
+        return tasks.compactMap { task -> (task: TaskItem, departure: Date, eta: TimeInterval)? in
+            guard let eta = travelData[task.id] else { return nil }
+            guard let startDate = task.startDate else { return nil }
+            let departure = startDate.addingTimeInterval(-eta)
+            return departure >= now ? (task, departure, eta) : nil
+        }.sorted { $0.departure < $1.departure }.first
     }
 }
 

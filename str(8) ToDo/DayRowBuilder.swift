@@ -8,12 +8,14 @@
 
 import Foundation
 
-/// 日ビューの1行。travel ケースは P7 で追加。
+/// 日ビューの1行。
 enum DayRow: Identifiable {
     case bandHeading(Band)
     case task(TaskItem)
     case gap(start: Date, duration: TimeInterval)
     case nowSeparator
+    case sun(isSunrise: Bool, time: Date)
+    case travel(task: TaskItem, departure: Date, eta: TimeInterval)
 
     var id: String {
         switch self {
@@ -25,17 +27,29 @@ enum DayRow: Identifiable {
             return "gap-\(Int(start.timeIntervalSince1970))"
         case .nowSeparator:
             return "now"
+        case .sun(let isSunrise, let time):
+            return "sun-\(isSunrise ? "rise" : "set")-\(Int(time.timeIntervalSince1970))"
+        case .travel(let task, _, _):
+            return "travel-\(task.id.uuidString)"
         }
     }
 }
 
 enum DayRowBuilder {
-    /// 終日タスク（先頭固定）＋ 枠見出し/時刻付きタスク/空き/「今」を
+    /// 終日タスク（先頭固定）＋ 枠見出し/時刻付きタスク/空き/「今」/太陽/移動を
     /// 表示日 day の 0:00 からの経過分で安定ソートしてマージした行列を返す。
     /// 前日から跨ぐタスクは分0（0:00）位置にクランプする（時刻表示は実時刻のまま）。
-    /// 同分のタイブレーク: 見出し(0) → 空き(1) → 今(2) → タスク(3)。同時刻タスクは id 昇順。
-    static func buildRows(day: Date, allDayTasks: [TaskItem], timedTasks: [TaskItem], bands: [Band],
-                          now: Date?, calendar: Calendar = .current) -> [DayRow] {
+    /// 同分のタイブレーク: 見出し(0) → 空き(1) → 太陽(1) → 移動(2、挿入順で今の前) → 今(2) → タスク(3)。同時刻タスクは id 昇順。
+    static func buildRows(
+        day: Date,
+        allDayTasks: [TaskItem],
+        timedTasks: [TaskItem],
+        bands: [Band],
+        now: Date?,
+        calendar: Calendar = .current,
+        sunTimes: (sunrise: Date, sunset: Date)? = nil,
+        travel: [(task: TaskItem, departure: Date, eta: TimeInterval)] = []
+    ) -> [DayRow] {
         let dayStart = calendar.startOfDay(for: day)
         /// day の 0:00 からの経過分（前日は負になる）。
         func minuteOfDay(_ date: Date) -> Int {
@@ -68,6 +82,21 @@ enum DayRowBuilder {
             }
         }
 
+        // 太陽位置（日の出・日の入り）
+        if let sunTimes {
+            let sunriseMinute = min(1440, max(0, minuteOfDay(sunTimes.sunrise)))
+            entries.append((sunriseMinute, 1, .sun(isSunrise: true, time: sunTimes.sunrise)))
+
+            let sunsetMinute = min(1440, max(0, minuteOfDay(sunTimes.sunset)))
+            entries.append((sunsetMinute, 1, .sun(isSunrise: false, time: sunTimes.sunset)))
+        }
+
+        // 出発逆算（移動）
+        for item in travel {
+            let departureMinute = min(1440, max(0, minuteOfDay(item.departure)))
+            entries.append((departureMinute, 2, .travel(task: item.task, departure: item.departure, eta: item.eta)))
+        }
+
         if let now {
             entries.append((minuteOfDay(now), 2, .nowSeparator))
         }
@@ -80,5 +109,12 @@ enum DayRowBuilder {
             .map(\.element.row)
 
         return allDayTasks.map(DayRow.task) + merged
+    }
+
+    /// travel 再計算のトリガーキー。5分粒度で変わる（TimelineView 毎分再評価 × MKDirections 連打防止の折衷）。
+    /// 実ネットワーク要求は DepartureService の30分キャッシュが抑えるので、5分ごとの再評価は実質無料。
+    static func travelRefreshKey(date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let dayStart = calendar.startOfDay(for: date)
+        return "\(dayStart.timeIntervalSinceReferenceDate)-\(Int(now.timeIntervalSinceReferenceDate / 300))"
     }
 }
