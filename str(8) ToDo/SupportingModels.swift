@@ -71,3 +71,51 @@ final class DayStat {
         self.focusSeconds = focusSeconds
     }
 }
+
+// MARK: - 再構築
+
+extension DayStat {
+    /// 全 DayStat を削除して approved タスク + FocusSession から再構築する。
+    /// 冪等（二重実行で二重カウントなし）。
+    @MainActor
+    static func rebuildDayStats(context: ModelContext) {
+        let cal = Calendar.current
+
+        // 既存 DayStat を全削除
+        let allStats = (try? context.fetch(FetchDescriptor<DayStat>())) ?? []
+        allStats.forEach { context.delete($0) }
+
+        // approved タスクを日ごと集計
+        var dayMap: [Date: (count: Int, focusSeconds: Int)] = [:]
+
+        let allTasks = (try? context.fetch(FetchDescriptor<TaskItem>())) ?? []
+        for task in allTasks where task.status == .approved {
+            let achieveDate = task.approvedAt ?? task.completedAt ?? task.startDate
+            if let date = achieveDate {
+                let dayStart = cal.startOfDay(for: date)
+                if dayMap[dayStart] == nil {
+                    dayMap[dayStart] = (count: 0, focusSeconds: 0)
+                }
+                dayMap[dayStart]!.count += 1
+            }
+        }
+
+        // FocusSession の end フィールドから focusSeconds を集計
+        let allSessions = (try? context.fetch(FetchDescriptor<FocusSession>())) ?? []
+        for session in allSessions {
+            let dayStart = cal.startOfDay(for: session.end)
+            let duration = Int(session.end.timeIntervalSince(session.start))
+            if dayMap[dayStart] == nil {
+                dayMap[dayStart] = (count: 0, focusSeconds: 0)
+            }
+            dayMap[dayStart]!.focusSeconds += duration
+        }
+
+        // 全 DayStat は冒頭で delete 済みなので素直に insert（既存行は残っていない）
+        for (day, stats) in dayMap {
+            context.insert(DayStat(day: day, completedCount: stats.count, focusSeconds: stats.focusSeconds))
+        }
+
+        try? context.save()
+    }
+}

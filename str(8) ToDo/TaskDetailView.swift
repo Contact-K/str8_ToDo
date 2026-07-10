@@ -54,11 +54,13 @@ struct TaskDetailView: View {
                     Image(systemName: task.isImportant ? "star.fill" : "star")
                         .foregroundColor(task.isImportant ? .yellow : .gray)
                 }
+                .accessibilityLabel(task.isImportant ? "重要を解除" : "重要に設定")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive, action: { showDeleteConfirmation = true }) {
                     Image(systemName: "trash")
                 }
+                .accessibilityLabel("削除")
             }
         }
         .confirmationDialog(

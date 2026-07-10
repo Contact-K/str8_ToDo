@@ -30,6 +30,18 @@ struct CalendarSettingsView: View {
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
 
+    // 特定日差し替え UI
+    @State private var showDateSpecificPicker = false
+    @State private var selectedDateForAssignment = Date()
+    @State private var selectedTemplateForDate: UUID?
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+
     var body: some View {
         Form {
             // MARK: - 同期セクション
@@ -64,6 +76,7 @@ struct CalendarSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.clockwise")
+                            .accessibilityLabel("同期")
                         Text("今すぐ同期")
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -114,6 +127,7 @@ struct CalendarSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "cloud.fill")
+                            .accessibilityLabel("天気")
                         Text("天気を取得")
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -172,6 +186,87 @@ struct CalendarSettingsView: View {
                 }
             }
 
+            // MARK: - 特定日差し替えセクション
+            Section(header: Text("特定日の差し替え")) {
+                // 既存の特定日割当を一覧表示
+                ForEach(assignments.filter { $0.date != nil }.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }) { assignment in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(assignment.date.map { dateFormatter.string(from: $0) } ?? "不明")
+                                .font(.body)
+                            Text(assignment.template?.name ?? "なし")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                }
+                .onDelete { offsets in
+                    let dateAssignments = assignments.filter { $0.date != nil }.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+                    offsets.map { dateAssignments[$0] }.forEach(modelContext.delete)
+                    try? modelContext.save()
+                }
+
+                // 新規追加ボタン
+                Button(action: {
+                    showDateSpecificPicker = true
+                    selectedDateForAssignment = Date()
+                    selectedTemplateForDate = nil
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .accessibilityLabel("特定日の差し替えを追加")
+                        Text("特定日の差し替えを追加")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
+            }
+            .sheet(isPresented: $showDateSpecificPicker) {
+                NavigationStack {
+                    Form {
+                        Section("日付") {
+                            DatePicker("日付を選択", selection: $selectedDateForAssignment, displayedComponents: .date)
+                                .environment(\.locale, Locale(identifier: "ja_JP"))
+                        }
+                        Section("テンプレート") {
+                            Picker("テンプレートを選択", selection: $selectedTemplateForDate) {
+                                Text("なし").tag(nil as UUID?)
+                                ForEach(templates) { template in
+                                    Text(template.name).tag(template.id as UUID?)
+                                }
+                            }
+                        }
+                    }
+                    .navigationTitle("特定日の差し替え")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("キャンセル") {
+                                showDateSpecificPicker = false
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("保存") {
+                                if let templateID = selectedTemplateForDate,
+                                   let template = templates.first(where: { $0.id == templateID }) {
+                                    // 同日の既存割当があれば update、なければ insert（重複行を作らない）
+                                    let dayStart = Calendar.current.startOfDay(for: selectedDateForAssignment)
+                                    if let existing = assignments.first(where: { $0.date == dayStart }) {
+                                        existing.template = template
+                                    } else {
+                                        modelContext.insert(BandAssignment(date: selectedDateForAssignment, template: template))
+                                    }
+                                    try? modelContext.save()
+                                }
+                                showDateSpecificPicker = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
+
             // MARK: - カテゴリ色セクション
             Section(header: Text("カテゴリ色")) {
                 ForEach(categories) { category in
@@ -204,6 +299,7 @@ struct CalendarSettingsView: View {
                                         )
                                 }
                                 .buttonStyle(.borderless)
+                                .accessibilityLabel("色を変更: \(hex)")
                             }
                         }
                     }
@@ -220,6 +316,7 @@ struct CalendarSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.up.doc")
+                            .accessibilityLabel("エクスポート")
                         Text("エクスポート (.str8)")
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -232,6 +329,7 @@ struct CalendarSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.down.doc")
+                            .accessibilityLabel("インポート")
                         Text("インポート")
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -259,6 +357,21 @@ struct CalendarSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+            }
+
+            // MARK: - デバッグセクション
+            Section(header: Text("デバッグ")) {
+                Button(action: {
+                    DayStat.rebuildDayStats(context: modelContext)
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle")
+                            .accessibilityLabel("再構築")
+                        Text("DayStat を再構築")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
             }
         }
         .navigationTitle("カレンダー設定")
@@ -538,7 +651,7 @@ extension UTType {
     static let str8 = UTType(exportedAs: "str8.todo.str8backup", conformingTo: .data)
 }
 
-// MARK: - 枠テンプレートエディタ（最小版、磨き込みは P9）
+// MARK: - 枠テンプレートエディタ
 
 struct BandTemplateEditorView: View {
     @Bindable var template: BandTemplate
@@ -546,11 +659,25 @@ struct BandTemplateEditorView: View {
 
     var body: some View {
         Form {
-            Section("テンプレート名") {
+            Section {
                 TextField("テンプレート名", text: $template.name)
+                    // 空名のまま離脱したらデフォルト名で保存（空テンプレ名を作らせない）
+                    .onSubmit { normalizeName() }
+            } header: {
+                Text("テンプレート名")
+            } footer: {
+                if template.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text("名称は空にできません。空のままだと自動命名されます。")
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("枠") {
+                if template.orderedBands.isEmpty {
+                    Text("枠がありません。「枠を追加」で作成してください。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 ForEach(template.orderedBands) { band in
                     BandRowEditor(band: band)
                 }
@@ -561,7 +688,7 @@ struct BandTemplateEditorView: View {
                 }
 
                 Button("枠を追加") {
-                    // 末尾（最大 endMinutes）の後ろに60分枠を置く
+                    // 末尾（最大 endMinutes）の後ろに60分枠を置く。開始<終了は clamp で保証。
                     let start = min(template.bands.map(\.endMinutes).max() ?? 9 * 60, 1380)
                     let band = Band(name: "枠\(template.bands.count + 1)",
                                     startMinutes: start,
@@ -572,8 +699,17 @@ struct BandTemplateEditorView: View {
                 }
             }
         }
-        .navigationTitle(template.name)
+        .navigationTitle(template.name.isEmpty ? "（無題）" : template.name)
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear { normalizeName() }
+    }
+
+    /// 空テンプレ名を防ぐ。空白のみなら自動命名して save。
+    private func normalizeName() {
+        if template.name.trimmingCharacters(in: .whitespaces).isEmpty {
+            template.name = "名称未設定"
+        }
+        try? modelContext.save()
     }
 }
 

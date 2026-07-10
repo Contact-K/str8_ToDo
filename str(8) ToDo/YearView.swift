@@ -14,6 +14,7 @@ struct YearView: View {
     var year: Int = Calendar.current.component(.year, from: .now)
 
     @Query private var tasks: [TaskItem]
+    @Query private var dayStats: [DayStat]
     @State private var selectedYear: Int = 0
 
     private let cal = Calendar.current
@@ -128,6 +129,7 @@ struct YearView: View {
             .padding(.vertical, 12)
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
+            .accessibilityLabel("\(stats.longestStreak)日連続")
         }
     }
 
@@ -139,6 +141,7 @@ struct YearView: View {
             Text("達成数の推移")
                 .font(.headline)
                 .fontWeight(.semibold)
+                .lineLimit(1)
 
             let dailyCount = computeDailyCount()
 
@@ -160,8 +163,10 @@ struct YearView: View {
                                     if let (month, _, _) = dayInWeek(weekIdx, 0, dailyCount) {
                                         if weekIdx == 0 || dayInWeek(weekIdx - 1, 6, dailyCount)?.0 ?? 0 != month {
                                             Text("\(month)月")
-                                                .font(.system(size: 9, weight: .semibold))
-                                                .frame(width: 14, height: 14)
+                                                .font(.caption2)
+                                                .fontWeight(.semibold)
+                                                .lineLimit(1)
+                                                .frame(width: 14, alignment: .center)
                                         } else {
                                             Color.clear.frame(width: 14, height: 14)
                                         }
@@ -180,9 +185,11 @@ struct YearView: View {
                             ForEach(0..<53, id: \.self) { weekIdx in
                                 VStack(spacing: 2) {
                                     ForEach(0..<7, id: \.self) { dayOfWeek in
-                                        if let (_, _, count) = dayInWeek(weekIdx, dayOfWeek, dailyCount) {
+                                        if let (month, day, count) = dayInWeek(weekIdx, dayOfWeek, dailyCount) {
                                             contributionCell(count: count)
                                                 .frame(width: 12, height: 12)
+                                                .accessibilityLabel("\(month)月\(day)日 \(count > 0 ? "\(count)件承認" : "記録なし")")
+                                                .accessibilityValue("\(count)")
                                         } else {
                                             Color.clear
                                                 .frame(width: 12, height: 12)
@@ -246,6 +253,7 @@ struct YearView: View {
             Text("カテゴリ別達成数")
                 .font(.headline)
                 .fontWeight(.semibold)
+                .lineLimit(1)
 
             let categoryCounts = computeCategoryCounts()
 
@@ -267,6 +275,7 @@ struct YearView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 28)
                             .opacity(width > 0 ? 1 : 0)
+                            .accessibilityLabel("\(item.category.name): \(String(format: "%.1f", width))%")
                     }
                 }
                 .cornerRadius(8)
@@ -287,6 +296,7 @@ struct YearView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityLabel("\(item.category.name): \(item.count)件")
                     }
                 }
                 .padding(.top, 8)
@@ -303,13 +313,9 @@ struct YearView: View {
     private func computeDailyCount() -> [Date: Int] {
         var result: [Date: Int] = [:]
 
-        for task in tasks where task.status == .approved {
-            let achieveDate = task.approvedAt ?? task.completedAt ?? task.startDate
-            if let date = achieveDate,
-               cal.component(.year, from: date) == selectedYear {
-                let dayStart = cal.startOfDay(for: date)
-                result[dayStart, default: 0] += 1
-            }
+        // focusSeconds のみの日（completedCount == 0）は承認ゼロなのでヒートマップ/ストリークから除外
+        for stat in dayStats where stat.completedCount > 0 && cal.component(.year, from: stat.day) == selectedYear {
+            result[stat.day] = stat.completedCount
         }
 
         return result

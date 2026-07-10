@@ -67,7 +67,7 @@ struct AddTaskSheet: View {
                             .foregroundColor(isImportant ? .yellow : .gray)
                         Text("重要")
                         Spacer()
-                        Toggle("", isOn: $isImportant)
+                        Toggle("重要", isOn: $isImportant)
                             .labelsHidden()
                     }
                 }
@@ -100,6 +100,7 @@ struct AddTaskSheet: View {
                                             .foregroundColor(.primary)
                                     }
                                     .buttonStyle(.borderless)
+                                    .accessibilityLabel("カテゴリ \(cat.name)")
                                 }
 
                                 NavigationLink(destination: CategoryPickerView(selection: $selectedCategory)) {
@@ -136,6 +137,7 @@ struct AddTaskSheet: View {
                                             .foregroundColor(.gray)
                                     }
                                     .buttonStyle(.borderless)
+                                    .accessibilityLabel("場所を削除")
                                 } else {
                                     Text("場所を選択")
                                         .foregroundColor(.secondary)
@@ -243,6 +245,7 @@ struct AddTaskSheet: View {
                         HStack {
                             Image(systemName: selectedNotifications.contains(minutes) ? "checkmark.circle.fill" : "circle")
                                 .foregroundColor(selectedNotifications.contains(minutes) ? .blue : .gray)
+                                .accessibilityLabel("通知 \(label)")
                             Text(label)
                             Spacer()
                             Toggle("", isOn: Binding(
@@ -275,6 +278,7 @@ struct AddTaskSheet: View {
                                 .foregroundColor(.blue)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("カスタム通知を追加")
                     }
                 }
 
@@ -294,6 +298,7 @@ struct AddTaskSheet: View {
                                         )
                                 }
                                 .buttonStyle(.borderless)
+                                .accessibilityLabel("色 \(colorName(for: hex))")
                             }
 
                             Button(action: { selectedColorHex = nil }) {
@@ -312,6 +317,7 @@ struct AddTaskSheet: View {
                                 )
                             }
                             .buttonStyle(.borderless)
+                            .accessibilityLabel("色を削除")
                         }
                         .padding(.vertical, 8)
                     }
@@ -341,6 +347,18 @@ struct AddTaskSheet: View {
                 }
             }
         }
+    }
+
+    private func colorName(for hex: String) -> String {
+        let colorMap = [
+            "4F8DFD": "青",
+            "34C759": "緑",
+            "FF9500": "オレンジ",
+            "FF2D55": "赤",
+            "AF52DE": "紫",
+            "8E8E93": "グレー"
+        ]
+        return colorMap[hex] ?? hex
     }
 
     /// 金額入力の正規化＋パース。全角数字→半角、カンマ・空白除去。

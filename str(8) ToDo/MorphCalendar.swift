@@ -191,21 +191,25 @@ struct CalendarRootView: View {
                         }
                     }
                 }
+                .accessibilityLabel("カテゴリフィルター")
                 Button {
                     showYear = true
                 } label: {
                     Image(systemName: "chart.bar.xaxis")
                 }
+                .accessibilityLabel("年ビュー")
                 Button("今日") {
                     withAnimation(morphAnimation) {
                         selectedDate = cal.startOfDay(for: .now)
                     }
                 }
+                .accessibilityLabel("今日")
                 Button {
                     showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
                 }
+                .accessibilityLabel("設定")
             }
         }
     }
@@ -288,6 +292,16 @@ struct DayBlock: View {
         }
         .opacity(inFocusMonth ? 1 : 0.35)
         .matchedGeometryEffect(id: dayKey(date), in: morph)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(dayAccessibilityLabel)
+    }
+
+    private var dayAccessibilityLabel: String {
+        var label = "\(dayNumber)日"
+        if isToday { label += " 今日" }
+        if !dots.isEmpty { label += " \(dots.count)件のタスク" }
+        if let amountText { label += " \(amountText)" }
+        return label
     }
 }
 
@@ -358,6 +372,8 @@ struct MonthGrid: View {
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(6)
                 .onTapGesture { showMoneyBreakdown = true }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("支出サマリ サブスク \(currencyText(monthlyStat.subscriptionSpend)) 支出 \(currencyText(monthlyStat.totalSpend))")
             }
 
             let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)

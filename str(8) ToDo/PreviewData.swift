@@ -107,6 +107,19 @@ enum PreviewData {
             context.insert(cache)
         }
 
+        // 合成 DayStat（過去365日）
+        let counts = [1, 2, 0, 3, 1, 2, 0, 1]
+        let focusSecs = [0, 900, 1800, 3600, 2700, 5400, 0, 1200]
+        for i in 0..<365 {
+            let dayOffset = -i
+            let dayKey = cal.date(byAdding: .day, value: dayOffset, to: today) ?? today
+            let completedCount = counts[i % counts.count]
+            let focusSeconds = focusSecs[i % focusSecs.count]
+            if completedCount > 0 || focusSeconds > 0 {
+                context.insert(DayStat(day: dayKey, completedCount: completedCount, focusSeconds: focusSeconds))
+            }
+        }
+
         return container
     }()
 }
