@@ -22,6 +22,7 @@ struct str_8__ToDoApp: App {
                 Category.self,
                 PlaceTag.self,
                 DayStat.self,
+                MonthMoneyStat.self,
                 Band.self,
                 BandTemplate.self,
                 BandAssignment.self,

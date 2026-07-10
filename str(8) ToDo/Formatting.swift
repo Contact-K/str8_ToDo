@@ -20,3 +20,11 @@ func durationText(_ seconds: TimeInterval) -> String {
     }
     return "\(hours)時間\(remainder)分"
 }
+
+/// 金額（Decimal）→ 「¥1,490」形式（ja_JP 通貨）。
+func currencyText(_ amount: Decimal) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.locale = Locale(identifier: "ja_JP")
+    return formatter.string(from: amount as NSDecimalNumber) ?? "¥0"
+}

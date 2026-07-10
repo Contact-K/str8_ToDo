@@ -12,7 +12,7 @@ enum PreviewData {
     /// インメモリの ModelContainer。サンプルタスクを数件投入済み。
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
-            TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
+            TaskItem.self, Category.self, PlaceTag.self, DayStat.self, MonthMoneyStat.self,
             Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, WeatherCache.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -21,8 +21,10 @@ enum PreviewData {
 
         let study = Category(name: "勉強", colorHex: "#4F8DFD", symbolName: "book.fill")
         let life = Category(name: "生活", colorHex: "#34C759", symbolName: "house.fill")
+        let subscription = Category(name: "サブスク", colorHex: "#FF9500", symbolName: "repeat.circle.fill")
         context.insert(study)
         context.insert(life)
+        context.insert(subscription)
 
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
@@ -62,6 +64,20 @@ enum PreviewData {
         context.insert(TaskItem(title: "朝のジョギング", category: life,
                                 startDate: at(6, 30), duration: 1800, phase: .today, status: .active,
                                 rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR"))
+
+        // お金関連サンプル（P8）
+        context.insert(TaskItem(title: "Netflix", category: subscription,
+                                startDate: at(0), duration: 0, phase: .today, status: .active,
+                                rrule: "FREQ=MONTHLY", amount: Decimal(1490), paymentMethod: "クレジットカード"))
+        context.insert(TaskItem(title: "Spotify", category: subscription,
+                                startDate: at(0), duration: 0, phase: .today, status: .active,
+                                rrule: "FREQ=MONTHLY", amount: Decimal(1080), paymentMethod: "クレジットカード"))
+        context.insert(TaskItem(title: "ランチ代", category: life,
+                                startDate: at(12), duration: 0, phase: .today, status: .active,
+                                amount: Decimal(1200), paymentMethod: "現金"))
+        context.insert(TaskItem(title: "書籍購入", category: study,
+                                startDate: at(14), duration: 0, phase: .today, status: .active,
+                                amount: Decimal(2980), paymentMethod: "クレジットカード"))
 
         // 特定日差し替えサンプル: 今週の木曜を「特別日」テンプレに
         let special = BandTemplate(name: "特別日", bands: [

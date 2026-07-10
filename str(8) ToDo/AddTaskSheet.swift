@@ -20,6 +20,10 @@ struct AddTaskSheet: View {
     @State private var selectedNotifications: [Int] = []
     @State private var isImportant: Bool = false
 
+    @State private var isMoneySpecified: Bool = false
+    @State private var selectedAmount: String = ""
+    @State private var selectedPaymentMethod: String = ""
+
     @State private var isTimeSpecified: Bool = false
     @State private var selectedStartDate: Date = .now
     @State private var selectedDuration: TimeInterval = 3600
@@ -200,6 +204,22 @@ struct AddTaskSheet: View {
                     }
                 }
 
+                // お金
+                Section("お金") {
+                    Toggle("金額を記録", isOn: $isMoneySpecified)
+
+                    if isMoneySpecified {
+                        TextField("金額（例: 1490）", text: $selectedAmount)
+                            .keyboardType(.decimalPad)
+                        if !selectedAmount.isEmpty && parsedAmount == nil {
+                            Text("金額を数値で入力してください")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        TextField("支払方法（例: クレジットカード）", text: $selectedPaymentMethod)
+                    }
+                }
+
                 // メモ
                 Section("メモ") {
                     TextEditor(text: $selectedNotes)
@@ -310,14 +330,30 @@ struct AddTaskSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") { addTask() }
-                        .disabled(selectedTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(
+                            selectedTitle.trimmingCharacters(in: .whitespaces).isEmpty
+                            || (isMoneySpecified && parsedAmount == nil)
+                        )
                 }
             }
         }
     }
 
+    /// 金額入力の正規化＋パース。全角数字→半角、カンマ・空白除去。不能なら nil。
+    private var parsedAmount: Decimal? {
+        let normalized = selectedAmount
+            .applyingTransform(.fullwidthToHalfwidth, reverse: false)?
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        guard !normalized.isEmpty else { return nil }
+        return Decimal(string: normalized, locale: Locale(identifier: "en_US"))
+    }
+
     private func addTask() {
         let rruleStr = repeatOptions.first { $0.0 == selectedRepeatPattern }?.2
+
+        let amount: Decimal? = isMoneySpecified ? parsedAmount : nil
+        let paymentMethod: String? = isMoneySpecified && !selectedPaymentMethod.isEmpty ? selectedPaymentMethod.trimmingCharacters(in: .whitespaces) : nil
 
         let task = TaskItem(
             title: selectedTitle.trimmingCharacters(in: .whitespaces),
@@ -334,11 +370,19 @@ struct AddTaskSheet: View {
             colorHex: selectedColorHex,
             notificationOffsets: selectedNotifications.sorted(),
             timeZoneIdentifier: isTimeSpecified ? selectedTimeZone : nil,
+            amount: amount,
+            paymentMethod: paymentMethod,
             isTimePinned: isTimeSpecified && isTimePinned
         )
 
         modelContext.insert(task)
         try? modelContext.save()
+
+        // 金額あれば、対象月の統計を再計算
+        if amount != nil {
+            let targetMonth = isTimeSpecified ? selectedStartDate : .now
+            MoneyStats.recompute(month: targetMonth, context: modelContext)
+        }
 
         if !selectedNotifications.isEmpty {
             NotificationService.reschedule(for: task)

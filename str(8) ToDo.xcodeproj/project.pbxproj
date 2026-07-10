@@ -50,6 +50,7 @@
 		FF0000000000000000000153 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000152 /* BackupService.swift */; };
 		FF0000000000000000000155 /* SunCalc.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000154 /* SunCalc.swift */; };
 		FF0000000000000000000157 /* DepartureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000156 /* DepartureService.swift */; };
+		FF0000000000000000000159 /* MoneyStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000158 /* MoneyStats.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -98,6 +99,7 @@
 		FF0000000000000000000152 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		FF0000000000000000000154 /* SunCalc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunCalc.swift; sourceTree = "<group>"; };
 		FF0000000000000000000156 /* DepartureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepartureService.swift; sourceTree = "<group>"; };
+		FF0000000000000000000158 /* MoneyStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyStats.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +157,7 @@
 				FF0000000000000000000142 /* HourglassMotion.swift */,
 				FF0000000000000000000113 /* LocationPickerView.swift */,
 				FF0000000000000000000115 /* MorphCalendar.swift */,
+				FF0000000000000000000158 /* MoneyStats.swift */,
 				FF0000000000000000000117 /* NotificationService.swift */,
 				FF0000000000000000000119 /* PreviewData.swift */,
 				FF000000000000000000014C /* PeerSession.swift */,
@@ -272,6 +275,7 @@
 				FF0000000000000000000143 /* HourglassMotion.swift in Sources */,
 				FF0000000000000000000114 /* LocationPickerView.swift in Sources */,
 				FF0000000000000000000116 /* MorphCalendar.swift in Sources */,
+				FF0000000000000000000159 /* MoneyStats.swift in Sources */,
 				FF0000000000000000000118 /* NotificationService.swift in Sources */,
 				FF000000000000000000011A /* PreviewData.swift in Sources */,
 				FF000000000000000000014D /* PeerSession.swift in Sources */,
@@ -366,11 +370,11 @@
 				INFOPLIST_FILE = "str(8) ToDo/info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "ーToDo";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -406,11 +410,11 @@
 				INFOPLIST_FILE = "str(8) ToDo/info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "ーToDo";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

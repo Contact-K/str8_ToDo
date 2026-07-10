@@ -198,6 +198,28 @@ struct TaskDetailView: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            if let amount = task.amount, amount > 0 {
+                HStack {
+                    Image(systemName: "yen.circle.fill")
+                        .foregroundColor(.green)
+                    Text(currencyText(amount))
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+
+                if let method = task.paymentMethod, !method.isEmpty {
+                    HStack {
+                        Image(systemName: "creditcard.fill")
+                            .foregroundColor(.gray)
+                        Text(method)
+                            .font(.subheadline)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
         }
     }
 
@@ -338,9 +360,19 @@ struct TaskDetailView: View {
     }
 
     private func deleteTask() {
-        modelContext.delete(task)
+        // 削除後にプロパティへ触れないよう先に退避
+        let hadAmount = task.amount != nil
+        let startDate = task.startDate
+
         NotificationService.cancel(for: task)
+        modelContext.delete(task)
         save()
+
+        // 金額がある場合は月別統計を再計算
+        if hadAmount, let startDate {
+            MoneyStats.recompute(month: startDate, context: modelContext)
+        }
+
         dismiss()
     }
 

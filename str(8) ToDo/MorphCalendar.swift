@@ -54,6 +54,7 @@ struct CalendarRootView: View {
     @State private var selectedTask: TaskItem?
     @State private var showSettings = false
     @State private var showYear = false
+    @State private var showMoneyBreakdown = false
     @State private var categoryFilter: Set<UUID>? = nil
     @Query(sort: \Category.name) private var categories: [Category]
 
@@ -65,7 +66,7 @@ struct CalendarRootView: View {
             ZStack {
                 switch scale {
                 case .month:
-                    MonthGrid(selectedDate: $selectedDate, morph: morph, categoryFilter: categoryFilter) { day in
+                    MonthGrid(selectedDate: $selectedDate, morph: morph, categoryFilter: categoryFilter, showMoneyBreakdown: $showMoneyBreakdown) { day in
                         selectedDate = cal.startOfDay(for: day)
                         zoom(to: .day)
                     } onLongLook: { day in
@@ -106,6 +107,11 @@ struct CalendarRootView: View {
             .sheet(isPresented: $showYear) {
                 NavigationStack {
                     YearView()
+                }
+            }
+            .sheet(isPresented: $showMoneyBreakdown) {
+                NavigationStack {
+                    MoneyBreakdownView(month: selectedDate)
                 }
             }
             .task {
@@ -233,6 +239,8 @@ struct DayBlock: View {
     let inFocusMonth: Bool
     let dots: [Color]
     let morph: Namespace.ID
+    /// 支出額の短縮表示（例 "¥1490"）。nil なら非表示。let+初期値は memberwise init から消えるので var。
+    var amountText: String? = nil
 
     private var dayNumber: String { "\(Calendar.current.component(.day, from: date))" }
     private var weekday: Int { Calendar.current.component(.weekday, from: date) }
@@ -257,6 +265,14 @@ struct DayBlock: View {
                 }
             }
             .frame(height: 6)
+
+            if let amountText {
+                Text(amountText)
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: scale == .month ? 52 : 72)
@@ -301,10 +317,13 @@ struct MonthGrid: View {
     @Binding var selectedDate: Date
     var morph: Namespace.ID
     var categoryFilter: Set<UUID>? = nil
+    @Binding var showMoneyBreakdown: Bool
     var onPickDay: (Date) -> Void
     var onLongLook: (Date) -> Void
 
     @Query private var tasks: [TaskItem]
+    @Query private var moneystats: [MonthMoneyStat]
+    @Environment(\.modelContext) var modelContext
     private let cal = Calendar.current
     private let weekdaySymbols = ["日", "月", "火", "水", "木", "金", "土"]
 
@@ -318,7 +337,31 @@ struct MonthGrid: View {
                         .frame(maxWidth: .infinity)
                 }
             }
+
+            // 月別支出ヘッダ
+            if let monthlyStat = moneystats.first(where: { stat in
+                cal.isDate(stat.month, equalTo: selectedDate, toGranularity: .month)
+            }), monthlyStat.totalSpend > 0 {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("サブスク \(currencyText(monthlyStat.subscriptionSpend)) ・ 支出 \(currencyText(monthlyStat.totalSpend))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(6)
+                .onTapGesture { showMoneyBreakdown = true }
+            }
+
             let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+            let spendByDay = dailySpends()
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(monthDays(), id: \.self) { day in
                     DayBlock(
@@ -328,7 +371,8 @@ struct MonthGrid: View {
                         isToday: cal.isDateInToday(day),
                         inFocusMonth: cal.isDate(day, equalTo: selectedDate, toGranularity: .month),
                         dots: dotColors(for: day, in: tasks, categoryFilter: categoryFilter),
-                        morph: morph
+                        morph: morph,
+                        amountText: spendByDay[day].map { "¥\(NSDecimalNumber(decimal: $0).intValue)" }
                     )
                     .onTapGesture { onPickDay(day) }
                     .onLongPressGesture { onLongLook(day) }
@@ -338,6 +382,25 @@ struct MonthGrid: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
+        .onAppear {
+            MoneyStats.recompute(month: selectedDate, context: modelContext)
+        }
+        .onChange(of: selectedDate) {
+            MoneyStats.recompute(month: selectedDate, context: modelContext)
+        }
+    }
+
+    /// フォーカス月の日別支出（グリッド42マスの startOfDay がキー）。
+    private func dailySpends() -> [Date: Decimal] {
+        let moneyTasks = tasks.filter { ($0.amount ?? 0) > 0 }
+        guard !moneyTasks.isEmpty else { return [:] }
+        var result: [Date: Decimal] = [:]
+        for day in monthDays() where cal.isDate(day, equalTo: selectedDate, toGranularity: .month) {
+            for task in moneyTasks where task.occurs(on: day) {
+                result[day, default: 0] += task.amount ?? 0
+            }
+        }
+        return result
     }
 
     /// 6週 42 マス（週頭の日曜開始）。
