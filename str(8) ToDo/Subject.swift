@@ -48,14 +48,17 @@ enum StudyStats {
     }
 
     /// 日ごとの集中時間（秒）。キー = その日の startOfDay、値 = Σ秒
+    /// ponytail: 0秒セッション（end<start 等）は日のキーを作らない。幽霊キー排除で streak/hasSession/byDay が一貫。
     static func focusSecondsByDay(
         _ sessions: [FocusSession],
         calendar: Calendar = .current
     ) -> [Date: Int] {
         var result: [Date: Int] = [:]
         for session in sessions {
+            let clampedSec = clampedSeconds(session)
+            guard clampedSec > 0 else { continue }  // 0秒は活動日ではない
             let dayStart = calendar.startOfDay(for: session.end)
-            result[dayStart, default: 0] += clampedSeconds(session)
+            result[dayStart, default: 0] += clampedSec
         }
         return result
     }
@@ -77,14 +80,16 @@ enum StudyStats {
         return result
     }
 
-    /// その日（startOfDay 一致）にセッション記録があるか。
+    /// その日（startOfDay 一致）にセッション記録があるか。0秒のセッションは非活動日として除外。
     static func hasSession(
         on day: Date,
         _ sessions: [FocusSession],
         calendar: Calendar = .current
     ) -> Bool {
         let dayStart = calendar.startOfDay(for: day)
-        return sessions.contains { calendar.startOfDay(for: $0.end) == dayStart }
+        return sessions.contains {
+            calendar.startOfDay(for: $0.end) == dayStart && clampedSeconds($0) > 0
+        }
     }
 
     /// 指定科目の、interval 内の集中時間合計（秒）。session.end が interval に含まれ、subjectID が一致するセッションのみ対象。

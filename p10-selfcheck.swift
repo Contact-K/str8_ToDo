@@ -309,6 +309,49 @@ func testCurrentStreakDays() {
     print("testCurrentStreakDays: passed（ストリーク5ケース確認）")
 }
 
+// MARK: - Test 10: 0秒のみの日はストリーク/hasSession/byDay に含まれない
+
+@MainActor
+func testZeroSecondDayNotCounted() {
+    let d0 = day(2026, 7, 8)   // 30分
+    let d1 = day(2026, 7, 9)   // 0秒のみ（end < start）
+    let d2 = day(2026, 7, 10)  // 20分
+
+    // d0: 正常30分
+    let good0 = FocusSession(start: d0, end: d0.addingTimeInterval(30 * 60))
+
+    // d1: 0秒のみ（負値）
+    let bad1 = FocusSession(start: d1.addingTimeInterval(3600),
+                            end: d1.addingTimeInterval(3600 - 5 * 60))  // 5分マイナス
+
+    // d2: 正常20分
+    let good2 = FocusSession(start: d2, end: d2.addingTimeInterval(20 * 60))
+
+    let sessions = [good0, bad1, good2]
+
+    // (1) focusSecondsByDay: d0 と d2 のみ、d1 のキーは作られない
+    let byDay = StudyStats.focusSecondsByDay(sessions)
+    let dayStart0 = Calendar.current.startOfDay(for: d0)
+    let dayStart1 = Calendar.current.startOfDay(for: d1)
+    let dayStart2 = Calendar.current.startOfDay(for: d2)
+
+    assert(byDay[dayStart0] == 30 * 60, "d0(30分) 期待\(30 * 60) 実際\(byDay[dayStart0] ?? -1)")
+    assert(byDay[dayStart1] == nil, "d1(0秒) キーなし 期待nil 実際\(byDay[dayStart1] ?? -1)")
+    assert(byDay[dayStart2] == 20 * 60, "d2(20分) 期待\(20 * 60) 実際\(byDay[dayStart2] ?? -1)")
+
+    // (2) hasSession: d0 true, d1 false, d2 true
+    assert(StudyStats.hasSession(on: d0, sessions) == true, "d0 hasSession: true 期待")
+    assert(StudyStats.hasSession(on: d1, sessions) == false, "d1 hasSession: false 期待（0秒のみ）")
+    assert(StudyStats.hasSession(on: d2, sessions) == true, "d2 hasSession: true 期待")
+
+    // (3) currentStreakDays: d2 を基準に遡ると、d2→d1(キーなし gap)→break
+    // streak は d2 のみ = 1
+    let streak = StudyStats.currentStreakDays(sessions, asOf: d2)
+    assert(streak == 1, "streak（d0から遡るなら2 but d1でgap）期待1（d2のみ） 実際\(streak)")
+
+    print("testZeroSecondDayNotCounted: passed（0秒日は非活動、ストリーク/hasSession/byDay から除外）")
+}
+
 // MARK: - Main
 
 @main
@@ -324,6 +367,7 @@ struct P10SelfCheck {
         testNegativeDurationClamped()
         testFocusSecondsForSubject()
         testCurrentStreakDays()
+        testZeroSecondDayNotCounted()
 
         print("p10-selfcheck: all passed")
     }

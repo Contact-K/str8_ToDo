@@ -119,10 +119,7 @@ struct StudyHubView: View {
             ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { subject in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Circle()
-                            .fill(Color(hex: subject.colorHex))
-                            .frame(width: 12, height: 12)
-                        Text(subject.name)
+                        SubjectIndicator(subject: subject)
                             .font(.callout)
                         Spacer()
                     }
@@ -201,10 +198,7 @@ struct StudyHubView: View {
                 .font(.headline)
             ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { subject in
                 HStack {
-                    Circle()
-                        .fill(Color(hex: subject.colorHex))
-                        .frame(width: 12, height: 12)
-                    Text(subject.name)
+                    SubjectIndicator(subject: subject)
                     Spacer()
                     let subjectSeconds = focusSecondsBySubject[subject.id] ?? 0
                     Text(durationText(Double(subjectSeconds)))
@@ -302,10 +296,7 @@ struct StudyHubView: View {
                 let seconds = focusSecondsBySubject[subject.id] ?? 0
                 if seconds > 0 {
                     HStack {
-                        Circle()
-                            .fill(Color(hex: subject.colorHex))
-                            .frame(width: 12, height: 12)
-                        Text(subject.name)
+                        SubjectIndicator(subject: subject)
                         Spacer()
                         Text(durationText(Double(seconds)))
                             .font(.callout)
@@ -359,6 +350,17 @@ struct StudyHubView: View {
 
     private func dayLabel(for date: Date) -> String {
         "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
+    }
+
+    // MARK: - Subject Indicator
+
+    private func SubjectIndicator(subject: Subject) -> some View {
+        HStack {
+            Circle()
+                .fill(Color(hex: subject.colorHex))
+                .frame(width: 12, height: 12)
+            Text(subject.name)
+        }
     }
 }
 

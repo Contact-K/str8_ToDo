@@ -178,6 +178,12 @@
 
 **受け入れ基準**: タイマーのセッションが科目に紐付いて Hub に出る。目標進捗・ストリークが正しい。プリセットがタイマー既定値を変える。
 
+> **debate-review 繰り越し(最終ブラッシュアップでまとめて対応、2026-07-10)**: P10 実装後の多角レビューで挙がった、実害は無いが将来負債になる項目。
+> - **DayStat.focusSeconds の二重集計源**: Study Hub は FocusSession をライブ集計し、DayStat.focusSeconds(rebuildDayStats のみが書く)を誰も読まない死にフィールド化している。どちらかに寄せる(Hub を DayStat 経由にする / DayStat から focusSeconds を外す / 意図コメントで固定)。
+> - **subjectID を生 UUID で保持**: `TaskItem.subjectID` / `FocusSession.subjectID` は既存の `@Relationship(deleteRule:.nullify)` パターン外。Subject 削除 UI を追加する際に nullify 戦略を用意するか、FocusSession.taskID と同様の意図コメントを付ける。
+> - **復元値の範囲検証**: SubjectDTO の goal/pomodoro 分が復元時に無検証で、`totalDuration = selectedMinutes * 60` の乗算が極端値でオーバーフローし得る。復元値をクランプ。
+> - **Subject の編集/削除 UI**: 現状 AddSubjectSheet は追加専用。目標・ストリークの訂正手段として編集/削除を追加。
+
 ---
 
 ## Phase 11 — ウィジェット+StandBy(W1) 〔実機/Sim〕
