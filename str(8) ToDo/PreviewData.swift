@@ -13,7 +13,7 @@ enum PreviewData {
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
             TaskItem.self, Category.self, PlaceTag.self, DayStat.self, MonthMoneyStat.self,
-            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, WeatherCache.self
+            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self, WeatherCache.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: config)
@@ -26,6 +26,14 @@ enum PreviewData {
         context.insert(life)
         context.insert(subscription)
 
+        // 科目サンプル
+        let mathSubject = Subject(name: "数学", colorHex: "#4F8DFD")
+        let englishSubject = Subject(name: "英語", colorHex: "#34C759")
+        let exerciseSubject = Subject(name: "運動", colorHex: "#FF9500")
+        context.insert(mathSubject)
+        context.insert(englishSubject)
+        context.insert(exerciseSubject)
+
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
 
@@ -35,23 +43,23 @@ enum PreviewData {
 
         let samples: [TaskItem] = [
             TaskItem(title: "線形代数の課題", category: study,
-                     startDate: at(10), duration: 3600, phase: .today, status: .active),
+                     startDate: at(10), duration: 3600, phase: .today, status: .active, subjectID: mathSubject.id),
             TaskItem(title: "ポモドーロ：統計レポート", category: study,
                      startDate: at(14), duration: 25 * 60, phase: .now, status: .done,
-                     completedAt: .now, unlockDate: TaskItem.nextMidnight()),
+                     completedAt: .now, unlockDate: TaskItem.nextMidnight(), subjectID: mathSubject.id),
             TaskItem(title: "買い出し", category: life,
                      startDate: at(18, 30), duration: 1800, phase: .today, status: .approved,
                      completedAt: .now, approvedAt: .now, approverID: "self-future"),
-            TaskItem(title: "読みたい論文を探す", category: study, phase: .someday),
+            TaskItem(title: "読みたい論文を探す", category: study, phase: .someday, subjectID: englishSubject.id),
             // 浮遊タスク: 未仕分け2件 + snooze 中1件
             TaskItem(title: "部屋の掃除", category: life, phase: .today, sortIndex: 1),
-            TaskItem(title: "参考書を注文", category: study, phase: .someday, sortIndex: 2),
+            TaskItem(title: "参考書を注文", category: study, phase: .someday, sortIndex: 2, subjectID: mathSubject.id),
             TaskItem(title: "美容院を予約", category: life, phase: .someday, sortIndex: 3,
                      snoozeUntil: cal.date(byAdding: .day, value: 2, to: today)),
             TaskItem(title: "朝ラン", category: life,
                      startDate: Date.now.addingTimeInterval(-2 * 3600), duration: 1800,
                      phase: .today, status: .done, completedAt: .now,
-                     unlockDate: cal.date(byAdding: .day, value: -1, to: today)),
+                     unlockDate: cal.date(byAdding: .day, value: -1, to: today), subjectID: exerciseSubject.id),
             TaskItem(title: "歯医者", category: life,
                      startDate: at(9), duration: 1800, phase: .today, status: .active,
                      isTimePinned: true)
@@ -63,7 +71,7 @@ enum PreviewData {
         // RRULE ルーティーンサンプル（月水金の朝ジョギング）
         context.insert(TaskItem(title: "朝のジョギング", category: life,
                                 startDate: at(6, 30), duration: 1800, phase: .today, status: .active,
-                                rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR"))
+                                rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR", subjectID: exerciseSubject.id))
 
         // お金関連サンプル（P8）
         context.insert(TaskItem(title: "Netflix", category: subscription,
@@ -90,9 +98,20 @@ enum PreviewData {
             context.insert(BandAssignment(date: thursday, template: special))
         }
 
-        // 集中セッションサンプル（昨日の25分ポモドーロ）
+        // 集中セッションサンプル（昨日の25分ポモドーロ：数学）
         context.insert(FocusSession(start: today.addingTimeInterval(-15 * 3600),
-                                    end: today.addingTimeInterval(-15 * 3600 + 25 * 60)))
+                                    end: today.addingTimeInterval(-15 * 3600 + 25 * 60),
+                                    subjectID: mathSubject.id))
+
+        // 2日前の英語セッション（30分）
+        context.insert(FocusSession(start: today.addingTimeInterval(-39 * 3600),
+                                    end: today.addingTimeInterval(-39 * 3600 + 30 * 60),
+                                    subjectID: englishSubject.id))
+
+        // 3日前の運動セッション（1時間）
+        context.insert(FocusSession(start: today.addingTimeInterval(-63 * 3600),
+                                    end: today.addingTimeInterval(-63 * 3600 + 60 * 60),
+                                    subjectID: exerciseSubject.id))
 
         // WeatherCache サンプル（今日から10日分）
         for i in 0..<10 {

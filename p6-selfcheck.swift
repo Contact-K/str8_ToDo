@@ -7,6 +7,7 @@
 //      "str(8) ToDo/Enums.swift" "str(8) ToDo/TaskItem.swift" \
 //      "str(8) ToDo/SupportingModels.swift" "str(8) ToDo/BandModels.swift" \
 //      "str(8) ToDo/Color+Hex.swift" "str(8) ToDo/FocusSession.swift" "str(8) ToDo/BackupService.swift" \
+//      "str(8) ToDo/Subject.swift" "str(8) ToDo/MoneyStats.swift" "str(8) ToDo/Formatting.swift" \
 //      p6-selfcheck.swift -o /tmp/p6check && /tmp/p6check
 //
 //  アプリターゲットには含めない（pbxproj 未登録）。
@@ -21,7 +22,7 @@ import SwiftData
 @MainActor
 func makeTestContext() -> (container: ModelContainer, ctx: ModelContext) {
     let schema = Schema([TaskItem.self, Category.self, PlaceTag.self, DayStat.self,
-                         Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self])
+                         Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: config)
     return (container, container.mainContext)
@@ -43,6 +44,11 @@ func testRoundtrip() {
     let place = PlaceTag(id: UUID(), name: "オフィス", latitude: 35.6789, longitude: 139.7654)
     ctx.insert(place)
 
+    // Subject を作成（P10: TaskItem.subjectID / FocusSession.subjectID の参照先）
+    let subject = Subject(id: UUID(), name: "数学", colorHex: "#4F8DFD",
+                          dailyGoalMinutes: 90, weeklyGoalMinutes: 420, pomodoroMinutes: 30)
+    ctx.insert(subject)
+
     // BandTemplate と Band を作成
     let template = BandTemplate(id: UUID(), name: "平日")
     let band1 = Band(id: UUID(), name: "朝", startMinutes: 360, endMinutes: 540)
@@ -61,8 +67,8 @@ func testRoundtrip() {
     assignmentDate.template = template
     ctx.insert(assignmentDate)
 
-    // TaskItem (カテゴリ・場所付き)
-    let task1 = TaskItem(id: UUID(), title: "会議", category: category, place: place, phase: .today, status: .active)
+    // TaskItem (カテゴリ・場所・科目付き)
+    let task1 = TaskItem(id: UUID(), title: "会議", category: category, place: place, phase: .today, status: .active, subjectID: subject.id)
     task1.createdAt = Date(timeIntervalSince1970: 1000000)
     ctx.insert(task1)
 
@@ -75,8 +81,8 @@ func testRoundtrip() {
     let stat = DayStat(day: Date(), completedCount: 5, focusSeconds: 3600)
     ctx.insert(stat)
 
-    // FocusSession (taskID 付き)
-    let session = FocusSession(id: UUID(), start: Date(), end: Date().addingTimeInterval(1800), taskID: task1.id)
+    // FocusSession (taskID・subjectID 付き)
+    let session = FocusSession(id: UUID(), start: Date(), end: Date().addingTimeInterval(1800), taskID: task1.id, subjectID: subject.id)
     ctx.insert(session)
 
     try! ctx.save()
@@ -111,6 +117,7 @@ func testRoundtrip() {
     let bandCount = try! ctx.fetch(FetchDescriptor<Band>()).count
     let assignmentCount = try! ctx.fetch(FetchDescriptor<BandAssignment>()).count
     let sessionCount = try! ctx.fetch(FetchDescriptor<FocusSession>()).count
+    let subjectCount = try! ctx.fetch(FetchDescriptor<Subject>()).count
 
     assert(taskCount == 2, "restore: TaskItem 件数 \(taskCount) == 2")
     assert(categoryCount == 1, "restore: Category 件数 \(categoryCount) == 1")
@@ -120,6 +127,7 @@ func testRoundtrip() {
     assert(bandCount == 1, "restore: Band 件数 \(bandCount) == 1")
     assert(assignmentCount == 2, "restore: BandAssignment 件数 \(assignmentCount) == 2")
     assert(sessionCount == 1, "restore: FocusSession 件数 \(sessionCount) == 1")
+    assert(subjectCount == 1, "restore: Subject 件数 \(subjectCount) == 1")
 
     // リレーション確認
     let restoredTask1 = try! ctx.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.title == "会議" })).first
@@ -145,6 +153,22 @@ func testRoundtrip() {
     // FocusSession.taskID 確認
     let restoredSession = try! ctx.fetch(FetchDescriptor<FocusSession>()).first
     assert(restoredSession?.taskID == task1.id, "restore: FocusSession.taskID が保持された")
+
+    // Subject の値往復（名前/色/日週目標/ポモ）
+    let restoredSubject = try! ctx.fetch(FetchDescriptor<Subject>()).first
+    assert(restoredSubject?.id == subject.id, "restore: Subject.id が復元された")
+    assert(restoredSubject?.name == "数学", "restore: Subject.name が復元された")
+    assert(restoredSubject?.colorHex == "#4F8DFD", "restore: Subject.colorHex が復元された")
+    assert(restoredSubject?.dailyGoalMinutes == 90, "restore: Subject.dailyGoalMinutes が復元された")
+    assert(restoredSubject?.weeklyGoalMinutes == 420, "restore: Subject.weeklyGoalMinutes が復元された")
+    assert(restoredSubject?.pomodoroMinutes == 30, "restore: Subject.pomodoroMinutes が復元された")
+
+    // subjectID が有効な復元 Subject を指す（ダングリングでない）
+    let restoredSubjectIDs = Set(try! ctx.fetch(FetchDescriptor<Subject>()).map { $0.id })
+    assert(restoredTask1?.subjectID == subject.id, "restore: TaskItem.subjectID が保持された")
+    assert(restoredTask1?.subjectID.map { restoredSubjectIDs.contains($0) } == true, "restore: TaskItem.subjectID が有効な Subject を指す")
+    assert(restoredSession?.subjectID == subject.id, "restore: FocusSession.subjectID が保持された")
+    assert(restoredSession?.subjectID.map { restoredSubjectIDs.contains($0) } == true, "restore: FocusSession.subjectID が有効な Subject を指す")
 }
 
 // MARK: - Test 2: 誤パスフレーズ → BackupError.wrongPassphrase

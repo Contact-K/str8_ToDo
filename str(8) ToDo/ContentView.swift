@@ -37,10 +37,7 @@ struct ContentView: View {
             }
             .badge(pendingCount)
             Tab("Study Hub", systemImage: "books.vertical") {
-                ComingSoonView(
-                    title: "Study Hub",
-                    detail: "科目管理・集中統計・目標とストリーク。"
-                )
+                StudyHubView()
             }
         }
         .onChange(of: scenePhase) {

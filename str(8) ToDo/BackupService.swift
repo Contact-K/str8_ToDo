@@ -46,6 +46,7 @@ enum BackupService {
         var sortIndex: Int
         var lastSortedDay: Date?
         var snoozeUntil: Date?
+        var subjectID: UUID?
     }
 
     struct CategoryDTO: Codable {
@@ -53,6 +54,15 @@ enum BackupService {
         var name: String
         var colorHex: String
         var symbolName: String
+    }
+
+    struct SubjectDTO: Codable {
+        var id: UUID
+        var name: String
+        var colorHex: String
+        var dailyGoalMinutes: Int
+        var weeklyGoalMinutes: Int
+        var pomodoroMinutes: Int
     }
 
     struct PlaceTagDTO: Codable {
@@ -112,6 +122,8 @@ enum BackupService {
         var bands: [BandDTO]
         var bandAssignments: [BandAssignmentDTO]
         var focusSessions: [FocusSessionDTO]
+        /// P10 加算。規約どおり optional：旧 .str8（subjects キー無し）でも keyNotFound にならず nil で読める。
+        var subjects: [SubjectDTO]?
     }
 
     // MARK: - エラー型
@@ -251,7 +263,7 @@ enum BackupService {
         }
     }
 
-    /// 全9モデルを参照する側から順に個別 delete（internal: selfcheck からも使う）。
+    /// 全10モデルを参照する側から順に個別 delete（internal: selfcheck からも使う）。
     @MainActor
     static func deleteAllModels(context: ModelContext) throws {
         try deleteAll(TaskItem.self, context: context)
@@ -264,6 +276,8 @@ enum BackupService {
         try deleteAll(BandTemplate.self, context: context)
         try deleteAll(Category.self, context: context)
         try deleteAll(PlaceTag.self, context: context)
+        // Subject は一次データ（科目名/色/目標/ポモ）。subjectID のダングリング防止に必ず含める。
+        try deleteAll(Subject.self, context: context)
     }
 
     // MARK: - export / restore
@@ -280,6 +294,7 @@ enum BackupService {
         let bands = try context.fetch(FetchDescriptor<Band>())
         let bandAssignments = try context.fetch(FetchDescriptor<BandAssignment>())
         let focusSessions = try context.fetch(FetchDescriptor<FocusSession>())
+        let subjects = try context.fetch(FetchDescriptor<Subject>())
 
         // DTO に変換
         let taskDTOs = tasks.map { task in
@@ -312,7 +327,8 @@ enum BackupService {
                 isTimePinned: task.isTimePinned,
                 sortIndex: task.sortIndex,
                 lastSortedDay: task.lastSortedDay,
-                snoozeUntil: task.snoozeUntil
+                snoozeUntil: task.snoozeUntil,
+                subjectID: task.subjectID
             )
         }
 
@@ -344,6 +360,13 @@ enum BackupService {
             FocusSessionDTO(id: session.id, start: session.start, end: session.end, taskID: session.taskID, subjectID: session.subjectID)
         }
 
+        let subjectDTOs = subjects.map { subject in
+            SubjectDTO(id: subject.id, name: subject.name, colorHex: subject.colorHex,
+                       dailyGoalMinutes: subject.dailyGoalMinutes,
+                       weeklyGoalMinutes: subject.weeklyGoalMinutes,
+                       pomodoroMinutes: subject.pomodoroMinutes)
+        }
+
         let payload = BackupPayload(
             formatVersion: formatVersion,
             exportedAt: .now,
@@ -354,7 +377,8 @@ enum BackupService {
             bandTemplates: bandTemplateDTOs,
             bands: bandDTOs,
             bandAssignments: bandAssignmentDTOs,
-            focusSessions: focusSessionDTOs
+            focusSessions: focusSessionDTOs,
+            subjects: subjectDTOs
         )
 
         // ペイロード暗号化
@@ -427,6 +451,14 @@ enum BackupService {
             categoryMap[cat.id] = cat
         }
 
+        // Subject 挿入（subjectID は UUID 値参照なので順序依存なし。旧 .str8 は nil → 空配列）
+        for subjectDTO in payload.subjects ?? [] {
+            context.insert(Subject(id: subjectDTO.id, name: subjectDTO.name, colorHex: subjectDTO.colorHex,
+                                   dailyGoalMinutes: subjectDTO.dailyGoalMinutes,
+                                   weeklyGoalMinutes: subjectDTO.weeklyGoalMinutes,
+                                   pomodoroMinutes: subjectDTO.pomodoroMinutes))
+        }
+
         // PlaceTag 挿入
         for placeDTO in payload.places {
             let place = PlaceTag(id: placeDTO.id, name: placeDTO.name, latitude: placeDTO.latitude, longitude: placeDTO.longitude)
@@ -468,7 +500,7 @@ enum BackupService {
             context.insert(assignment)
         }
 
-        // TaskItem 挿入（categoryID/placeID でリンク）
+        // TaskItem 挿入（categoryID/placeID/subjectID でリンク）
         for taskDTO in payload.tasks {
             let task = TaskItem(
                 id: taskDTO.id,
@@ -499,7 +531,8 @@ enum BackupService {
                 isTimePinned: taskDTO.isTimePinned,
                 sortIndex: taskDTO.sortIndex,
                 lastSortedDay: taskDTO.lastSortedDay,
-                snoozeUntil: taskDTO.snoozeUntil
+                snoozeUntil: taskDTO.snoozeUntil,
+                subjectID: taskDTO.subjectID
             )
             context.insert(task)
         }

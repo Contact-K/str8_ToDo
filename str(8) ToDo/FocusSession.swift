@@ -16,7 +16,7 @@ final class FocusSession {
     var end: Date
     /// TaskItem への弱い参照（リレーションにしない=削除に強い）。
     var taskID: UUID?
-    /// 科目（P10 用）。常に nil で作る。
+    /// 科目（P10）。タイマーで科目を選んで終了すると記録される（未選択なら nil）。
     var subjectID: UUID?
     // ponytail: roomID/participantCount は P14 で追加
 
@@ -31,8 +31,8 @@ final class FocusSession {
     /// セッションを保存し、紐付けタスクがあれば actualDuration に経過を累積する。
     @MainActor
     @discardableResult
-    static func record(start: Date, end: Date, task: TaskItem?, context: ModelContext) -> FocusSession {
-        let session = FocusSession(start: start, end: end, taskID: task?.id)
+    static func record(start: Date, end: Date, task: TaskItem?, subject: Subject? = nil, context: ModelContext) -> FocusSession {
+        let session = FocusSession(start: start, end: end, taskID: task?.id, subjectID: subject?.id)
         context.insert(session)
         if let task {
             let duration = end.timeIntervalSince(start)

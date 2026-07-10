@@ -7,12 +7,14 @@ struct AddTaskSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @Query(sort: \Category.name) var categories: [Category]
+    @Query(sort: \Subject.name) var subjects: [Subject]
 
     let defaultDate: Date
     let prefillDuration: TimeInterval?
 
     @State private var selectedTitle: String = ""
     @State private var selectedCategory: Category? = nil
+    @State private var selectedSubject: Subject? = nil
     @State private var selectedPlace: PlaceTag? = nil
     @State private var selectedPhase: SortPhase = .today
     @State private var selectedNotes: String = ""
@@ -145,6 +147,70 @@ struct AddTaskSheet: View {
                             }
                         }
                     )
+                }
+
+                // 科目
+                if !subjects.isEmpty {
+                    Section("科目") {
+                        if let selected = selectedSubject {
+                            HStack {
+                                Text(selected.name)
+                                    .foregroundColor(Color(hex: selected.colorHex))
+                                Spacer()
+                                Button(action: { selectedSubject = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("科目を削除")
+                            }
+                        } else {
+                            Text("科目を選択")
+                                .foregroundColor(.secondary)
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(subjects.prefix(5)) { subject in
+                                    Button(action: { selectedSubject = subject }) {
+                                        Text(subject.name)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(
+                                                        selectedSubject?.id == subject.id ? Color(hex: subject.colorHex) : .gray.opacity(0.3),
+                                                        lineWidth: selectedSubject?.id == subject.id ? 2 : 1
+                                                    )
+                                            )
+                                            .foregroundColor(.primary)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("科目 \(subject.name)")
+                                }
+
+                                Button(action: { selectedSubject = nil }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "xmark.circle.fill")
+                                        Text("なし")
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(
+                                                selectedSubject == nil ? Color.blue : .gray.opacity(0.3),
+                                                lineWidth: selectedSubject == nil ? 2 : 1
+                                            )
+                                    )
+                                    .foregroundColor(.primary)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("科目なし")
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
                 }
 
                 // 時間設定
@@ -399,7 +465,8 @@ struct AddTaskSheet: View {
             timeZoneIdentifier: isTimeSpecified ? selectedTimeZone : nil,
             amount: amount,
             paymentMethod: paymentMethod,
-            isTimePinned: isTimeSpecified && isTimePinned
+            isTimePinned: isTimeSpecified && isTimePinned,
+            subjectID: selectedSubject?.id
         )
 
         modelContext.insert(task)

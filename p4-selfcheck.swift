@@ -6,6 +6,7 @@
 //      "str(8) ToDo/Enums.swift" "str(8) ToDo/TaskItem.swift" \
 //      "str(8) ToDo/SupportingModels.swift" "str(8) ToDo/BandModels.swift" \
 //      "str(8) ToDo/Color+Hex.swift" "str(8) ToDo/FocusSession.swift" \
+//      "str(8) ToDo/Subject.swift" \
 //      "str(8) ToDo/HourglassMotion.swift" p4-selfcheck.swift -o /tmp/p4check && /tmp/p4check
 //
 //  アプリターゲットには含めない（pbxproj 未登録）。ロジックが壊れたら assert で落ちる。
@@ -131,7 +132,7 @@ struct P4SelfCheck {
 
         // 実行中・期限超過→ .autoFinish(end: plannedEnd)
         let decision2 = TimerRestore.decide(snapshot: snapshot1, now: plannedEnd.addingTimeInterval(1))
-        if case .autoFinish(let autFinishStart, let autoFinishEnd, _, _) = decision2 {
+        if case .autoFinish(let autFinishStart, let autoFinishEnd, _, _, _) = decision2 {
             assert(autFinishStart == sessionStart, "autoFinish の sessionStart は復元元と同じ")
             assert(autoFinishEnd == plannedEnd, "autoFinish の end は plannedEnd")
         } else {
@@ -189,7 +190,7 @@ struct P4SelfCheck {
         var snapshot8 = snapshot1
         snapshot8.removeValue(forKey: "runStartedAt")
         let decision9 = TimerRestore.decide(snapshot: snapshot8, now: baseTime)
-        if case .resume(_, let accum, let runStarted, _, _, _) = decision9 {
+        if case .resume(_, let accum, let runStarted, _, _, _, _) = decision9 {
             assert(runStarted == nil, "runStartedAt 欠落は nil として復元")
             assert(accum == accumulated, "accumulated は保持される")
         } else {
@@ -200,7 +201,7 @@ struct P4SelfCheck {
         var snapshot9 = snapshot1
         snapshot9.removeValue(forKey: "linkedTaskID")
         let decision10 = TimerRestore.decide(snapshot: snapshot9, now: plannedEnd.addingTimeInterval(-1))
-        if case .resume(_, _, _, _, let linkedID, _) = decision10 {
+        if case .resume(_, _, _, _, let linkedID, _, _) = decision10 {
             assert(linkedID == nil, "linkedTaskID 欠落は nil として復元")
         } else {
             fatalError("linkedTaskID 欠落は .resume")

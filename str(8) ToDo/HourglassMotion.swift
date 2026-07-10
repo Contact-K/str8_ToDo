@@ -183,8 +183,8 @@ struct MotionHUDView: View {
 /// タイマー中に死んだ場合の復元シナリオ: 実行中で期限超過→自動finish / 一時停止中→復元のみ / 壊れたデータ→クリア。
 enum TimerRestore: Equatable {
     case invalid
-    case resume(sessionStart: Date, accumulated: TimeInterval, runStartedAt: Date?, selectedMinutes: Int, linkedTaskID: UUID?, alarmID: UUID)
-    case autoFinish(sessionStart: Date, end: Date, linkedTaskID: UUID?, alarmID: UUID)
+    case resume(sessionStart: Date, accumulated: TimeInterval, runStartedAt: Date?, selectedMinutes: Int, linkedTaskID: UUID?, linkedSubjectID: UUID?, alarmID: UUID)
+    case autoFinish(sessionStart: Date, end: Date, linkedTaskID: UUID?, linkedSubjectID: UUID?, alarmID: UUID)
 
     /// スナップショット辞書から復元アクションを判定する。
     /// - パース失敗・不正値（selectedMinutes ≤ 0、accumulated < 0、キー欠落）は .invalid。
@@ -214,6 +214,7 @@ enum TimerRestore: Equatable {
         // オプションキー
         let restoredRunStartedAt: Date? = (snapshot["runStartedAt"] as? TimeInterval).map { Date(timeIntervalSinceReferenceDate: $0) }
         let restoredLinkedTaskID: UUID? = (snapshot["linkedTaskID"] as? String).flatMap { UUID(uuidString: $0) }
+        let restoredLinkedSubjectID: UUID? = (snapshot["linkedSubjectID"] as? String).flatMap { UUID(uuidString: $0) }
 
         // 実行中の場合のみ期限切れ判定
         if let runStarted = restoredRunStartedAt {
@@ -229,6 +230,7 @@ enum TimerRestore: Equatable {
                     sessionStart: sessionStart,
                     end: plannedEnd,
                     linkedTaskID: restoredLinkedTaskID,
+                    linkedSubjectID: restoredLinkedSubjectID,
                     alarmID: alarmUUID
                 )
             }
@@ -241,6 +243,7 @@ enum TimerRestore: Equatable {
             runStartedAt: restoredRunStartedAt,
             selectedMinutes: selectedMin,
             linkedTaskID: restoredLinkedTaskID,
+            linkedSubjectID: restoredLinkedSubjectID,
             alarmID: alarmUUID
         )
     }

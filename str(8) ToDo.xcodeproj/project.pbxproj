@@ -51,6 +51,9 @@
 		FF0000000000000000000155 /* SunCalc.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000154 /* SunCalc.swift */; };
 		FF0000000000000000000157 /* DepartureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000156 /* DepartureService.swift */; };
 		FF0000000000000000000159 /* MoneyStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000158 /* MoneyStats.swift */; };
+		FF000000000000000000015B /* Subject.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015A /* Subject.swift */; };
+		FF000000000000000000015D /* HeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015C /* HeatmapView.swift */; };
+		FF000000000000000000015F /* StudyHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015E /* StudyHubView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -100,6 +103,9 @@
 		FF0000000000000000000154 /* SunCalc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunCalc.swift; sourceTree = "<group>"; };
 		FF0000000000000000000156 /* DepartureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepartureService.swift; sourceTree = "<group>"; };
 		FF0000000000000000000158 /* MoneyStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyStats.swift; sourceTree = "<group>"; };
+		FF000000000000000000015A /* Subject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Subject.swift; sourceTree = "<group>"; };
+		FF000000000000000000015C /* HeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapView.swift; sourceTree = "<group>"; };
+		FF000000000000000000015E /* StudyHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyHubView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -154,6 +160,7 @@
 				FF0000000000000000000111 /* EventKitService.swift */,
 				FF0000000000000000000140 /* FocusSession.swift */,
 				FF000000000000000000013E /* Formatting.swift */,
+				FF000000000000000000015C /* HeatmapView.swift */,
 				FF0000000000000000000142 /* HourglassMotion.swift */,
 				FF0000000000000000000113 /* LocationPickerView.swift */,
 				FF0000000000000000000115 /* MorphCalendar.swift */,
@@ -165,7 +172,9 @@
 				FF000000000000000000013A /* SortDeckView.swift */,
 				FF000000000000000000014E /* ProximityGate.swift */,
 				FF0000000000000000000154 /* SunCalc.swift */,
+				FF000000000000000000015A /* Subject.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
+				FF000000000000000000015E /* StudyHubView.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
 				FF000000000000000000011F /* TaskItem.swift */,
@@ -272,6 +281,7 @@
 				FF0000000000000000000112 /* EventKitService.swift in Sources */,
 				FF0000000000000000000141 /* FocusSession.swift in Sources */,
 				FF000000000000000000013F /* Formatting.swift in Sources */,
+				FF000000000000000000015D /* HeatmapView.swift in Sources */,
 				FF0000000000000000000143 /* HourglassMotion.swift in Sources */,
 				FF0000000000000000000114 /* LocationPickerView.swift in Sources */,
 				FF0000000000000000000116 /* MorphCalendar.swift in Sources */,
@@ -283,7 +293,9 @@
 				FF000000000000000000013B /* SortDeckView.swift in Sources */,
 				FF000000000000000000014F /* ProximityGate.swift in Sources */,
 				FF0000000000000000000155 /* SunCalc.swift in Sources */,
+				FF000000000000000000015B /* Subject.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
+				FF000000000000000000015F /* StudyHubView.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
 				FF0000000000000000000120 /* TaskItem.swift in Sources */,

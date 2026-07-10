@@ -15,12 +15,14 @@ import Combine
 struct TimerView: View {
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TaskItem]
+    @Query private var subjects: [Subject]
 
     @State private var motion = HourglassMotionService()
 
     // 設定
     @State private var selectedMinutes = 25
     @State private var linkedTaskID: UUID?
+    @State private var linkedSubjectID: UUID?
     @State private var dragBaseMinutes: Int?
 
     // セッション状態（経過は paused を除いて累積）
@@ -70,6 +72,8 @@ struct TimerView: View {
                 }
 
                 taskPicker
+
+                subjectPicker
 
                 controls
 
@@ -126,6 +130,15 @@ struct TimerView: View {
             .onChange(of: linkedTaskID) {
                 if isSessionActive {
                     saveSnapshot()
+                }
+            }
+            .onChange(of: linkedSubjectID) {
+                if isSessionActive {
+                    saveSnapshot()
+                } else if let linkedSubjectID {
+                    if let subject = subjects.first(where: { $0.id == linkedSubjectID }) {
+                        selectedMinutes = subject.pomodoroMinutes
+                    }
                 }
             }
         }
@@ -196,6 +209,16 @@ struct TimerView: View {
         .pickerStyle(.menu)
     }
 
+    private var subjectPicker: some View {
+        Picker("科目", selection: $linkedSubjectID) {
+            Text("科目なし").tag(nil as UUID?)
+            ForEach(subjects, id: \.id) { subject in
+                Text(subject.name).tag(subject.id as UUID?)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
     @ViewBuilder
     private var controls: some View {
         // シミュレータ（センサーなし）では手動ボタン、実機でも代替操作として常設
@@ -246,6 +269,9 @@ struct TimerView: View {
         if let linkedTaskID {
             snapshot["linkedTaskID"] = linkedTaskID.uuidString
         }
+        if let linkedSubjectID {
+            snapshot["linkedSubjectID"] = linkedSubjectID.uuidString
+        }
         UserDefaults.standard.set(snapshot, forKey: "timer.session")
     }
 
@@ -268,20 +294,22 @@ struct TimerView: View {
             }
             clearSnapshot()
 
-        case .resume(let sessionStart, let accumulated, let runStartedAt, let selectedMinutes, let linkedTaskID, let alarmID):
+        case .resume(let sessionStart, let accumulated, let runStartedAt, let selectedMinutes, let linkedTaskID, let linkedSubjectID, let alarmID):
             // 実行中（期限内）or 一時停止中→状態復元のみ
             self.sessionStart = sessionStart
             self.accumulated = accumulated
             self.runStartedAt = runStartedAt
             self.selectedMinutes = selectedMinutes
             self.linkedTaskID = linkedTaskID
+            self.linkedSubjectID = linkedSubjectID
             self.alarmID = alarmID
             self.now = .now
 
-        case .autoFinish(let sessionStart, let end, let linkedTaskID, let alarmID):
+        case .autoFinish(let sessionStart, let end, let linkedTaskID, let linkedSubjectID, let alarmID):
             // 実行中で期限超過→状態セット後に自動 finish（endCap で期限に制限）
             self.sessionStart = sessionStart
             self.linkedTaskID = linkedTaskID
+            self.linkedSubjectID = linkedSubjectID
             self.alarmID = alarmID
             self.now = .now
             finish(endCap: end)
@@ -350,7 +378,8 @@ struct TimerView: View {
         }
         let end = endCap ?? Date.now
         let task = linkableTasks.first { $0.id == linkedTaskID }
-        FocusSession.record(start: start, end: end, task: task, context: context)
+        let subject = subjects.first { $0.id == linkedSubjectID }
+        FocusSession.record(start: start, end: end, task: task, subject: subject, context: context)
         AlarmService.cancel(id: alarmID)
         resetSession()
         clearSnapshot()

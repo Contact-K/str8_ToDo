@@ -12,15 +12,21 @@ import SwiftData
 struct TodoListView: View {
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TaskItem]
+    @Query(sort: \Subject.name) private var subjects: [Subject]
 
     @State private var quickTitle = ""
     @State private var selectedTask: TaskItem?
     @State private var schedulingTask: TaskItem?
     @State private var showDeck = false
+    @State private var selectedSubjectFilter: UUID? = nil
 
     /// 浮遊 active タスク（リストの対象）。
     private var floating: [TaskItem] {
-        allTasks.filter { $0.startDate == nil && $0.status == .active }
+        let base = allTasks.filter { $0.startDate == nil && $0.status == .active }
+        if let filterID = selectedSubjectFilter {
+            return base.filter { $0.subjectID == filterID }
+        }
+        return base
     }
 
     private var todayTasks: [TaskItem] {
@@ -54,6 +60,34 @@ struct TodoListView: View {
             }
             .navigationTitle("リスト")
             .toolbar {
+                ToolbarItem(placement: .secondaryAction) {
+                    if !subjects.isEmpty {
+                        Menu {
+                            Button(action: { selectedSubjectFilter = nil }) {
+                                HStack {
+                                    Text("すべて")
+                                    if selectedSubjectFilter == nil {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            Divider()
+                            ForEach(subjects) { subject in
+                                Button(action: { selectedSubjectFilter = subject.id }) {
+                                    HStack {
+                                        Label(subject.name, systemImage: "circle.fill")
+                                            .foregroundColor(Color(hex: subject.colorHex))
+                                        if selectedSubjectFilter == subject.id {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "funnel")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("仕分けを始める") { showDeck = true }
                         .disabled(SortDeckEngine.deckTasks(from: allTasks).isEmpty)

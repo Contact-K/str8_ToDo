@@ -106,6 +106,9 @@ final class TaskItem {
     /// 先送り期限。この日時まではデッキに出さない。
     var snoozeUntil: Date? = nil
 
+    /// 紐付き科目（勉強タスク）。任意。
+    var subjectID: UUID? = nil
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -135,7 +138,8 @@ final class TaskItem {
         isTimePinned: Bool = false,
         sortIndex: Int = 0,
         lastSortedDay: Date? = nil,
-        snoozeUntil: Date? = nil
+        snoozeUntil: Date? = nil,
+        subjectID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -166,6 +170,7 @@ final class TaskItem {
         self.sortIndex = sortIndex
         self.lastSortedDay = lastSortedDay
         self.snoozeUntil = snoozeUntil
+        self.subjectID = subjectID
     }
 }
 

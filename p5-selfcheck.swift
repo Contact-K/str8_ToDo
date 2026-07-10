@@ -7,6 +7,7 @@
 //      "str(8) ToDo/Enums.swift" "str(8) ToDo/TaskItem.swift" \
 //      "str(8) ToDo/SupportingModels.swift" "str(8) ToDo/BandModels.swift" \
 //      "str(8) ToDo/Color+Hex.swift" "str(8) ToDo/FocusSession.swift" "str(8) ToDo/ChopDetector.swift" \
+//      "str(8) ToDo/Subject.swift" \
 //      "str(8) ToDo/ApprovalMessage.swift" p5-selfcheck.swift -o /tmp/p5check && /tmp/p5check
 //
 //  アプリターゲットには含めない（pbxproj 未登録）。ロジックが壊れたら assert で落ちる。

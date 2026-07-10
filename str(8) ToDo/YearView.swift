@@ -154,95 +154,35 @@ struct YearView: View {
                 }
                 .padding(.vertical, 32)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    // 月ラベル行
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 2) {
-                            ForEach(0..<53, id: \.self) { weekIdx in
-                                VStack(spacing: 0) {
-                                    if let (month, _, _) = dayInWeek(weekIdx, 0, dailyCount) {
-                                        if weekIdx == 0 || dayInWeek(weekIdx - 1, 6, dailyCount)?.0 ?? 0 != month {
-                                            Text("\(month)月")
-                                                .font(.caption2)
-                                                .fontWeight(.semibold)
-                                                .lineLimit(1)
-                                                .frame(width: 14, alignment: .center)
-                                        } else {
-                                            Color.clear.frame(width: 14, height: 14)
-                                        }
-                                    } else {
-                                        Color.clear.frame(width: 14, height: 14)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
+                let heatmapValues = Dictionary(uniqueKeysWithValues: dailyCount.map { date, count in
+                    (date, Double(count))
+                })
 
-                    // ヒートマップ本体
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        HStack(spacing: 2) {
-                            ForEach(0..<53, id: \.self) { weekIdx in
-                                VStack(spacing: 2) {
-                                    ForEach(0..<7, id: \.self) { dayOfWeek in
-                                        if let (month, day, count) = dayInWeek(weekIdx, dayOfWeek, dailyCount) {
-                                            contributionCell(count: count)
-                                                .frame(width: 12, height: 12)
-                                                .accessibilityLabel("\(month)月\(day)日 \(count > 0 ? "\(count)件承認" : "記録なし")")
-                                                .accessibilityValue("\(count)")
-                                        } else {
-                                            Color.clear
-                                                .frame(width: 12, height: 12)
-                                        }
-                                    }
-                                }
-                            }
+                HeatmapView(
+                    year: selectedYear,
+                    values: heatmapValues,
+                    tint: Color.accentColor,
+                    intensity: { value in
+                        switch Int(value) {
+                        case 0: return 0.15
+                        case 1: return 0.4
+                        case 2: return 0.6
+                        case 3: return 0.8
+                        default: return 1.0
                         }
-                        .padding(.vertical, 8)
+                    },
+                    labelFor: { date, value in
+                        let month = cal.component(.month, from: date)
+                        let day = cal.component(.day, from: date)
+                        return "\(month)月\(day)日 \(Int(value) > 0 ? "\(Int(value))件承認" : "記録なし")"
                     }
-                }
+                )
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-    }
-
-    /// 指定週・曜日の日付と達成数を返す（1月1日基準で年間配置）。
-    private func dayInWeek(_ weekIdx: Int, _ dayOfWeek: Int, _ dailyCount: [Date: Int]) -> (Int, Int, Int)? {
-        guard let yearStart = cal.date(from: DateComponents(year: selectedYear, month: 1, day: 1)) else { return nil }
-
-        // 1月1日の曜日（0=日〜6=土）
-        let jan1Weekday = cal.component(.weekday, from: yearStart) - 1
-
-        // week0の開始は1月1日より前の日曜日
-        let dayOffset = weekIdx * 7 + dayOfWeek - jan1Weekday
-        guard dayOffset >= 0 else { return nil }
-
-        guard let date = cal.date(byAdding: .day, value: dayOffset, to: yearStart) else { return nil }
-        guard cal.component(.year, from: date) == selectedYear else { return nil }
-
-        let month = cal.component(.month, from: date)
-        let day = cal.component(.day, from: date)
-        let count = dailyCount[cal.startOfDay(for: date)] ?? 0
-
-        return (month, day, count)
-    }
-
-    /// 達成数に応じた色（opacity）。
-    private func contributionCell(count: Int) -> some View {
-        let opacity: Double
-        switch count {
-        case 0: opacity = 0.15
-        case 1: opacity = 0.4
-        case 2: opacity = 0.6
-        case 3: opacity = 0.8
-        default: opacity = 1.0
-        }
-
-        return RoundedRectangle(cornerRadius: 3)
-            .fill(Color.accentColor.opacity(opacity))
     }
 
     // MARK: - カテゴリ別積み上げ横バー

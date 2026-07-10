@@ -27,6 +27,7 @@ struct str_8__ToDoApp: App {
                 BandTemplate.self,
                 BandAssignment.self,
                 FocusSession.self,
+                Subject.self,
                 WeatherCache.self
             ])
             let configuration = ModelConfiguration(

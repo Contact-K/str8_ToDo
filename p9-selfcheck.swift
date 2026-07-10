@@ -7,6 +7,7 @@
 //      "str(8) ToDo/Enums.swift" "str(8) ToDo/TaskItem.swift" \
 //      "str(8) ToDo/SupportingModels.swift" "str(8) ToDo/BandModels.swift" \
 //      "str(8) ToDo/FocusSession.swift" "str(8) ToDo/Color+Hex.swift" \
+//      "str(8) ToDo/Subject.swift" \
 //      p9-selfcheck.swift -o /tmp/p9check && /tmp/p9check
 //
 //  アプリターゲットには含めない（pbxproj 未登録）。
