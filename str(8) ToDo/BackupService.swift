@@ -251,12 +251,14 @@ enum BackupService {
         }
     }
 
-    /// 全8モデルを参照する側から順に個別 delete（internal: selfcheck からも使う）。
+    /// 全9モデルを参照する側から順に個別 delete（internal: selfcheck からも使う）。
     @MainActor
     static func deleteAllModels(context: ModelContext) throws {
         try deleteAll(TaskItem.self, context: context)
         try deleteAll(FocusSession.self, context: context)
         try deleteAll(DayStat.self, context: context)
+        // MonthMoneyStat は再計算可能キャッシュ: 復元時は削除のみ（月ビュー表示時に recompute）
+        try deleteAll(MonthMoneyStat.self, context: context)
         try deleteAll(BandAssignment.self, context: context)
         try deleteAll(Band.self, context: context)
         try deleteAll(BandTemplate.self, context: context)

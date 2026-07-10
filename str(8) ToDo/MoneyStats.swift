@@ -27,15 +27,33 @@ final class MonthMoneyStat {
 }
 
 enum MoneyStats {
+    /// 金額付きタスクの月内発生を1箇所で反復する共通プリミティブ。
+    /// amount > 0 のタスクだけを対象に、月内の各発生日（毎週×4回なら4回）で body を呼ぶ。
+    static func forEachOccurrence(tasks: [TaskItem], month: Date, _ body: (Date, TaskItem) -> Void) {
+        let cal = Calendar.current
+        // 注意: date(bySetting: .day, value: 1) は前方検索で翌月に飛ぶため dateInterval を使う
+        let monthStart = cal.dateInterval(of: .month, for: month)?.start ?? cal.startOfDay(for: month)
+        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart)!
+
+        for task in tasks {
+            guard (task.amount ?? 0) > 0 else { continue }
+            var cursor = monthStart
+            while cursor < monthEnd {
+                if task.occurs(on: cursor) {
+                    body(cursor, task)
+                }
+                cursor = cal.date(byAdding: .day, value: 1, to: cursor)!
+            }
+        }
+    }
+
     /// 指定月の支出を再計算し、MonthMoneyStat に upsert する。
     /// - Parameters:
     ///   - month: startOfMonth のその月
     ///   - context: ModelContext
     static func recompute(month: Date, context: ModelContext) {
         let cal = Calendar.current
-        // 注意: date(bySetting: .day, value: 1) は前方検索で翌月に飛ぶため dateInterval を使う
         let monthStart = cal.dateInterval(of: .month, for: month)?.start ?? cal.startOfDay(for: month)
-        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart)!
 
         // ponytail: Decimal? の nil 比較は #Predicate で避けるため、fetch 後に Swift 側で フィルタ
         let descriptor = FetchDescriptor<TaskItem>(
@@ -46,18 +64,11 @@ enum MoneyStats {
         var totalSpend: Decimal = 0
         var subscriptionSpend: Decimal = 0
 
-        for task in allTasks {
-            guard let amount = task.amount, amount > 0 else { continue }
-            // 月内の各発生日ごとに計上（毎週×4回なら4回分）
-            var cursor = monthStart
-            while cursor < monthEnd {
-                if task.occurs(on: cursor) {
-                    totalSpend += amount
-                    if task.category?.name == "サブスク" {
-                        subscriptionSpend += amount
-                    }
-                }
-                cursor = cal.date(byAdding: .day, value: 1, to: cursor)!
+        forEachOccurrence(tasks: allTasks, month: monthStart) { _, task in
+            let amount = task.amount ?? 0
+            totalSpend += amount
+            if task.category?.name == "サブスク" {
+                subscriptionSpend += amount
             }
         }
 
@@ -82,8 +93,6 @@ struct MoneyBreakdownView: View {
     let month: Date
     @Environment(\.modelContext) var modelContext
     @Query private var tasks: [TaskItem]
-
-    private var cal: Calendar { Calendar.current }
 
     var body: some View {
         NavigationStack {
@@ -163,18 +172,8 @@ struct MoneyBreakdownView: View {
     /// 月内の発生日ごとに amount を key 別に合算。
     private func breakdown(_ key: (TaskItem) -> String) -> [String: Decimal] {
         var result: [String: Decimal] = [:]
-        let monthStart = cal.dateInterval(of: .month, for: month)?.start ?? cal.startOfDay(for: month)
-        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart)!
-
-        for task in tasks {
-            guard let amount = task.amount, amount > 0 else { continue }
-            var cursor = monthStart
-            while cursor < monthEnd {
-                if task.occurs(on: cursor) {
-                    result[key(task), default: 0] += amount
-                }
-                cursor = cal.date(byAdding: .day, value: 1, to: cursor)!
-            }
+        MoneyStats.forEachOccurrence(tasks: tasks, month: month) { _, task in
+            result[key(task), default: 0] += task.amount ?? 0
         }
         return result
     }

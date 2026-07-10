@@ -211,8 +211,12 @@ struct AddTaskSheet: View {
                     if isMoneySpecified {
                         TextField("金額（例: 1490）", text: $selectedAmount)
                             .keyboardType(.decimalPad)
-                        if !selectedAmount.isEmpty && parsedAmount == nil {
-                            Text("金額を数値で入力してください")
+                        if selectedAmount.isEmpty {
+                            Text("金額を入力してください")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if parsedAmount == nil {
+                            Text("金額は正の数値で入力してください")
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }
@@ -339,14 +343,19 @@ struct AddTaskSheet: View {
         }
     }
 
-    /// 金額入力の正規化＋パース。全角数字→半角、カンマ・空白除去。不能なら nil。
+    /// 金額入力の正規化＋パース。全角数字→半角、カンマ・空白除去。
+    /// マイナス（半角/全角）や 0 以下は集計対象外（amount > 0 のみ計上）なのでパース失敗扱い。
     private var parsedAmount: Decimal? {
         let normalized = selectedAmount
             .applyingTransform(.fullwidthToHalfwidth, reverse: false)?
             .replacingOccurrences(of: ",", with: "")
             .trimmingCharacters(in: .whitespaces) ?? ""
-        guard !normalized.isEmpty else { return nil }
-        return Decimal(string: normalized, locale: Locale(identifier: "en_US"))
+        guard !normalized.isEmpty,
+              !normalized.contains("-"), !normalized.contains("−"),
+              let amount = Decimal(string: normalized, locale: Locale(identifier: "en_US")),
+              amount > 0
+        else { return nil }
+        return amount
     }
 
     private func addTask() {

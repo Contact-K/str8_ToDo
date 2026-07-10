@@ -124,7 +124,39 @@ func testUpsert() {
     print("testUpsert: passed（二重挿入なし・値更新）")
 }
 
-// MARK: - Test 3: currencyText（ja_JP 通貨表記）
+// MARK: - Test 3: FREQ=MONTHLY の月末クランプ（1/31 開始 → 2月は月末日に計上）
+
+@MainActor
+func testMonthEndClamp() {
+    let (container, context) = makeContext()
+    _ = container
+    let subs = Category(name: "サブスク")
+    context.insert(subs)
+    context.insert(TaskItem(title: "月末サブスク", category: subs,
+                            startDate: day(2026, 1, 31), rrule: "FREQ=MONTHLY", amount: 980))
+    try! context.save()
+
+    // occurs 単体: 2026年2月は28日まで → 2/28 に発生、2/27 には発生しない
+    let task = try! context.fetch(FetchDescriptor<TaskItem>()).first!
+    assert(task.occurs(on: day(2026, 2, 28)), "1/31 開始 FREQ=MONTHLY は 2/28 に発生すべき")
+    assert(!task.occurs(on: day(2026, 2, 27)), "2/27 には発生しない")
+    // 31日がある月は通常どおり31日
+    assert(task.occurs(on: day(2026, 3, 31)), "3月は 3/31 に発生すべき")
+    assert(!task.occurs(on: day(2026, 3, 28)), "3/28 には発生しない")
+
+    // 集計: 2月に1回分計上される
+    MoneyStats.recompute(month: day(2026, 2, 10), context: context)
+    guard let feb = fetchStat(month: day(2026, 2, 1), context: context) else {
+        assertionFailure("2月の MonthMoneyStat が作成されるべき")
+        return
+    }
+    assert(feb.totalSpend == Decimal(980), "2月合計 期待980 実際\(feb.totalSpend)")
+    assert(feb.subscriptionSpend == Decimal(980), "2月サブスク 期待980 実際\(feb.subscriptionSpend)")
+
+    print("testMonthEndClamp: passed（月末クランプ）")
+}
+
+// MARK: - Test 4: currencyText（ja_JP 通貨表記）
 
 func testCurrencyText() {
     assert(currencyText(Decimal(1490)).contains("1,490"), "桁区切り 実際\(currencyText(Decimal(1490)))")
@@ -143,6 +175,7 @@ struct P8SelfCheck {
     static func main() {
         testMonthlyTotals()
         testUpsert()
+        testMonthEndClamp()
         testCurrencyText()
 
         print("p8-selfcheck: all passed")

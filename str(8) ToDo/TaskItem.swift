@@ -265,7 +265,10 @@ extension TaskItem {
             return calendar.component(.weekday, from: day) == calendar.component(.weekday, from: startDate)
         }
         if rrule == "FREQ=MONTHLY" {
-            return calendar.component(.day, from: day) == calendar.component(.day, from: startDate)
+            // 月末クランプ: 開始日の day がその月の日数を超える場合は月末日に発生（例: 31日開始→2月は28/29日）
+            let startDay = calendar.component(.day, from: startDate)
+            let daysInMonth = calendar.range(of: .day, in: .month, for: day)?.count ?? 31
+            return calendar.component(.day, from: day) == min(startDay, daysInMonth)
         }
         return false
     }

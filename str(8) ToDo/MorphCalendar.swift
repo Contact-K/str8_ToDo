@@ -390,15 +390,11 @@ struct MonthGrid: View {
         }
     }
 
-    /// フォーカス月の日別支出（グリッド42マスの startOfDay がキー）。
+    /// フォーカス月の日別支出（startOfDay がキー）。
     private func dailySpends() -> [Date: Decimal] {
-        let moneyTasks = tasks.filter { ($0.amount ?? 0) > 0 }
-        guard !moneyTasks.isEmpty else { return [:] }
         var result: [Date: Decimal] = [:]
-        for day in monthDays() where cal.isDate(day, equalTo: selectedDate, toGranularity: .month) {
-            for task in moneyTasks where task.occurs(on: day) {
-                result[day, default: 0] += task.amount ?? 0
-            }
+        MoneyStats.forEachOccurrence(tasks: tasks, month: selectedDate) { day, task in
+            result[day, default: 0] += task.amount ?? 0
         }
         return result
     }
