@@ -90,6 +90,7 @@ struct ApprovalQueueView: View {
                                     // 確定ボタン
                                     Button(action: {
                                         _ = task.approve(by: "self-future", context: context)
+                                        try? context.save()   // P11 #2: 承認を即永続化→ModelContext.didSave で widget 反映
                                     }) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
@@ -115,6 +116,7 @@ struct ApprovalQueueView: View {
                         // 承認待ちの先頭1件を確定
                         if let first = doneTasks.first(where: { !$0.isAwaitingFutureSelf }) {
                             _ = first.approve(by: "self-future", context: context)
+                            try? context.save()   // P11 #2: didSave で widget 反映
                         }
                     }
                     chopService.start()
@@ -129,6 +131,7 @@ struct ApprovalQueueView: View {
                         // 依頼側: 対応タスクを承認済みに変更
                         if let task = allTasks.first(where: { $0.id == taskID }) {
                             _ = task.approve(by: senderName, context: context, bypassesLock: true)
+                            try? context.save()   // P11 #2: didSave で widget 反映
                         }
                     }
 

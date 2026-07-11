@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 @main
 struct str_8__ToDoApp: App {
@@ -73,6 +74,12 @@ private struct RootView: View {
                 @unknown default:
                     break
                 }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: ModelContext.didSave)
+                    .debounce(for: .seconds(2), scheduler: RunLoop.main)
+            ) { _ in
+                WidgetSnapshotService.refresh(modelContainer.mainContext)
             }
     }
 }

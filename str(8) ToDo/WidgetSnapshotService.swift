@@ -60,7 +60,13 @@ enum WidgetSnapshotService {
             }
 
         // 4. achievementCount: DayStat を fetch し day == today の completedCount
-        let allStats = (try? context.fetch(FetchDescriptor<DayStat>())) ?? []
+        let allStats: [DayStat]
+        do {
+            allStats = try context.fetch(FetchDescriptor<DayStat>())
+        } catch {
+            // DayStat fetch 失敗時は write せず既存の良いキャッシュを残す（達成数0の偽スナップショット防止）
+            return
+        }
         let achievementCount = allStats.first(where: { $0.day == today })?.completedCount ?? 0
 
         // 5. unconfirmedCount: TaskItem を fetch し status == .done の件数

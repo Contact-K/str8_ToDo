@@ -192,6 +192,16 @@ App Group 追加、SwiftData ストアをグループコンテナへ移動(起�
 
 **受け入れ基準**: データ変更後のタイムラインリロードでウィジェットに反映される。
 
+> **P11 実装メモ（2026-07-11）**: 上記の「SwiftData ストアをグループコンテナへ移動」は**不採用**。代わりに **App Group 共有ファイルにアプリが表示用スナップショット JSON を書き出し、ウィジェットがそれを読む**方式で実装（オーナー決定：生ストア移行のデータ消失リスク回避・widget へのモデル共有不要）。共有型/IO は `WidgetShared.swift`（純 Foundation・両ターゲット所属）、生成は `WidgetSnapshotService.swift`。詳細は memory [[str8-todo-phase11-widget-decisions]]。
+
+> **P11 debate-review 繰り越し（2026-07-11、最終ブラッシュアップでまとめて対応）**: 多角レビューで挙がった、実害は限定的だが将来負債になる項目。**#1・#2 は対応済み**（#1 DayStat fetch 失敗時の write スキップ、#2 `ModelContext.didSave` 購読で全ミューテーションから widget refresh 発火）。以下は繰り越し：
+> - **#3 エラー握りつぶし＋テレメトリ皆無**（合意3ロール）: `WidgetSnapshotStore.write/read` の失敗が全経路で無言。App Group 誤設定・旧 JSON 残存などの本番障害が「ウィジェットが更新されない」としか観測できない。最低限の失敗ログ/カウンタを入れる。
+> - **#4 RRULE 繰り返しの当日インスタンス非表示**（合意2ロール）: ウィジェット/日ビュー（DayAgendaView.dayTasks）は同日 startDate のみで `occurs(on:)` 未展開。WeekView だけ展開する既存の全体不整合を継承。**アプリ日ビューごと直すか容認かの方針判断が必要**。**P12（空きコマ提案）も同じ「今日のタスク」解決に依存するため、P12 着手前に方針決定すること**。
+> - **#5 ウィジェット表示の不揃い＋アクセシビリティ**: ファミリ間で「空/古い/読めない」の区別が不揃い（systemSmall/Medium のみ「アプリで更新」）。`pin.fill` に accessibilityLabel 無し、Dynamic Type 非追従（固定10pt）、カテゴリがカード色のみでテキスト表現なし、`lineLimit(1)` で拡大時タイトル欠落。P9 のアクセシビリティ方針に合わせて補修。
+> - **#6 systemSmall/Medium の約60行重複**: stat 表示の helper view 化で簡潔化。
+> - **#7 平文個人情報のバックアップ露出**: 予定タイトル等が App Group に平文 JSON で保存され、NSFileProtection 未指定・iCloud/iTunes バックアップ対象・タスク削除時のパージ経路なし。「オフライン主義」との整合でファイル保護属性/削除方針を判断。
+> - **#8 その他小**: upcoming 配列サイズ無上限（巨大 JSON でウィジェットのメモリ制約下デコード）、group ID の二重手管理（entitlements 2ファイル、片方更新漏れで無言失敗）、scenePhase active/background の並行 refresh 競合（atomic なので破損なし・鮮度が一時後退のみ）。
+
 ## Phase 12 — 空きコマ自動提案(W2) 〔Sim〕
 
 今日バケツの浮遊タスクを、`duration`(実績 `actualDuration` で補正——P0/P4 から蓄積済み)を使って枠の空きに「締切が近い順→重い順」の貪欲法でフィット。提案チップは P1 の空きカード内に表示、ワンタップ採用。**勝手に確定しない**。ML なし、完全ローカル。
