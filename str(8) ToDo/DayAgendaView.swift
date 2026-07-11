@@ -31,6 +31,19 @@ struct DayAgendaView: View {
             let now = timeline.date
             let isToday = cal.isDateInToday(date)
             let rows = buildRows(isToday: isToday, now: now)
+            let gapSuggestions: [Date: [SlotSuggestion]] = isToday ? {
+                let candidates = allTasks
+                    .filter { $0.startDate == nil && $0.status == .active && ($0.phase == .now || $0.phase == .today) }
+                    .map { FreeSlotSuggester.Candidate(
+                        id: $0.id,
+                        phaseRank: $0.phase == .now ? 0 : 1,
+                        effectiveDuration: FreeSlotSuggester.effectiveDuration(actualDuration: $0.actualDuration, duration: $0.duration),
+                        sortIndex: $0.sortIndex) }
+                let gaps: [(start: Date, duration: TimeInterval)] = rows.compactMap {
+                    if case .gap(let s, let d) = $0 { return (s, d) } else { return nil }
+                }
+                return FreeSlotSuggester.suggest(gaps: gaps, candidates: candidates)
+            }() : [:]
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -56,11 +69,8 @@ struct DayAgendaView: View {
                                     }
 
                             case .gap(let start, let duration):
-                                gapRow(start: start, duration: duration)
+                                gapRow(start: start, duration: duration, suggestions: gapSuggestions[start] ?? [])
                                     .id(row.id)
-                                    .onTapGesture {
-                                        onTapGap?(start, duration)
-                                    }
 
                             case .nowSeparator:
                                 nowSeparatorRow(now: now)
@@ -209,9 +219,10 @@ struct DayAgendaView: View {
         }
     }
 
-    private func gapRow(start: Date, duration: TimeInterval) -> some View {
+    private func gapRow(start: Date, duration: TimeInterval, suggestions: [SlotSuggestion]) -> some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+            // 静的情報（タップ対応、単一アクセシビリティ要素）
+            VStack(alignment: .leading, spacing: 8) {
                 Text("空き")
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -224,8 +235,42 @@ struct DayAgendaView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onTapGap?(start, duration)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("タップでこの時間にタスクを追加")
 
             Spacer()
+
+            // 提案チップ（静的 VStack の外、個別に VoiceOver 操作可能）
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(suggestions) { suggestion in
+                        if let task = allTasks.first(where: { $0.id == suggestion.taskID }) {
+                            Button {
+                                task.scheduleAt(start: suggestion.start, duration: suggestion.duration, context: context)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(task.title)
+                                        .lineLimit(1)
+                                    Text(formatDurationShort(suggestion.duration))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.accentColor.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(task.title) をこの空きに入れる")
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -235,8 +280,6 @@ struct DayAgendaView: View {
         )
         .background(Color(.systemBackground))
         .cornerRadius(8)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("タップでこの時間にタスクを追加")
     }
 
     private func nowSeparatorRow(now: Date) -> some View {

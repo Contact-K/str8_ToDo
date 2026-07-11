@@ -54,6 +54,7 @@
 		FF000000000000000000015B /* Subject.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015A /* Subject.swift */; };
 		FF000000000000000000015D /* HeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015C /* HeatmapView.swift */; };
 		FF000000000000000000015F /* StudyHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015E /* StudyHubView.swift */; };
+		FF0000000000000000000161 /* FreeSlotSuggester.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000160 /* FreeSlotSuggester.swift */; };
 		FF0000000000000000000204 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
 		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
 		FF0000000000000000000208 /* str8Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000207 /* str8Widget.swift */; };
@@ -112,6 +113,7 @@
 		FF000000000000000000015A /* Subject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Subject.swift; sourceTree = "<group>"; };
 		FF000000000000000000015C /* HeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapView.swift; sourceTree = "<group>"; };
 		FF000000000000000000015E /* StudyHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyHubView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000160 /* FreeSlotSuggester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreeSlotSuggester.swift; sourceTree = "<group>"; };
 		FF0000000000000000000201 /* str8Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000000000000000000203 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
 		FF0000000000000000000205 /* WidgetSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotService.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				FF000000000000000000015A /* Subject.swift */,
 				FF000000000000000000011B /* SupportingModels.swift */,
 				FF000000000000000000015E /* StudyHubView.swift */,
+				FF0000000000000000000160 /* FreeSlotSuggester.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
 				FF000000000000000000011D /* TaskDetailView.swift */,
 				FF000000000000000000011F /* TaskItem.swift */,
@@ -383,6 +386,7 @@
 				FF000000000000000000015B /* Subject.swift in Sources */,
 				FF000000000000000000011C /* SupportingModels.swift in Sources */,
 				FF000000000000000000015F /* StudyHubView.swift in Sources */,
+				FF0000000000000000000161 /* FreeSlotSuggester.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
 				FF0000000000000000000120 /* TaskItem.swift in Sources */,

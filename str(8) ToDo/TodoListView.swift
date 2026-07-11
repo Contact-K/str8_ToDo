@@ -217,12 +217,7 @@ private struct SchedulePromoteSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("決定") {
-                        task.startDate = startDate
-                        task.duration = duration
-                        // 浮遊時代の状態を持ち越さない
-                        task.snoozeUntil = nil
-                        task.lastSortedDay = nil
-                        try? context.save()
+                        task.scheduleAt(start: startDate, duration: duration, context: context)
                         dismiss()
                     }
                 }
