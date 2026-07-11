@@ -34,3 +34,14 @@ final class PhraseAlias {
         self.isEnabled = isEnabled
     }
 }
+
+extension PhraseAlias {
+    /// P18 H2: 辞書エントリ（keyword/replacement）の入力サニタイズ。改行除去→trim→100文字上限（超過は truncate）。
+    /// DictionarySettingsView.AliasEditSheet と QuickAddParserView.NewAliasSheet の両方が使う共通ロジック。
+    static func sanitizeEntry(_ text: String) -> String {
+        let noNewlines = text
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+        return String(noNewlines.trimmingCharacters(in: .whitespaces).prefix(100))
+    }
+}

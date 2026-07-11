@@ -81,6 +81,7 @@ private struct RootView: View {
             .task {
                 BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext)
                 seedPhraseAliasesIfNeeded(modelContainer.mainContext)
+                seedProfilesIfNeeded(modelContainer.mainContext)
                 // seed 後の初回 refresh
                 await WidgetSnapshotService.refresh(modelContainer.mainContext)
                 // 起動時に通知権限を要求
@@ -115,7 +116,7 @@ private func seedPhraseAliasesIfNeeded(_ context: ModelContext) {
     guard ((try? context.fetch(descriptor)) ?? []).isEmpty else { return }
 
     let seeds: [(keyword: String, category: WHCategory, replacement: String)] = [
-        ("ポモ", .which, "25 分"),
+        ("ポモ", .how, "25 分"),
         ("今日", .when, "今日 09:00"),
         ("明日", .when, "明日 09:00"),
         ("朝", .when, "09:00"),
@@ -125,14 +126,29 @@ private func seedPhraseAliasesIfNeeded(_ context: ModelContext) {
         ("大学", .where_, "大学図書館"),
         ("会社", .where_, "オフィス"),
         ("買い物", .where_, "スーパー"),
-        ("会議", .which, "ミーティング"),
         ("レポート", .what, "レポート作成"),
-        ("運動", .which, "運動"),
         ("散歩", .what, "散歩 30 分"),
-        ("打ち合わせ", .what, "打ち合わせ 60 分")
+        ("打ち合わせ", .what, "打ち合わせ 60 分"),
+        ("30 分", .how, "30 分"),
+        ("1 時間", .how, "60 分")
     ]
+    // H3: keyword の一意性維持（シード内重複は先勝ちで skip）。
+    var existingKeywords: Set<String> = []
     for seed in seeds {
+        guard existingKeywords.insert(seed.keyword).inserted else { continue }
         context.insert(PhraseAlias(keyword: seed.keyword, whCategory: seed.category, replacement: seed.replacement, isBuiltIn: true))
     }
+    try? context.save()
+}
+
+/// Profile の既定シード（対称性。企画書 which=会社/個人の最小セット）。初回起動時のみ、Profile が1件も無ければ挿入する。
+@MainActor
+private func seedProfilesIfNeeded(_ context: ModelContext) {
+    var descriptor = FetchDescriptor<Profile>()
+    descriptor.fetchLimit = 1
+    guard ((try? context.fetch(descriptor)) ?? []).isEmpty else { return }
+
+    context.insert(Profile(name: "個人", iconName: "person"))
+    context.insert(Profile(name: "仕事", iconName: "briefcase"))
     try? context.save()
 }

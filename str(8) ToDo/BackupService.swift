@@ -166,6 +166,7 @@ enum BackupService {
         case unsupportedVersion(Int)
         case emptyPassphrase
         case keyDerivationFailed
+        case fileTooLarge
 
         var errorDescription: String? {
             switch self {
@@ -179,9 +180,14 @@ enum BackupService {
                 return "パスフレーズを入力してください"
             case .keyDerivationFailed:
                 return "暗号鍵の生成に失敗しました"
+            case .fileTooLarge:
+                return "バックアップファイルが大きすぎます（100MB超）"
             }
         }
     }
+
+    /// P18 H8: readPayload に渡せるファイルサイズの上限（100 MB）。
+    static let maxFileSize = 104_857_600
 
     // MARK: - 鍵導出（PBKDF2）
 
@@ -445,6 +451,12 @@ enum BackupService {
     /// 復号+デコード+バージョン検証のみ。ストアには書き込まない。
     /// UI が復元確認前に exportedAt 等を表示するために使う。
     static func readPayload(data: Data, passphrase: String) throws -> BackupPayload {
+        // P18 H8: OOM/悪意あるファイル対策。data は既にメモリ上に読み込み済みなので data.count が
+        // そのままファイルサイズ（FileManager で改めて attributesOfItem を取る必要がない）。
+        guard data.count <= maxFileSize else {
+            throw BackupError.fileTooLarge
+        }
+
         // ファイルフォーマット検証
         guard data.count >= 5 else {
             throw BackupError.corruptData
@@ -523,8 +535,13 @@ enum BackupService {
         }
 
         // PhraseAlias 挿入（P15。旧 .str8 は nil → 空配列。不正な whCategory は捨てる）
+        // H3: keyword の一意性維持。deleteAllModels 済みで既存 aliases は空なので、都度 fetch する
+        // 代わりにこのループ内で挿入済みの keyword を Set で追跡し、重複（壊れた/悪意あるバックアップ
+        // ファイル対策）を skip する。
+        var phraseAliasKeywords: Set<String> = []
         for aliasDTO in payload.phraseAliases ?? [] {
             guard let category = WHCategory(rawValue: aliasDTO.whCategory) else { continue }
+            guard phraseAliasKeywords.insert(aliasDTO.keyword).inserted else { continue }
             context.insert(PhraseAlias(id: aliasDTO.id, keyword: aliasDTO.keyword, whCategory: category,
                                         replacement: aliasDTO.replacement, isBuiltIn: aliasDTO.isBuiltIn,
                                         isEnabled: aliasDTO.isEnabled))

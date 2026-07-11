@@ -25,7 +25,7 @@ struct QuickAddParserView: View {
     @State private var parseResult = PhraseParser.ParseResult()
     @State private var debounceTask: Task<Void, Never>?
     @State private var showComposer = false
-    @State private var aliasDraftWord: AliasDraftWord?
+    @State private var aliasDraftWord: AliasCandidateWord?
 
     var body: some View {
         NavigationStack {
@@ -49,7 +49,7 @@ struct QuickAddParserView: View {
                             HStack {
                                 Text(word)
                                 Spacer()
-                                Button("+分類選択") { aliasDraftWord = AliasDraftWord(word: word) }
+                                Button("+分類選択") { aliasDraftWord = AliasCandidateWord(word: word) }
                                     .font(.caption)
                                     .buttonStyle(.bordered)
                             }
@@ -78,12 +78,21 @@ struct QuickAddParserView: View {
             }
         }
         .sheet(isPresented: $showComposer) {
-            // ponytail: EventComposerView は改変しない。initialStart/initialDuration の既存 init のみ利用。
+            // P18 M13: ParseResult の全ヒント（titleRemainder/startDate/duration/placeHint/
+            // categoryHint(→Profile優先/Category)/whoHint/otherHint）を一括プリフィル init に渡す。
             // startDate を検出できたのに duration 未検出だと isTimeSpecified が false 扱いになる
             // （ComposerDraft の仕様）ため、時刻を検出できた場合は既定60分を明示的に渡す。
+            let profile = matchedProfile()
+            let category = profile == nil ? matchedCategory() : nil
             EventComposerView(
                 initialStart: parseResult.startDate,
-                initialDuration: parseResult.startDate != nil ? (parseResult.duration ?? 3600) : nil
+                initialDuration: parseResult.startDate != nil ? (parseResult.duration ?? 3600) : nil,
+                prefillTitle: parseResult.titleRemainder.isEmpty ? nil : parseResult.titleRemainder,
+                prefillPlace: parseResult.placeHint,
+                prefillCategory: category,
+                prefillProfile: profile,
+                prefillParticipants: parseResult.whoHint.map { [$0] } ?? [],
+                prefillNotes: parseResult.otherHint ?? ""
             )
         }
         .sheet(item: $aliasDraftWord) { draft in
@@ -169,7 +178,7 @@ struct QuickAddParserView: View {
         dismiss()
     }
 
-    /// 「詳細を追加」：パース結果（日時のみ、EventComposerView 未改変のため）をプリフィルして開く。
+    /// 「詳細を追加」：パース結果の全ヒントをプリフィルして EventComposerView を開く（P18 M13）。
     private func openComposer() {
         showComposer = true
     }
@@ -190,20 +199,16 @@ struct QuickAddParserView: View {
     }
 }
 
-/// サジェストの辞書登録候補ダイアログ表示用（String は Identifiable でないためラップ）。
-private struct AliasDraftWord: Identifiable {
-    let word: String
-    var id: String { word }
-}
-
 /// サジェストからの新規 PhraseAlias 登録ダイアログ（分類選択のみの簡易版。管理 UI 本体は P17）。
 private struct NewAliasSheet: View {
     let word: String
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query private var existingAliases: [PhraseAlias]
 
     @State private var category: WHCategory = .other
     @State private var replacement: String = ""
+    @State private var showDuplicateAlert = false
 
     var body: some View {
         NavigationStack {
@@ -232,12 +237,27 @@ private struct NewAliasSheet: View {
                     Button("登録", action: register)
                 }
             }
+            .alert("重複したキーワード", isPresented: $showDuplicateAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("「\(word)」は既に辞書に登録されています")
+            }
         }
     }
 
     private func register() {
-        let trimmed = replacement.trimmingCharacters(in: .whitespaces)
-        context.insert(PhraseAlias(keyword: word, whCategory: category, replacement: trimmed.isEmpty ? word : trimmed))
+        // H2: keyword/replacement は改行除去→trim→100文字上限で正規化。
+        let keyword = PhraseAlias.sanitizeEntry(word)
+        guard !keyword.isEmpty else { return }
+        let trimmed = PhraseAlias.sanitizeEntry(replacement)
+
+        // H3: keyword の一意性維持（既存 aliases と重複していれば拒否）。
+        guard !existingAliases.contains(where: { $0.keyword == keyword }) else {
+            showDuplicateAlert = true
+            return
+        }
+
+        context.insert(PhraseAlias(keyword: keyword, whCategory: category, replacement: trimmed.isEmpty ? keyword : trimmed))
         try? context.save()
         SuggestionQueue.dequeue(word)  // 直接登録済みなので「登録待ち」からも外す
         dismiss()

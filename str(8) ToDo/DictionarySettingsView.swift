@@ -21,7 +21,7 @@ struct DictionarySettingsView: View {
     @State private var pendingWords: [String] = []
     @State private var showAddSheet = false
     @State private var editingAlias: PhraseAlias?
-    @State private var pendingWordDraft: PendingWordDraft?
+    @State private var pendingWordDraft: AliasCandidateWord?
 
     private var builtInAliases: [PhraseAlias] {
         aliases.filter(\.isBuiltIn).sorted { $0.keyword < $1.keyword }
@@ -67,7 +67,7 @@ struct DictionarySettingsView: View {
                         HStack {
                             Text(word)
                             Spacer()
-                            Button("+分類選択") { pendingWordDraft = PendingWordDraft(word: word) }
+                            Button("+分類選択") { pendingWordDraft = AliasCandidateWord(word: word) }
                                 .font(.caption)
                                 .buttonStyle(.bordered)
                         }
@@ -97,12 +97,6 @@ struct DictionarySettingsView: View {
         context.delete(alias)
         try? context.save()
     }
-}
-
-/// 「登録待ち」ワードの分類選択ダイアログ表示用（String は Identifiable でないためラップ）。
-private struct PendingWordDraft: Identifiable {
-    let word: String
-    var id: String { word }
 }
 
 /// 既定表現/ユーザー登録分の1行。isBuiltIn=true は Toggle のみ（swipeActions なし＝削除・編集不可）。
@@ -143,6 +137,7 @@ private struct AliasRow: View {
 private struct AliasEditSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query private var existingAliases: [PhraseAlias]
 
     /// nil なら新規追加（登録待ち確定含む）、非nilなら既存ユーザー登録分の編集。
     let alias: PhraseAlias?
@@ -153,6 +148,7 @@ private struct AliasEditSheet: View {
     @State private var keyword = ""
     @State private var category: WHCategory = .other
     @State private var replacement = ""
+    @State private var showDuplicateAlert = false
 
     var body: some View {
         NavigationStack {
@@ -182,6 +178,11 @@ private struct AliasEditSheet: View {
                         .disabled(keyword.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .alert("重複したキーワード", isPresented: $showDuplicateAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("同じキーワードが既に登録されています")
+            }
         }
         .onAppear {
             if let alias {
@@ -195,10 +196,18 @@ private struct AliasEditSheet: View {
     }
 
     private func save() {
-        let trimmedKeyword = keyword.trimmingCharacters(in: .whitespaces)
+        // H2: keyword/replacement は改行除去→trim→100文字上限で正規化。
+        let trimmedKeyword = PhraseAlias.sanitizeEntry(keyword)
         guard !trimmedKeyword.isEmpty else { return }
-        let trimmedReplacement = replacement.trimmingCharacters(in: .whitespaces)
+        let trimmedReplacement = PhraseAlias.sanitizeEntry(replacement)
         let finalReplacement = trimmedReplacement.isEmpty ? trimmedKeyword : trimmedReplacement
+
+        // H3: keyword の一意性維持（自分自身以外の既存 aliases と重複していれば拒否）。
+        let isDuplicate = existingAliases.contains { $0.keyword == trimmedKeyword && $0.id != alias?.id }
+        guard !isDuplicate else {
+            showDuplicateAlert = true
+            return
+        }
 
         if let alias {
             alias.keyword = trimmedKeyword

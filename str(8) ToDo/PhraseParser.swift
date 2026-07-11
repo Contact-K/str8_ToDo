@@ -30,6 +30,10 @@ struct PhraseParser {
         var duration: TimeInterval?
         var placeHint: String?
         var categoryHint: String?
+        /// P18 H6: who（誰と）カテゴリのヒット。最初の1件を採用。
+        var whoHint: String?
+        /// P18 H6: other（その他）カテゴリのヒット。最初の1件を採用。
+        var otherHint: String?
         var recognizedChips: [(WHCategory, String)] = []
         var unrecognizedWords: [String] = []
     }
@@ -44,12 +48,17 @@ struct PhraseParser {
     private static func parse(_ text: String, aliases: [PhraseAlias], depth: Int) -> ParseResult {
         var result = ParseResult()
 
-        // ① 日時・相対日付の抽出
+        // ① 日時・相対日付の抽出（P18 H5: 複数マッチ対応。最初の1件だけ startDate として確定し、
+        // 除去する。2件目以降は remaining に残したまま「追加の時刻」chip として見える化するだけ）
         var remaining = text
-        if let (date, range) = firstDateMatch(in: remaining) {
-            result.startDate = date
-            result.recognizedChips.append((.when, chipLabelFormatter.string(from: date)))
-            remaining.removeSubrange(range)
+        let dateHits = dateMatches(in: remaining)
+        if let first = dateHits.first {
+            result.startDate = first.date
+            result.recognizedChips.append((.when, chipLabelFormatter.string(from: first.date)))
+            remaining.removeSubrange(first.range)
+        }
+        for extra in dateHits.dropFirst() {
+            result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
         }
 
         // ② PhraseAlias 照合（部分文字列検索。理由は上のヘッダコメント参照）
@@ -60,12 +69,23 @@ struct PhraseParser {
         for alias in enabledAliases {
             guard let range = remaining.range(of: alias.keyword) else { continue }
 
+            // P18 H4: 意図しない複合語マッチ回避（大学 vs 大学図書館 等）。前後が日本語(Han/Hiragana/
+            // Katakana)または英数字なら単語境界とみなさず skip する。
+            let before: Character? = range.lowerBound > remaining.startIndex
+                ? remaining[remaining.index(before: range.lowerBound)] : nil
+            let after: Character? = range.upperBound < remaining.endIndex ? remaining[range.upperBound] : nil
+            guard isWordBoundary(before), isWordBoundary(after) else { continue }
+
             result.recognizedChips.append((alias.whCategory, alias.replacement))
             switch alias.whCategory {
             case .where_:
                 result.placeHint = alias.replacement
             case .which:
                 result.categoryHint = alias.replacement
+            case .who:
+                if result.whoHint == nil { result.whoHint = alias.replacement }
+            case .other:
+                if result.otherHint == nil { result.otherHint = alias.replacement }
             case .how:
                 if let minutes = durationMinutes(from: alias.replacement) {
                     result.duration = TimeInterval(minutes * 60)
@@ -76,7 +96,7 @@ struct PhraseParser {
                     rewritten.replaceSubrange(rewriteRange, with: alias.replacement)
                     shouldRecurse = true
                 }
-            case .what, .who, .other:
+            case .what:
                 break // chip としては認識済みだが専用ヒントフィールドは持たない
             }
             remaining.removeSubrange(range)
@@ -97,14 +117,15 @@ struct PhraseParser {
 
     // MARK: - ① 日時抽出
 
-    private static func firstDateMatch(in text: String) -> (date: Date, range: Range<String.Index>)? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return nil }
+    /// P18 H5: 1件目だけでなく全マッチを返す（呼び出し側で先頭を startDate、残りを chip 化する）。
+    private static func dateMatches(in text: String) -> [(date: Date, range: Range<String.Index>)] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return [] }
         let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
-        guard let match = detector.firstMatch(in: text, options: [], range: nsRange),
-              let date = match.date,
-              let range = Range(match.range, in: text)
-        else { return nil }
-        return (date, range)
+        let matches = detector.matches(in: text, options: [], range: nsRange)
+        return matches.compactMap { match in
+            guard let date = match.date, let range = Range(match.range, in: text) else { return nil }
+            return (date, range)
+        }
     }
 
     private static let chipLabelFormatter: DateFormatter = {
@@ -113,6 +134,22 @@ struct PhraseParser {
         f.locale = Locale(identifier: "ja_JP")
         return f
     }()
+
+    /// P18 H5: 2件目以降の「追加の時刻」chip 表示用（HH:mm のみ）。
+    private static let extraTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.locale = Locale(identifier: "ja_JP")
+        return f
+    }()
+
+    /// P18 H4: 指定文字が単語境界か（nil＝文字列端も境界扱い）。日本語(Han/Hiragana/Katakana)や
+    /// 英数字はいずれも Unicode.Scalar.Properties.isAlphabetic / Character.isNumber で判定できるため、
+    /// 前後どちらかがそれに該当する場合は「複合語の内部」とみなし境界ではないと判定する。
+    private static func isWordBoundary(_ character: Character?) -> Bool {
+        guard let character, let scalar = character.unicodeScalars.first else { return true }
+        return !(scalar.properties.isAlphabetic || character.isNumber)
+    }
 
     // MARK: - ③ 分かち書き
 

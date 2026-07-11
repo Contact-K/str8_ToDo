@@ -100,11 +100,34 @@ struct EventComposerView: View {
     private let existingTask: TaskItem?
     @State private var draft: ComposerDraft
     @State private var focusedCategory: WHCategory?
+    /// P18 M13: prefillPlace（場所名の文字列ヒント）は init 時点では modelContext が使えないため、
+    /// PlaceTag への解決を body 表示後の .task に遅延する。
+    @State private var pendingPlaceHint: String?
+    /// P18 H2: 金額が上限（1兆円）を超えた保存操作を弾いた時に表示するアラート。
+    @State private var showAmountTooLargeAlert = false
 
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
-    init(initialStart: Date? = nil, initialDuration: TimeInterval? = nil) {
+    /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
+    /// （既存呼び出し元はデフォルト値でそのまま動く）。
+    init(
+        initialStart: Date? = nil,
+        initialDuration: TimeInterval? = nil,
+        prefillTitle: String? = nil,
+        prefillPlace: String? = nil,
+        prefillCategory: Category? = nil,
+        prefillProfile: Profile? = nil,
+        prefillParticipants: [String] = [],
+        prefillNotes: String = ""
+    ) {
         existingTask = nil
-        _draft = State(initialValue: ComposerDraft(defaultDate: initialStart ?? .now, prefillDuration: initialDuration))
+        let newDraft = ComposerDraft(defaultDate: initialStart ?? .now, prefillDuration: initialDuration)
+        if let prefillTitle { newDraft.title = prefillTitle }
+        newDraft.category = prefillCategory
+        newDraft.profile = prefillProfile
+        newDraft.participantNames = prefillParticipants
+        newDraft.notes = prefillNotes
+        _draft = State(initialValue: newDraft)
+        _pendingPlaceHint = State(initialValue: prefillPlace)
     }
 
     /// 既存タスクの編集。TaskDetailView のペンアイコンから接続（P18）。
@@ -163,6 +186,23 @@ struct EventComposerView: View {
         .sheet(item: $focusedCategory) { category in
             ComposerFocusView(category: category, draft: draft) { focusedCategory = $0 }
         }
+        .task {
+            resolvePlaceHintIfNeeded()
+        }
+        .alert("金額が大きすぎます", isPresented: $showAmountTooLargeAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("金額は1兆円以下で入力してください")
+        }
+    }
+
+    /// P18 M13: prefillPlace（文字列）を PlaceTag に解決する。modelContext は init 時点では
+    /// 使えないため body 表示後に一度だけ実行する。
+    private func resolvePlaceHintIfNeeded() {
+        guard let hint = pendingPlaceHint, draft.place == nil else { return }
+        let fetch = FetchDescriptor<PlaceTag>(predicate: #Predicate<PlaceTag> { $0.name == hint })
+        draft.place = try? modelContext.fetch(fetch).first
+        pendingPlaceHint = nil
     }
 
     private var isSaveDisabled: Bool {
@@ -194,6 +234,17 @@ struct EventComposerView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(category.label): \(preview(for: category))")
+        // P18 M10: how タイルはフォーカスを開かずに重要度だけ切替できるインラインの星アイコンを重ねる。
+        .overlay(alignment: .bottomTrailing) {
+            if category == .how {
+                Image(systemName: draft.isImportant ? "star.fill" : "star")
+                    .font(.caption)
+                    .foregroundStyle(draft.isImportant ? .yellow : .gray)
+                    .padding(8)
+                    .onTapGesture { draft.isImportant.toggle() }
+                    .accessibilityLabel(draft.isImportant ? "重要を解除" : "重要に設定")
+            }
+        }
     }
 
     private func isSet(_ category: WHCategory) -> Bool {
@@ -244,6 +295,11 @@ struct EventComposerView: View {
         let trimmedTitle = draft.title.trimmingCharacters(in: .whitespaces)
         guard !trimmedTitle.isEmpty else { return }
         guard draft.amountText.isEmpty || draft.parsedAmount != nil else { return }
+        // P18 H2: 金額の上限バリデーション（1兆円超は拒否）。
+        if let amount = draft.parsedAmount, amount > 1_000_000_000_000 {
+            showAmountTooLargeAlert = true
+            return
+        }
 
         let rruleStr = Self.repeatOptions.first { $0.0 == draft.repeatPattern }?.2
         let amount = draft.parsedAmount
@@ -552,8 +608,10 @@ private struct ComposerFocusView: View {
     }
 
     private func addParticipant() {
-        let trimmed = newParticipant.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        // P18 H2: 改行除去→trim→50文字上限、かつ既存と重複していれば追加しない。
+        let noNewlines = newParticipant.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
+        let trimmed = String(noNewlines.trimmingCharacters(in: .whitespaces).prefix(50))
+        guard !trimmed.isEmpty, !draft.participantNames.contains(trimmed) else { return }
         draft.participantNames.append(trimmed)
         newParticipant = ""
     }
@@ -564,17 +622,9 @@ private struct ComposerFocusView: View {
 
     // MARK: - how
 
+    // P18 H7: 「金額」と「重要度」の意味混在解消のため上下2サブセクションに分ける。
     private var howContent: some View {
         Form {
-            Section {
-                Toggle(isOn: $draft.isImportant) {
-                    HStack {
-                        Image(systemName: draft.isImportant ? "star.fill" : "star")
-                            .foregroundStyle(draft.isImportant ? .yellow : .gray)
-                        Text("重要")
-                    }
-                }
-            }
             Section("金額") {
                 TextField("金額（例: 1490）", text: $draft.amountText)
                     .keyboardType(.decimalPad)
@@ -584,6 +634,15 @@ private struct ComposerFocusView: View {
                         .foregroundStyle(.red)
                 }
                 TextField("支払方法（例: クレジットカード）", text: $draft.paymentMethod)
+            }
+            Section("重要度") {
+                Toggle(isOn: $draft.isImportant) {
+                    HStack {
+                        Image(systemName: draft.isImportant ? "star.fill" : "star")
+                            .foregroundStyle(draft.isImportant ? .yellow : .gray)
+                        Text("重要")
+                    }
+                }
             }
         }
     }
