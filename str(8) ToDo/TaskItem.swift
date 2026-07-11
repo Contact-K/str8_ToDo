@@ -284,6 +284,11 @@ extension TaskItem {
         self.duration = duration
         snoozeUntil = nil
         lastSortedDay = nil
-        try? context.save()
+        do {
+            try context.save()
+            NotificationService.reschedule(for: self)
+        } catch {
+            assertionFailure("Failed to schedule task: \(error)")
+        }
     }
 }

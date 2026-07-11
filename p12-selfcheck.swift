@@ -132,6 +132,32 @@ struct P12SelfCheck {
             assert(result[baseDate]?.first?.start == baseDate, "Start should match gap start")
         }
 
+        // Test 8: clampGap の3分岐
+        do {
+            let now = Date(timeIntervalSinceReferenceDate: 810_000_000)
+            let past = Date(timeInterval: -3600, since: now)   // 1h前
+
+            // 完全未来
+            let future = FreeSlotSuggester.clampGap(start: now.addingTimeInterval(600), duration: 1800, now: now)
+            assert(future?.start == now.addingTimeInterval(600) && future?.duration == 1800, "future gap unchanged")
+
+            // 完全過去（1h前から30分間 → end=30分前）
+            let allPast = FreeSlotSuggester.clampGap(start: past, duration: 1800, now: now)
+            assert(allPast == nil, "fully past gap dropped")
+
+            // 跨ぐ（1h前から2h継続 → 1h残り）
+            let straddle = FreeSlotSuggester.clampGap(start: past, duration: 7200, now: now)
+            assert(straddle?.start == now && straddle?.duration == 3600, "straddling gap clamped to now with remaining")
+
+            // 境界: start == now
+            let boundary = FreeSlotSuggester.clampGap(start: now, duration: 1800, now: now)
+            assert(boundary?.start == now && boundary?.duration == 1800, "start==now treated as future")
+
+            // 境界: 終端が now ちょうど（clipped == 0）→ nil
+            let endBoundary = FreeSlotSuggester.clampGap(start: past, duration: 3600, now: now)
+            assert(endBoundary == nil, "gap ending exactly at now should be dropped")
+        }
+
         print("P12 self-check: ALL PASS")
     }
 }

@@ -24,6 +24,13 @@ enum FreeSlotSuggester {
         return fallback
     }
 
+    /// gap が過去に食い込む場合に now でクランプ。完全に過去なら nil、跨ぐなら (now, 残り)、完全に未来なら (start, duration)。
+    static func clampGap(start: Date, duration: TimeInterval, now: Date) -> (start: Date, duration: TimeInterval)? {
+        if start >= now { return (start, duration) }
+        let clipped = duration - now.timeIntervalSince(start)
+        return clipped > 0 ? (now, clipped) : nil
+    }
+
     /// 貪欲フィット。candidates を「締切近い順(phaseRank昇順)→重い順(effectiveDuration降順)→sortIndex昇順→id昇順」で整列し、
     /// 各空きに先頭から詰める（First-Fit-Decreasing 風、1タスクは全空き通して高々1回）。
     /// 各空き内では start から順に配置し、配置ごとに cursor を effectiveDuration 分進める。

@@ -30,10 +30,18 @@ struct DayAgendaView: View {
         TimelineView(.everyMinute) { timeline in
             let now = timeline.date
             let isToday = cal.isDateInToday(date)
-            let rows = buildRows(isToday: isToday, now: now)
+            let rawRows = buildRows(isToday: isToday, now: now)
+            let rows: [DayRow] = isToday ? rawRows.compactMap { row in
+                if case .gap(let s, let d) = row {
+                    guard let c = FreeSlotSuggester.clampGap(start: s, duration: d, now: now) else { return nil }
+                    return .gap(start: c.start, duration: c.duration)
+                }
+                return row
+            } : rawRows
+
             let gapSuggestions: [Date: [SlotSuggestion]] = isToday ? {
                 let candidates = allTasks
-                    .filter { $0.startDate == nil && $0.status == .active && ($0.phase == .now || $0.phase == .today) }
+                    .filter { $0.startDate == nil && $0.status == .active && ($0.phase == .now || $0.phase == .today) && !(($0.snoozeUntil ?? .distantPast) > now) }
                     .map { FreeSlotSuggester.Candidate(
                         id: $0.id,
                         phaseRank: $0.phase == .now ? 0 : 1,

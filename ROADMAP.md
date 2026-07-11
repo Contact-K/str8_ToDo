@@ -208,6 +208,18 @@ App Group 追加、SwiftData ストアをグループコンテナへ移動(起�
 
 **受け入れ基準**: 収まる空きにだけ提案が出る。採用でタスクがスケジュールされる。
 
+### P12 残タスク（debate-review 検出、別フェーズ回し）
+
+Round 2 で合意した High/Medium/Low の未対応項目。Critical 3件（gap クランプ / snooze 除外 / scheduleAt での通知 reschedule + save エラー格上げ）は Phase 12 内で修正済み。
+
+- [High] **`[Date: [SlotSuggestion]]` を `[[SlotSuggestion]]` に**: `gap.start` を辞書キーにしているため同一 start の複数 gap で後勝ち上書きが起きる。返り値を配列にして rows の gap を `enumerated()` で対応させる。
+- [High/要判断] **`duration=0` 実データ問題**: `AddTaskSheet` / `TodoListView.quickAdd` の浮遊タスクは `duration=0` が典型で、`effectiveDuration` fallback=1800秒に潰れ「重い順」が崩れる。対処A=`duration=0` 候補を除外、対処B=`AddTaskSheet` で所要を必須入力に。**着手前にオーナー判断が必要**。
+- [Medium] **`gapSuggestions` の毎分再計算をキャッシュ**: `TimelineView(.everyMinute)` の中で `allTasks` 全走査 + `suggest` を無条件再実行している。`sunCache` / `travelData` と対称に、rows のシグネチャ変化検知で `@State` キャッシュ（~8行）。
+- [Medium] **chip 表示の `allTasks.first(where:)` を Dictionary 化**: chip 個ずつ O(n) 走査＝O(n*k)。`body` 内で `tasksByID = Dictionary(uniqueKeysWithValues: ...)` を1行、`gapRow` に受け渡し。
+- [Low] **`SchedulePromoteSheet` の `@State startDate = .now` 陳腐化**: シート開いたまま数分経過→「決定」で過去時刻がコミットされる。ボタン押下時に再取得へ。
+- [Low] **`FocusSession.actualDuration` の累積上限なし**: 長期繰り返しタスクで `effectiveDuration` が肥大化し優先チップを支配しうる。Phase 4 の記録側と合わせて別途検討。
+- [参考] **`SortPhase` を「締切近さ」の代理に使う設計**: 実 `dueDate` フィールドが無いため `.now`/`.today` を代理利用。将来 `.week` 拡張時は `phaseRank` の割り当てを見直す。
+
 ## Phase 13 — 週次締めの儀式(W3) 〔実機〕
 
 日曜夜(設定可)に通知→確定キュー一掃→週報(DayStat / FocusSession / MonthMoneyStat から読むだけ、新規集計なし)→来週プレビュー。締めの確定は ChopDetector 流用。小さな `WeekReview` 記録。共有は静止画エクスポートのみ。
