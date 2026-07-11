@@ -14,6 +14,7 @@ import CoreMotion
 #endif
 
 struct ApprovalQueueView: View {
+    @Binding var showWeekReview: Bool
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TaskItem]
     @State private var peerSession = PeerSession()
@@ -109,6 +110,11 @@ struct ApprovalQueueView: View {
                             Image(systemName: "person.2")
                         }
                     }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { showWeekReview = true }) {
+                            Label("今週を締める", systemImage: "calendar.badge.checkmark")
+                        }
+                    }
                 }
                 #if canImport(CoreMotion) && os(iOS)
                 .onAppear {
@@ -157,7 +163,7 @@ struct ApprovalQueueView: View {
 }
 
 #Preview {
-    ApprovalQueueView()
+    ApprovalQueueView(showWeekReview: .constant(false))
         .modelContainer(PreviewData.container)
 }
 

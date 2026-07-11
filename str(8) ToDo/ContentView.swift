@@ -15,6 +15,7 @@ struct ContentView: View {
     /// 仕分けデッキを完走した日（dayKey）。スタンプは SortDeckView が完走時に押す。
     @AppStorage("lastSortPromptDay") private var lastSortPromptDay = 0
     @State private var showMorningDeck = false
+    @State private var showWeekReview = false
 
     /// ponytail: stats 側の控えめ表示+導線はこのタブバッジで満たす。
     private var pendingCount: Int {
@@ -33,7 +34,7 @@ struct ContentView: View {
                 TodoListView()
             }
             Tab("承認", systemImage: "checkmark.seal") {
-                ApprovalQueueView()
+                ApprovalQueueView(showWeekReview: $showWeekReview)
             }
             .badge(pendingCount)
             Tab("Study Hub", systemImage: "books.vertical") {
@@ -49,6 +50,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showMorningDeck) {
             SortDeckView(tasks: allTasks)
+        }
+        .sheet(isPresented: $showWeekReview) {
+            WeekReviewView()
         }
     }
 }

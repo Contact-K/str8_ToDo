@@ -15,6 +15,14 @@ enum AppSettingsKey {
     static let weekShowSevenDays = "weekShowSevenDays"
     static let weekShowSevenDaysDefault = true
 
+    /// 週次締めの通知曜日（0=日, 1=月, ..., 6=土）。iOS Calendar.Component.weekday の 1-indexed とは異なるので変換は呼び出し側が行う。
+    static let weekReviewWeekday = "weekReviewWeekday"
+    static let weekReviewWeekdayDefault = 0  // 日曜
+
+    /// 週次締めの通知時刻（時のみ、0-23）。
+    static let weekReviewHour = "weekReviewHour"
+    static let weekReviewHourDefault = 20  // 20時
+
     /// 最終バックアップエクスポート日時（TimeInterval）。
     static let lastBackupExportDate = "lastBackupExportDate"
 

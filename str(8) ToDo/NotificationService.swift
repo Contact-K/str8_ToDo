@@ -54,4 +54,42 @@ enum NotificationService {
         }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
+
+    // MARK: - 週次締め通知
+
+    /// 週次締めリマインダーの通知 identifier。
+    static let weeklyReviewIdentifier = "weekly-review"
+
+    /// 週次締めリマインダーを登録（既存があれば置き換え）。
+    /// - Parameters:
+    ///   - weekday: 0=日, 1=月, ..., 6=土。iOS Calendar の 1-indexed（1=日, 7=土）に変換して trigger に渡す。
+    ///   - hour: 0-23
+    static func scheduleWeeklyReview(weekday: Int, hour: Int) {
+        // 既存を除去
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [weeklyReviewIdentifier])
+
+        let content = UNMutableNotificationContent()
+        content.title = "週次締めの時間です"
+        content.body = "今週を振り返って、来週の予定を確認しましょう"
+        content.sound = .default
+
+        var components = DateComponents()
+        // iOS Calendar.Component.weekday: 1=日, 2=月, ..., 7=土。引数 weekday(0=日..6=土) に +1 して合わせる。
+        components.weekday = weekday + 1
+        components.hour = hour
+        components.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(identifier: weeklyReviewIdentifier, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                assertionFailure("weekly review scheduling failed: \(error)")
+            }
+        }
+    }
+
+    /// 週次締めリマインダーを取り消し（通知OFFなどで使用）。
+    static func cancelWeeklyReview() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [weeklyReviewIdentifier])
+    }
 }

@@ -28,6 +28,7 @@ struct str_8__ToDoApp: App {
                 BandTemplate.self,
                 BandAssignment.self,
                 FocusSession.self,
+                WeekReview.self,
                 Subject.self,
                 WeatherCache.self
             ])
@@ -37,6 +38,17 @@ struct str_8__ToDoApp: App {
                 cloudKitDatabase: .none
             )
             modelContainer = try ModelContainer(for: schema, configurations: configuration)
+
+            // 週次締めリマインダーを起動時に予約（enableNotifications OFF なら解除）
+            let d = UserDefaults.standard
+            let enabled = (d.object(forKey: AppSettingsKey.enableNotifications) as? Bool) ?? AppSettingsKey.enableNotificationsDefault
+            if enabled {
+                let w = (d.object(forKey: AppSettingsKey.weekReviewWeekday) as? Int) ?? AppSettingsKey.weekReviewWeekdayDefault
+                let h = (d.object(forKey: AppSettingsKey.weekReviewHour) as? Int) ?? AppSettingsKey.weekReviewHourDefault
+                NotificationService.scheduleWeeklyReview(weekday: w, hour: h)
+            } else {
+                NotificationService.cancelWeeklyReview()
+            }
         } catch {
             fatalError("ModelContainer の初期化に失敗しました: \(error)")
         }
