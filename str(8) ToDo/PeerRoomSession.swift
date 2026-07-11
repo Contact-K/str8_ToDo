@@ -40,6 +40,8 @@ final class PeerRoomSession: NSObject {
     var roomID: UUID = UUID()
     private var hostPeerID: MCPeerID?
     private var pendingPingSentAt: TimeInterval?
+    /// pong を1回でも受け取ってオフセットを算出したか。start 受信時のガードに使う。
+    private var hasClockSynced: Bool = false
 
     var onStateChanged: ((RoomState) -> Void)?
     var onStartScheduled: ((TimeInterval) -> Void)?
@@ -154,6 +156,7 @@ final class PeerRoomSession: NSObject {
         discoveredHosts = []
         hostPeerID = nil
         pendingPingSentAt = nil
+        hasClockSynced = false
     }
 
     /// clock ping-pong を投げる（ゲスト側から起動）。
@@ -207,10 +210,17 @@ final class PeerRoomSession: NSObject {
             // offset を計算
             let pongReceivedAt = Date().timeIntervalSince1970
             clockOffsetToHost = FocusRoom.clockOffset(pingSentAt: pingSentAt, pongReceivedAt: pongReceivedAt, hostReplyTime: hostReplyTime)
+            self.hasClockSynced = true
 
         case .start(let hostStartAt, let receivedRoomID):
             // ゲスト側のみ受信、かつホストからのみ
             guard !isHost, peerID == hostPeerID else { return }
+            // クロック同期未完了で start を受け付けると過去/未来にジャンプしうる。安全側に aborted。
+            guard hasClockSynced else {
+                self.state = .aborted
+                self.onStateChanged?(self.state)
+                return
+            }
             // ゲスト側でホストの roomID を上書き
             self.roomID = receivedRoomID
             // localStartTime を計算

@@ -267,6 +267,26 @@ Wave1〜3 で以下は完了: FocusSession スキーマ拡張・BackupService �
 - [Low] `HourglassMotionService` を FocusRoomView と TimerView で **別インスタンス** が生成される現状を、共有 service に統一（今は `guard !showRoom` で回避しているだけ）
 - [参考] ROADMAP の Phase 14 spec を実装に合わせて更新済み（本節冒頭で「PeerRoomSession 新設」に反映）
 
+### P14 debate-review 追加検出（Critical は修正済み）
+
+Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Critical 4 件は Phase 14 内で修正済み**：Info.plist の `_str8-focusroom` 追加 / `.start` reject（`hasClockSynced` gate） / `isDeviceFaceDown` accessor + FocusRoomView 側で初期姿勢検出（共有 FSM は無傷） / `FocusSession.record()` 経由への一本化。以下は残タスク。
+
+- [High] **`RoomMessage.hello` から `isHost` フラグ削除**: 現状は自己申告で複数人が isHost:true を名乗ることを participants 配列が防いでいない → UI 表示で「(ホスト)」がなりすまし可能。フラグを削除し、内部状態（`.startHosting()` を呼んだ側が host）で判定。
+- [High] **`participantID` を connectedPeer 実 ID に紐付け検証**: 詐称による架空参加者無制限注入で `participantCount` 改ざん・7 人上限誤誘発が可能。`.hello` 受信時に participantID と MCSession の実 peerID の対応を検証。
+- [High] **退出ボタン / scenePhase / save 失敗時の cleanup を一元化**: 現状 timer.invalidate/motion.stop/peer.stop の呼び忘れ経路が複数あり（安全性 #1/#7/extra 2）。defer 相当のヘルパで一元化。
+- [High] **`PeerRoomSession.end()` を実際に呼ぶ経路を実装**: 現状デッドコードで終了検知が 1Hz Timer の自己申告方式。ホスト側 Timer 満了で `broadcast(.end)`、全端末が受信時に `finishAndSave` → 1Hz ずれ解消。
+- [High] **受信レート制限**: `.leave` / `.hello` 高頻度連投で participants の連続 mutation → UI 遅延。デバウンス or 単位時間内の許容回数上限。
+- [High] **満員判定と切断反映のシリアライズ**: `advertiser(_:didReceiveInvitation:)` と `session(_:peer:didChange:)` が nonisolated から独立 Task 生成 → MainActor 実行順が実イベント順と一致しない。単一シリアルキュー or MainActor 上での明示的順序管理。
+- [High] **`ApprovalQueueView` への直行動線実装**: `endedSection` の「承認へ進みます」文言だけで実際の遷移が無い。sheet 閉じ後にタブ切替 or NavigationLink。ROADMAP の「終了後は相互承認モードへ直結」を満たすために必要。
+- [Medium] **ホスト昇格 or 明示 abort UI**: ホストの一時 background で全ピアが `.aborted` 遷移 → 全滅（単一障害点）。残ピア最若をホスト昇格、または明示的「ホスト離脱、再開不能」表示。
+- [Medium] **複数サンプル ping-pong + 再送タイムアウト**: 現状は 1 発 RTT/2 で外れ値除去なし、輻輳時の悪サンプルがセッション全体を狂わせる。3-5 サンプル中央値 + 200ms 再送タイムアウト。
+- [Medium] **`PeerSession` との接続層抽出**: `PeerRoomSession` は `PeerSession` を逐語コピーしている箇所が多い（MCSession 生成・delegate 配線・encoder/decoder）。共通 protocol / helper で集約。
+- [Low] `runningSection` の時刻フォーマット（`Int(remain/60)` + `String(format:...)`）を既存 `Formatting.swift` の helper に集約
+- [Low] `FocusRoomView.setupCallbacks` を onAppear inline に（分離不要）
+- [Low] `Participant.id: String`（MCPeerID.displayName）vs 他モデルの `id: UUID` の型混在整理
+- [Low] `onStartScheduled` が host `announceStartIfReady` とゲスト `.start` 受信の両経路から発火。単一経路化 or 2 重発火防止 assert
+- [参考] `p4-selfcheck.swift` は現状 TaskItem/NotificationService 依存でビルド不能（Sonnet 実測）。既存インフラの技術的負債、HourglassStateMachine 回帰防止網が機能していない。Phase 14 スコープ外だが要対処。
+
 ---
 
 ## ファイル別 流用/改修/作り直しマップ

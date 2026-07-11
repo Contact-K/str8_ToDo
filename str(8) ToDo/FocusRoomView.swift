@@ -62,6 +62,15 @@ struct FocusRoomView: View {
                 setupCallbacks()
                 motion.start()
                 lastMotionPhase = motion.phase
+                // ルーム参加時に既に端末が伏せられている場合、共有 FSM は faceUp 経由の
+                // .setting → .armed → .running を要求するため、モーション初期化後に
+                // 現在の姿勢を確認して faceDown なら明示的に伝える。
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    if motion.isDeviceFaceDown {
+                        peer.setFaceDown(true)
+                    }
+                }
             }
             .onDisappear {
                 motion.stop()
@@ -212,16 +221,9 @@ struct FocusRoomView: View {
         guard let localStart = localStartAt else { return }
         let start = Date(timeIntervalSince1970: localStart)
         let end = Date(timeIntervalSince1970: localStart + Double(selectedMinutes * 60))
-        let session = FocusSession(
-            id: UUID(),
-            start: start,
-            end: end,
-            taskID: nil,
-            subjectID: nil,
-            roomID: peer.roomID,
-            participantCount: peer.participants.count
-        )
-        context.insert(session)
+        let session = FocusSession.record(start: start, end: end, task: nil, subject: nil, context: context)
+        session.roomID = peer.roomID
+        session.participantCount = peer.participants.count
         do {
             try context.save()
         } catch {

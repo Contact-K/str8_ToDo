@@ -117,6 +117,8 @@ final class HourglassMotionService {
     var phase: HourglassStateMachine.Phase { machine.phase }
     /// シミュレータでは false（UI は手動モードにフォールバック）。
     var isAvailable: Bool { manager.isDeviceMotionAvailable }
+    /// 現在の端末姿勢が faceDown か否かを返す（gravity.z > 0.7）。
+    var isDeviceFaceDown: Bool { gravityZ > HourglassStateMachine.Tuning.enter }
 
     func start() {
         guard isAvailable, !manager.isDeviceMotionActive else { return }
