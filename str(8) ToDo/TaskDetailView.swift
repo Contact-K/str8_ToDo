@@ -13,6 +13,8 @@ struct TaskDetailView: View {
 
     @Environment(\.modelContext) var modelContext
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     @State private var showDeleteConfirmation = false
     /// P18: フィールド右のペンから該当トピックだけをフォーカス編集で直接開く。
@@ -53,18 +55,20 @@ struct TaskDetailView: View {
             }
             .padding()
         }
+        .background(c.paper)
         .navigationTitle("詳細")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: toggleImportant) {
                     Image(systemName: task.isImportant ? "star.fill" : "star")
-                        .foregroundColor(task.isImportant ? .yellow : .gray)
+                        .foregroundColor(task.isImportant ? c.accent : c.fg3)
                 }
                 .accessibilityLabel(task.isImportant ? "重要を解除" : "重要に設定")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive, action: { showDeleteConfirmation = true }) {
                     Image(systemName: "trash")
+                        .foregroundColor(c.danger)
                 }
                 .accessibilityLabel("削除")
             }
@@ -108,7 +112,7 @@ struct TaskDetailView: View {
 
                         if task.isImportant {
                             Image(systemName: "star.fill")
-                                .foregroundColor(.yellow)
+                                .foregroundColor(c.accent)
                                 .font(.callout)
                         }
                     }
@@ -138,9 +142,7 @@ struct TaskDetailView: View {
     private var timeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("スケジュール")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                sectionHeading("SCHEDULE", jp: "スケジュール")
                 Spacer()
                 editPencil { focusedTopic = .when }
             }
@@ -149,14 +151,14 @@ struct TaskDetailView: View {
                 if task.isAllDay {
                     HStack {
                         Image(systemName: "calendar")
-                            .foregroundColor(.blue)
+                            .foregroundColor(c.info)
                         Text("終日")
                             .font(.subheadline)
                     }
                 } else if let startDate = task.startDate {
                     HStack {
                         Image(systemName: "clock")
-                            .foregroundColor(.blue)
+                            .foregroundColor(c.info)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("開始: \(formatDate(startDate))")
                                 .font(.subheadline)
@@ -165,8 +167,8 @@ struct TaskDetailView: View {
                                     .font(.subheadline)
                             }
                             Text("所要: \(durationText(task.duration))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(S8Font.mono(13.5))
+                                .foregroundColor(c.fg3)
                         }
                     }
                 }
@@ -174,7 +176,7 @@ struct TaskDetailView: View {
                 if let rrule = task.rrule, !rrule.isEmpty {
                     HStack {
                         Image(systemName: "repeat")
-                            .foregroundColor(.blue)
+                            .foregroundColor(c.info)
                         Text(simplifyRRule(rrule))
                             .font(.subheadline)
                     }
@@ -183,10 +185,10 @@ struct TaskDetailView: View {
                 if let tzId = task.timeZoneIdentifier, !tzId.isEmpty {
                     HStack {
                         Image(systemName: "globe")
-                            .foregroundColor(.blue)
+                            .foregroundColor(c.info)
                         Text(tzId)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(c.fg3)
                     }
                 }
             }
@@ -211,7 +213,7 @@ struct TaskDetailView: View {
             if let profile = task.profile {
                 HStack {
                     Image(systemName: profile.iconName)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.fg3)
                     Text(profile.name)
                         .font(.subheadline)
                     Spacer()
@@ -223,7 +225,7 @@ struct TaskDetailView: View {
             if let place = task.place, !place.name.isEmpty {
                 HStack {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(c.danger)
                     Text(place.name)
                         .font(.subheadline)
                     Spacer()
@@ -235,7 +237,7 @@ struct TaskDetailView: View {
             if !task.participantNames.isEmpty {
                 HStack {
                     Image(systemName: "person.2.fill")
-                        .foregroundColor(.purple)
+                        .foregroundColor(c.info)
                     Text(task.participantNames.joined(separator: ", "))
                         .font(.subheadline)
                     Spacer()
@@ -247,7 +249,7 @@ struct TaskDetailView: View {
             if let amount = task.amount, amount > 0 {
                 HStack {
                     Image(systemName: "yen.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(c.ok)
                     Text(currencyText(amount))
                         .font(.subheadline)
                     Spacer()
@@ -258,7 +260,7 @@ struct TaskDetailView: View {
                 if let method = task.paymentMethod, !method.isEmpty {
                     HStack {
                         Image(systemName: "creditcard.fill")
-                            .foregroundColor(.gray)
+                            .foregroundColor(c.fg3)
                         Text(method)
                             .font(.subheadline)
                         Spacer()
@@ -273,9 +275,7 @@ struct TaskDetailView: View {
     private var notificationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("通知")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                sectionHeading("NOTIFY", jp: "通知")
                 Spacer()
                 editPencil { focusedTopic = .when }
             }
@@ -283,17 +283,17 @@ struct TaskDetailView: View {
             if task.notificationOffsets.isEmpty {
                 HStack {
                     Image(systemName: "bell.slash")
-                        .foregroundColor(.gray)
+                        .foregroundColor(c.fg3)
                     Text("なし")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.fg3)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(task.notificationOffsets.sorted(), id: \.self) { offset in
                         HStack {
                             Image(systemName: "bell.fill")
-                                .foregroundColor(.orange)
+                                .foregroundColor(c.warn)
                             Text(formatNotificationOffset(offset))
                                 .font(.subheadline)
                         }
@@ -307,9 +307,7 @@ struct TaskDetailView: View {
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("メモ")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                sectionHeading("NOTES", jp: "メモ")
                 Spacer()
                 editPencil { focusedTopic = .other }
             }
@@ -319,22 +317,20 @@ struct TaskDetailView: View {
                 .lineLimit(nil)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
+                .background(c.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
         }
     }
 
     // MARK: - Approval Section
     private var approvalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("操作")
-                .font(.headline)
-                .foregroundColor(.secondary)
+            sectionHeading("ACTIONS", jp: "操作")
 
             if task.isAwaitingFutureSelf {
                 HStack {
                     Image(systemName: "hourglass.end")
-                        .foregroundColor(.orange)
+                        .foregroundColor(c.warn)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("未来の自分待ち")
                             .font(.subheadline)
@@ -342,14 +338,14 @@ struct TaskDetailView: View {
                         if let unlockDate = task.unlockDate {
                             Text(formatDate(unlockDate) + " に承認可能")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(c.fg3)
                         }
                     }
                     Spacer()
                 }
                 .padding()
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
+                .background(c.warn.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
             } else {
                 VStack(spacing: 10) {
                     switch task.status {
@@ -360,11 +356,13 @@ struct TaskDetailView: View {
                                 Text("完了にする")
                             }
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
                         }
+                        .font(S8Font.jp(15, .semibold))
+                        .foregroundStyle(c.onAccent)
+                        .padding(.vertical, S8Space.s3 + 2)
+                        .padding(.horizontal, S8Space.s4 + 4)
+                        .background(c.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
 
                     case .done:
                         Button(action: approve) {
@@ -374,36 +372,53 @@ struct TaskDetailView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
+                            .background(c.ok)
+                            .foregroundColor(c.paper)
+                            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                         }
 
                     case .approved:
                         HStack {
                             Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(c.ok)
                             Text("確定済み ✓")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             Spacer()
                         }
                         .padding()
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
+                        .background(c.okWash)
+                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                     }
                 }
             }
         }
     }
 
+    // MARK: - Section Heading
+    /// mono UPPERCASE caption（英語タグ）+ JP ラベルの2段見出し。
+    private func sectionHeading(_ tag: String, jp: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(tag)
+                .font(S8Font.mono(11)).tracking(1.5)
+                .textCase(.uppercase)
+                .foregroundStyle(c.fg3)
+            Text(jp)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(c.fg1)
+        }
+    }
+
     // MARK: - Edit Pencil
     /// P18: フィールド右の共通ペンボタン。タップで該当トピックのフォーカス編集を開く。
+    /// iconbtn 相当：fg2 アイコン、押下時は surface の丸背景が浮く。
     private func editPencil(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "pencil")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(c.fg2)
+                .padding(6)
+                .background(Circle().fill(c.surface))
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("編集")

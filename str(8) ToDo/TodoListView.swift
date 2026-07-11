@@ -11,6 +11,8 @@ import SwiftData
 
 struct TodoListView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var allTasks: [TaskItem]
     @Query(sort: \Subject.name) private var subjects: [Subject]
 
@@ -58,15 +60,23 @@ struct TodoListView: View {
                     Button(action: { showComposer = true }) {
                         Label("詳細を追加", systemImage: "square.and.pencil")
                     }
+                    .font(S8Font.jp(15, .medium))
+                    .foregroundStyle(c.fg2)
                     // P16: 自然文1行入力（日時/場所/カテゴリ/所要時間を自動認識）
                     Button(action: { showQuickAddParser = true }) {
                         Label("自然文で追加", systemImage: "text.badge.plus")
                     }
+                    .font(S8Font.jp(15, .medium))
+                    .foregroundStyle(c.fg2)
                 }
+                .listRowBackground(c.paper)
 
                 taskSection(title: "今日", tasks: todayTasks)
                 taskSection(title: "いつか", tasks: somedayTasks)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(c.paper)
             .navigationTitle("リスト")
             .toolbar {
                 ToolbarItem(placement: .secondaryAction) {
@@ -100,6 +110,11 @@ struct TodoListView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("仕分けを始める") { showDeck = true }
                         .disabled(SortDeckEngine.deckTasks(from: allTasks).isEmpty)
+                        .font(S8Font.jp(15, .semibold))
+                        .foregroundStyle(c.fg1)
+                        .padding(.vertical, S8Space.s3 + 2)
+                        .padding(.horizontal, S8Space.s4 + 4)
+                        .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
                 }
             }
             .sheet(item: $selectedTask) { task in
@@ -123,22 +138,42 @@ struct TodoListView: View {
         }
     }
 
+    /// PLAIN: セクション見出しを mono UPPERCASE caption + JP ラベルの2段で表示。
+    private static let sectionTag: [String: String] = ["今日": "TODAY", "いつか": "SOMEDAY"]
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text("\(Self.sectionTag[title] ?? title) / \(title)")
+            .font(S8Font.mono(11)).tracking(1.5)
+            .textCase(.uppercase)
+            .foregroundStyle(c.fg3)
+    }
+
     @ViewBuilder
     private func taskSection(title: String, tasks: [TaskItem]) -> some View {
         if !tasks.isEmpty {
-            Section(title) {
+            Section(header: sectionHeader(title)) {
                 ForEach(tasks, id: \.id) { task in
-                    VStack(alignment: .trailing, spacing: 2) {
-                        TaskCardView(task: task)
-                        if let snooze = task.snoozeUntil, snooze > .now {
-                            Text("\(Self.snoozeFormatter.string(from: snooze)) まで先送り中")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                    // ponytail: S8Components に相当ロウがないので RuledListRow をここへ inline 移植。
+                    HStack(spacing: 0) {
+                        Rectangle()
+                            .fill(selectedTask?.id == task.id ? c.accent : Color.clear)
+                            .frame(width: 5)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TaskCardView(task: task, chromeless: true)
+                            if let snooze = task.snoozeUntil, snooze > .now {
+                                Text("\(Self.snoozeFormatter.string(from: snooze)) まで先送り中")
+                                    .font(S8Font.mono(13.5))
+                                    .foregroundStyle(c.fg3)
+                            }
                         }
+                        .padding(.vertical, 19)
+                        .padding(.horizontal, 26)
                     }
+                    .background(alignment: .top) { c.line.frame(height: 1) }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(c.paper)
                         .contentShape(Rectangle())
                         .onTapGesture { selectedTask = task }
-                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .leading) {
                             Button {

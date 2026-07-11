@@ -96,6 +96,8 @@ extension WHCategory: Identifiable {
 struct EventComposerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var aliases: [PhraseAlias]
     @Query private var categories: [Category]
     @Query private var placeTags: [PlaceTag]
@@ -112,6 +114,8 @@ struct EventComposerView: View {
     @State private var nlInput: String = ""
     @State private var nlDebounceTask: Task<Void, Never>? = nil
     @State private var recognizedChips: [(WHCategory, String)] = []
+    @FocusState private var nlFieldFocused: Bool
+    @FocusState private var titleFieldFocused: Bool
 
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
     /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
@@ -167,8 +171,16 @@ struct EventComposerView: View {
                 if existingTask == nil {
                     VStack(alignment: .leading, spacing: 4) {
                         TextField("自然文で入力（例: 明日 14:00 大学でレポート）", text: $nlInput, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.plain)
                             .lineLimit(1...2)
+                            .focused($nlFieldFocused)
+                            .padding(10)
+                            .background(c.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: S8Radius.md)
+                                    .stroke(nlFieldFocused ? c.accent : c.lineStrong, lineWidth: nlFieldFocused ? 1.5 : 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                             .onChange(of: nlInput) { _, newValue in
                                 scheduleParse(newValue)
                             }
@@ -177,10 +189,14 @@ struct EventComposerView: View {
                                 HStack(spacing: 6) {
                                     ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
                                         Text("\(chip.0.label): \(chip.1)")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                            .font(S8Font.mono(11)).tracking(1.5)
+                                            .foregroundStyle(c.fg2)
+                                            .padding(.horizontal, 11)
+                                            .padding(.vertical, 6)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: S8Radius.md)
+                                                    .stroke(c.lineStrong, lineWidth: 1)
+                                            )
                                     }
                                 }
                             }
@@ -193,7 +209,14 @@ struct EventComposerView: View {
 
                 TextField("タスク名", text: $draft.title)
                     .font(.title3)
+                    .focused($titleFieldFocused)
                     .padding()
+                    .background(c.surface)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(titleFieldFocused ? c.accent : c.lineStrong)
+                            .frame(height: titleFieldFocused ? 1.5 : 1)
+                    }
 
                 Divider()
 
@@ -211,10 +234,18 @@ struct EventComposerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
+                        .font(S8Font.jp(15, .medium))
+                        .foregroundStyle(c.fg2)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(existingTask == nil ? "追加" : "保存") { save() }
                         .disabled(isSaveDisabled)
+                        .font(S8Font.jp(15, .semibold))
+                        .foregroundStyle(isSaveDisabled ? c.fg3 : c.onAccent)
+                        .padding(.vertical, S8Space.s3 + 2)
+                        .padding(.horizontal, S8Space.s4 + 4)
+                        .background(isSaveDisabled ? c.surface2 : c.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                 }
             }
         }
@@ -303,22 +334,24 @@ struct EventComposerView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: category.iconName)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(isSet(category) ? c.accent : c.fg2)
                     Text(category.label)
                         .font(.subheadline)
                         .fontWeight(.semibold)
+                        .foregroundStyle(c.fg1)
                     Spacer()
                 }
                 Text(preview(for: category))
                     .font(.caption)
-                    .foregroundStyle(isSet(category) ? Color.primary : Color.secondary)
+                    .foregroundStyle(isSet(category) ? c.fg1 : c.fg3)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+            .background(c.surface)
+            .overlay(RoundedRectangle(cornerRadius: S8Radius.lg).stroke(c.line, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(category.label): \(preview(for: category))")
@@ -327,7 +360,7 @@ struct EventComposerView: View {
             if category == .how {
                 Image(systemName: draft.isImportant ? "star.fill" : "star")
                     .font(.caption)
-                    .foregroundStyle(draft.isImportant ? .yellow : .gray)
+                    .foregroundStyle(draft.isImportant ? c.accent : c.fg3)
                     .padding(8)
                     .onTapGesture { draft.isImportant.toggle() }
                     .accessibilityLabel(draft.isImportant ? "重要を解除" : "重要に設定")

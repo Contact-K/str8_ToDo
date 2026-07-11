@@ -22,7 +22,6 @@
 		FF000000000000000000011C /* SupportingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000011B /* SupportingModels.swift */; };
 		FF000000000000000000011E /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000011D /* TaskDetailView.swift */; };
 		FF0000000000000000000120 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000011F /* TaskItem.swift */; };
-		FF0000000000000000000122 /* WeatherProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000121 /* WeatherProvider.swift */; };
 		FF0000000000000000000124 /* WeekView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000123 /* WeekView.swift */; };
 		FF0000000000000000000126 /* YearView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000125 /* YearView.swift */; };
 		FF0000000000000000000128 /* str_8__ToDoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000127 /* str_8__ToDoApp.swift */; };
@@ -75,6 +74,9 @@
 		FF000000000000000000024C /* QuickAddParserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024B /* QuickAddParserView.swift */; };
 		FF000000000000000000024E /* DictionarySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024D /* DictionarySettingsView.swift */; };
 		FF0000000000000000000250 /* SuggestionQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024F /* SuggestionQueue.swift */; };
+		FF0000000000000000000305 /* S8Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000304 /* S8Tokens.swift */; };
+		FF0000000000000000000307 /* S8Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000306 /* S8Components.swift */; };
+		FF0000000000000000000309 /* S8Wheel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000308 /* S8Wheel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,7 +121,6 @@
 		FF000000000000000000011B /* SupportingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportingModels.swift; sourceTree = "<group>"; };
 		FF000000000000000000011D /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		FF000000000000000000011F /* TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskItem.swift; sourceTree = "<group>"; };
-		FF0000000000000000000121 /* WeatherProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherProvider.swift; sourceTree = "<group>"; };
 		FF0000000000000000000123 /* WeekView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000125 /* YearView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000127 /* str_8__ToDoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = str_8__ToDoApp.swift; sourceTree = "<group>"; };
@@ -172,6 +173,9 @@
 		FF000000000000000000024B /* QuickAddParserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddParserView.swift; sourceTree = "<group>"; };
 		FF000000000000000000024D /* DictionarySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettingsView.swift; sourceTree = "<group>"; };
 		FF000000000000000000024F /* SuggestionQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionQueue.swift; sourceTree = "<group>"; };
+		FF0000000000000000000304 /* S8Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Tokens.swift; sourceTree = "<group>"; };
+		FF0000000000000000000306 /* S8Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Components.swift; sourceTree = "<group>"; };
+		FF0000000000000000000308 /* S8Wheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Wheel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -269,7 +273,6 @@
 				FF000000000000000000011F /* TaskItem.swift */,
 				FF0000000000000000000144 /* TimerView.swift */,
 				FF000000000000000000013C /* TodoListView.swift */,
-				FF0000000000000000000121 /* WeatherProvider.swift */,
 				FF0000000000000000000134 /* WeekLayout.swift */,
 				FF000000000000000000023A /* WeekReviewView.swift */,
 				FF0000000000000000000123 /* WeekView.swift */,
@@ -277,6 +280,9 @@
 				FF0000000000000000000127 /* str_8__ToDoApp.swift */,
 				FF0000000000000000000203 /* WidgetShared.swift */,
 				FF0000000000000000000205 /* WidgetSnapshotService.swift */,
+				FF0000000000000000000304 /* S8Tokens.swift */,
+				FF0000000000000000000306 /* S8Components.swift */,
+				FF0000000000000000000308 /* S8Wheel.swift */,
 				FF0000000000000000000129 /* Assets.xcassets */,
 			);
 			path = "str(8) ToDo";
@@ -446,7 +452,6 @@
 				FF0000000000000000000120 /* TaskItem.swift in Sources */,
 				FF0000000000000000000145 /* TimerView.swift in Sources */,
 				FF000000000000000000013D /* TodoListView.swift in Sources */,
-				FF0000000000000000000122 /* WeatherProvider.swift in Sources */,
 				FF0000000000000000000135 /* WeekLayout.swift in Sources */,
 				FF0000000000000000000164 /* WeekMath.swift in Sources */,
 				FF0000000000000000000239 /* WeekReviewView.swift in Sources */,
@@ -455,6 +460,9 @@
 				FF0000000000000000000128 /* str_8__ToDoApp.swift in Sources */,
 				FF0000000000000000000204 /* WidgetShared.swift in Sources */,
 				FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */,
+				FF0000000000000000000305 /* S8Tokens.swift in Sources */,
+				FF0000000000000000000307 /* S8Components.swift in Sources */,
+				FF0000000000000000000309 /* S8Wheel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -602,7 +610,7 @@
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -642,7 +650,7 @@
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出・天気と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -45,6 +45,8 @@ func dayKey(_ date: Date, _ cal: Calendar = .current) -> Int {
 
 struct CalendarRootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @State private var eventKit = EventKitService()
 
     @State private var scale: CalendarScale = .month
@@ -186,7 +188,7 @@ struct CalendarRootView: View {
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
                                 .frame(width: 18, height: 18)
-                                .background(Circle().fill(Color.accentColor))
+                                .background(Circle().fill(c.accent))
                                 .offset(x: 6, y: -6)
                         }
                     }
@@ -246,14 +248,16 @@ struct DayBlock: View {
     /// 支出額の短縮表示（例 "¥1490"）。nil なら非表示。let+初期値は memberwise init から消えるので var。
     var amountText: String? = nil
 
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     private var dayNumber: String { "\(Calendar.current.component(.day, from: date))" }
     private var weekday: Int { Calendar.current.component(.weekday, from: date) }
 
     private var numberColor: Color {
-        if isToday { return .accentColor }
-        if weekday == 1 { return .red }
-        if weekday == 7 { return .blue }
-        return .primary
+        if isToday { return c.accent }
+        if weekday == 1 { return c.danger }
+        if weekday == 7 { return c.info }
+        return c.fg1
     }
 
     var body: some View {
@@ -272,8 +276,8 @@ struct DayBlock: View {
 
             if let amountText {
                 Text(amountText)
-                    .font(.caption2)
-                    .foregroundStyle(.green)
+                    .font(S8Font.mono(13.5))
+                    .foregroundStyle(c.ok)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
             }
@@ -281,13 +285,13 @@ struct DayBlock: View {
         .frame(maxWidth: .infinity)
         .frame(height: scale == .month ? 52 : 72)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isToday ? Color.accentColor.opacity(0.16) : Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: S8Radius.lg, style: .continuous)
+                .fill(isToday ? c.accentWash : c.surface2)
         }
         .overlay {
             if isSelected {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                RoundedRectangle(cornerRadius: S8Radius.lg, style: .continuous)
+                    .strokeBorder(c.accent, lineWidth: 2)
             }
         }
         .opacity(inFocusMonth ? 1 : 0.35)
@@ -338,6 +342,8 @@ struct MonthGrid: View {
     @Query private var tasks: [TaskItem]
     @Query private var moneystats: [MonthMoneyStat]
     @Environment(\.modelContext) var modelContext
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     private let cal = Calendar.current
     private let weekdaySymbols = ["日", "月", "火", "水", "木", "金", "土"]
 
@@ -347,7 +353,7 @@ struct MonthGrid: View {
                 ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { idx, sym in
                     Text(sym)
                         .font(.caption2)
-                        .foregroundStyle(idx == 0 ? .red : (idx == 6 ? .blue : .secondary))
+                        .foregroundStyle(idx == 0 ? c.danger : (idx == 6 ? c.info : c.fg3))
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -360,17 +366,17 @@ struct MonthGrid: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("サブスク \(currencyText(monthlyStat.subscriptionSpend)) ・ 支出 \(currencyText(monthlyStat.totalSpend))")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(c.fg3)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.fg3)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(6)
+                .background(c.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                 .onTapGesture { showMoneyBreakdown = true }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("支出サマリ サブスク \(currencyText(monthlyStat.subscriptionSpend)) 支出 \(currencyText(monthlyStat.totalSpend))")

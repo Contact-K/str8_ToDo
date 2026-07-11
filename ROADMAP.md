@@ -133,7 +133,7 @@
 1. **エクスポート(`BackupService.swift` 新規)**: 全モデルのバージョン付き JSON → パスフレーズ由来キー(注: CryptoKit に PBKDF2 はない。CommonCrypto の PBKDF2 か、ソルト付きダイジェスト+HKDF かをフェーズ内で決定)→ AES-GCM 暗号化 → fileExporter で `.str8` 書き出し(AirDrop/ファイルApp)。
 2. **インポート**: fileImporter → 復号 → バージョン確認 → 確認ダイアログ → 全消去して復元。設定画面に最終エクスポート日時表示+月1の控えめリマインド。
 
-**受け入れ基準**: エクスポート→ストア全消去→インポートでエンティティ数が完全一致。誤パスフレーズは明確なエラー。フォーマットにバージョンフィールドがあり、後続モデル(Subject / MonthMoneyStat / WeatherCache)を加算的に足せる。
+**受け入れ基準**: エクスポート→ストア全消去→インポートでエンティティ数が完全一致。誤パスフレーズは明確なエラー。フォーマットにバージョンフィールドがあり、後続モデル(Subject / MonthMoneyStat)を加算的に足せる。
 
 > **メモ（2026-07-11）**: P6 以降は加算的変更のみが原則だが、P13 で `WeekReview` モデル廃止（オーナー判断、後述）のため例外的に非加算変更が発生した。未リリース・開発端末のみのライブストアなのでシミュレータ再起動（ストア破棄）で対応可能（マイグレーション不要）。
 
@@ -143,11 +143,11 @@
 
 企画書 P2。「取得後キャッシュ+鮮度表示」でオフライン主義と両立。
 
-1. **天気キャッシュ**: `WeatherCache` @Model 新設、`WeatherProvider` をキャッシュ経由に改修。「◯分前に更新」鮮度ラベル部品を作り、日ヘッダ・週の日ヘッダ(P2 のプレースホルダを置換)に接続。オフライン時はキャッシュ+鮮度表示。
+1. ~~**天気キャッシュ**: `WeatherCache` @Model 新設、`WeatherProvider` をキャッシュ経由に改修。「◯分前に更新」鮮度ラベル部品を作り、日ヘッダ・週の日ヘッダ(P2 のプレースホルダを置換)に接続。オフライン時はキャッシュ+鮮度表示。~~ → **廃止（2026-07-11 オーナー判断）**: `WeatherProvider.swift`/`WeatherCache` @Model/日ヘッダ・週ヘッダの天気表示を全削除。企画書9行目に明記の通り再構築可能なキャッシュのため .str8 バックアップ対象外であり、廃止しても復元性に影響なし。位置キャッシュ(`LastKnownLocation`)の取得責務のみ `AppSettings.swift` 側に移設し、下記2機能に配線を残す。
 2. **日の出日の入り(`SunCalc.swift` 新規)**: NOAA アルゴリズムの純関数で完全オフライン算出。既知の日付・地点との assert 自己チェック付き。日アジェンダの該当位置に細いライン表示。
 3. **出発逆算(`DepartureService.swift` 新規)**: 場所座標を持つ直近(≤24h)の時刻固定イベントのみ MKDirections で ETA 算出→キャッシュ。DayRow に `.travel` ケース追加(移動カード)、週キャプセルに移動セグメント点灯、「今」中心表示に「出発は◯:◯」。
 
-**受け入れ基準**: 機内モードで再起動しても天気がキャッシュ+古さラベルで出る。日の出日の入りが参照値と1分以内で一致。場所付き時刻固定イベントに移動カードと正しい出発時刻が出る。遠い将来のイベントにルート要求が飛ばない。
+**受け入れ基準**: 日の出日の入りが参照値と1分以内で一致。場所付き時刻固定イベントに移動カードと正しい出発時刻が出る。遠い将来のイベントにルート要求が飛ばない。（天気キャッシュの受け入れ基準は廃止に伴い削除）
 
 ---
 
@@ -381,13 +381,14 @@ Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Criti
 | `TaskDetailView.swift` | P0 ステータス UI、P8 お金 |
 | `AddTaskSheet.swift` | P1 空きプレフィル、P8 お金 |
 | `YearView.swift` | P0 enum、P5 未確定表示、P9 DayStat 化+ヒートマップ部品化 |
-| `CalendarSettingsView.swift` | P2 枠エディタ、P7 天気、P9 磨き込み |
-| `AppSettings.swift` | P2(WeekBand/makeWeekBands/hhmm 削除) |
-| `WeatherProvider.swift` | P7(キャッシュ+鮮度) |
+| `CalendarSettingsView.swift` | P2 枠エディタ、P7 天気(2026-07-11 廃止)、P9 磨き込み |
+| `AppSettings.swift` | P2(WeekBand/makeWeekBands/hhmm 削除)、P7 廃止分の現在地キャッシュ取得を移設 |
 
 **作り直し**: `DayView.swift` → カード式アジェンダ(P1、`DayTaskBlock` は廃棄)、`WeekView.swift` → 枠グリッド+キャプセル(P2、スクロール骨格とヘッダは概ね残る)
 
-**新規(主要)**: `BandModels.swift`(P0)、`TaskCardView.swift`+`DayAgendaView.swift`(P1)、`CapsuleOverlay.swift`(P2)、`TodoListView.swift`+`SortDeckView.swift`(P3)、`HourglassMotion.swift`+`TimerView.swift`+`AlarmService.swift`+FocusSession(P4)、`ChopDetector.swift`+`ApprovalQueueView.swift`+`PeerSession.swift`+`ProximityGate.swift`(P5)、`BackupService.swift`(P6)、WeatherCache+`SunCalc.swift`+`DepartureService.swift`(P7)、MonthMoneyStat+内訳シート(P8)、Subject+Study Hub ビュー(P10)、Widget Extension ターゲット(P11)
+**新規(主要)**: `BandModels.swift`(P0)、`TaskCardView.swift`+`DayAgendaView.swift`(P1)、`CapsuleOverlay.swift`(P2)、`TodoListView.swift`+`SortDeckView.swift`(P3)、`HourglassMotion.swift`+`TimerView.swift`+`AlarmService.swift`+FocusSession(P4)、`ChopDetector.swift`+`ApprovalQueueView.swift`+`PeerSession.swift`+`ProximityGate.swift`(P5)、`BackupService.swift`(P6)、`SunCalc.swift`+`DepartureService.swift`(P7、天気キャッシュ部分は2026-07-11廃止)、MonthMoneyStat+内訳シート(P8)、Subject+Study Hub ビュー(P10)、Widget Extension ターゲット(P11)
+
+**廃止(P7、2026-07-11)**: `WeatherProvider.swift`(`WeatherCache` @Model / `WeatherProvider` / `WeatherFreshnessLabel` を含む)。企画書9行目に明記の再構築可能キャッシュのため .str8 バックアップ非対象であり削除しても復元性に影響なし。
 
 ---
 

@@ -26,6 +26,8 @@ struct WeekReviewView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var isShareSheetPresented = false
     @State private var shareImage: UIImage? = nil
@@ -52,6 +54,7 @@ struct WeekReviewView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
             }
+            .background(c.paper)
             .navigationTitle("今週の締め")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -144,13 +147,13 @@ struct WeekReviewView: View {
 
     private func statTile(label: String, value: String) -> some View {
         VStack {
-            Text(value).font(.title3.bold())
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(S8Font.mono(13.5)).fontWeight(.bold)
+            Text(label).font(S8Font.mono(11)).tracking(1.5).foregroundStyle(c.fg3)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(8)
+        .background(c.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
     }
 
     // MARK: 締め（確認して閉じるだけ。WeekReview モデル廃止のため永続化はしない）
@@ -169,7 +172,7 @@ struct WeekReviewView: View {
     // MARK: 静止画エクスポート
     @MainActor
     private func exportImage() {
-        let renderer = ImageRenderer(content: reportSection.padding(20).background(Color(.systemBackground)))
+        let renderer = ImageRenderer(content: reportSection.padding(20).background(c.paper))
         renderer.scale = displayScale
         guard let image = renderer.uiImage else {
             exportFailed = true

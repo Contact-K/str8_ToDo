@@ -13,7 +13,7 @@ enum PreviewData {
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
             TaskItem.self, Category.self, PlaceTag.self, DayStat.self, MonthMoneyStat.self,
-            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self, WeatherCache.self,
+            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self,
             Profile.self, PhraseAlias.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -128,19 +128,6 @@ enum PreviewData {
         context.insert(FocusSession(start: today.addingTimeInterval(-63 * 3600),
                                     end: today.addingTimeInterval(-63 * 3600 + 60 * 60),
                                     subjectID: exerciseSubject.id))
-
-        // WeatherCache サンプル（今日から10日分）
-        for i in 0..<10 {
-            let cacheDay = cal.date(byAdding: .day, value: i, to: today) ?? today
-            let cache = WeatherCache(
-                day: cacheDay,
-                symbolName: ["sun.max.fill", "cloud.sun.fill", "cloud.fill", "cloud.rain.fill", "sun.max.fill"][i % 5],
-                highCelsius: 28.0 - Double(i),
-                lowCelsius: 18.0 - Double(i),
-                fetchedAt: .now
-            )
-            context.insert(cache)
-        }
 
         // 合成 DayStat（過去365日）
         let counts = [1, 2, 0, 3, 1, 2, 0, 1]

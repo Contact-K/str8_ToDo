@@ -10,6 +10,12 @@ import SwiftUI
 struct TaskCardView: View {
     let task: TaskItem
     var collapsed: Bool = false
+    /// true の場合、外側のコンテナ（S8Row 等）が既に hairline/padding を
+    /// 提供しているので、自前の縁取りを重ねない（二重罫線防止）。
+    var chromeless: Bool = false
+
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -38,13 +44,14 @@ struct TaskCardView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .strikethrough(task.isDone)
+                    .foregroundStyle(task.isDone ? c.fg3 : c.fg1)
                     .lineLimit(1)
 
                 // 時刻範囲
                 if let timeRangeText = timeRangeString() {
                     Text(timeRangeText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(S8Font.mono(13.5))
+                        .foregroundStyle(c.fg3)
                 }
             }
 
@@ -55,26 +62,31 @@ struct TaskCardView: View {
                 if task.isImportant {
                     Image(systemName: "star.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(c.accent)
                 }
                 if task.place != nil {
                     Image(systemName: "figure.walk")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(c.fg3)
                 }
                 if task.isTimePinned {
                     Text("時刻厳守")
-                        .font(.caption2)
+                        .font(S8Font.mono(11)).tracking(1.5)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .border(Color.secondary, width: 0.5)
+                        .foregroundStyle(c.accent)
+                        .overlay(RoundedRectangle(cornerRadius: S8Radius.sm).stroke(c.accent, lineWidth: 0.5))
+                        .accessibilityLabel("時刻厳守")
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .padding(.horizontal, chromeless ? 0 : S8Space.s3)
+        .padding(.vertical, chromeless ? 0 : S8Space.s5)
+        .background(alignment: .top) {
+            if !chromeless {
+                c.line.frame(height: 1)
+            }
+        }
         .opacity(task.isDone ? 0.6 : 1.0)
         .accessibilityElement(children: .combine)
         .accessibilityHint("タップで詳細を表示")
@@ -85,19 +97,19 @@ struct TaskCardView: View {
             Text(task.title)
                 .font(.caption)
                 .lineLimit(1)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(c.fg3)
 
             Spacer()
 
             if task.isDone {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(c.fg3)
             }
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(c.fg3)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

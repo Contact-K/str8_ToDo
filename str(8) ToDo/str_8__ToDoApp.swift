@@ -30,7 +30,6 @@ struct str_8__ToDoApp: App {
                 BandAssignment.self,
                 FocusSession.self,
                 Subject.self,
-                WeatherCache.self,
                 Profile.self,
                 PhraseAlias.self
             ])
@@ -86,6 +85,9 @@ private struct RootView: View {
                 WidgetSnapshotService.refresh(modelContainer.mainContext)
                 // 起動時に通知権限を要求
                 _ = await NotificationService.requestAuthorization()
+                // 日の出日の入り(SunCalc)/出発逆算(DepartureService)用の現在地キャッシュ更新
+                // （天気機能廃止に伴い旧天気取得プロバイダから移設。天気自体はこの2機能とは無関係）
+                await LastKnownLocation.refresh()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {

@@ -1,12 +1,10 @@
 import SwiftUI
+import CoreLocation
 
 // MARK: - AppSettings Keys
 enum AppSettingsKey {
     static let syncSystemCalendar = "syncSystemCalendar"
     static let syncSystemCalendarDefault = false
-
-    static let syncWeather = "syncWeather"
-    static let syncWeatherDefault = false
 
     static let enableNotifications = "enableNotifications"
     static let enableNotificationsDefault = true
@@ -40,7 +38,6 @@ enum AppSettingsKey {
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             syncSystemCalendar: syncSystemCalendarDefault,
-            syncWeather: syncWeatherDefault,
             enableNotifications: enableNotificationsDefault,
             weekShowSevenDays: weekShowSevenDaysDefault,
             weekReviewWeekday: weekReviewWeekdayDefault,
@@ -53,13 +50,49 @@ enum AppSettingsKey {
 // MARK: - 現在地ヘルパー
 
 enum LastKnownLocation {
-    /// 天気取得時に保存された現在地。未保存（キー不存在）なら nil。
-    /// (0,0) 実座標と区別するため存在チェックで判定する。
+    /// 日の出日の入り(SunCalc)・出発逆算(DepartureService)が使う現在地キャッシュ。
+    /// 未保存（キー不存在）なら nil。(0,0) 実座標と区別するため存在チェックで判定する。
     static func load() -> (latitude: Double, longitude: Double)? {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: AppSettingsKey.lastKnownLatitude) != nil,
               defaults.object(forKey: AppSettingsKey.lastKnownLongitude) != nil else { return nil }
         return (defaults.double(forKey: AppSettingsKey.lastKnownLatitude),
                 defaults.double(forKey: AppSettingsKey.lastKnownLongitude))
+    }
+
+    /// 現在地を一度だけ取得してキャッシュを更新する（天気機能廃止に伴い旧天気取得プロバイダから移設）。
+    /// 権限が無い/取得失敗なら何もしない（呼び出し側は load() の nil で未取得を判定）。
+    static func refresh() async {
+        let manager = CLLocationManager()
+        switch manager.authorizationStatus {
+        case .denied, .restricted:
+            return
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        default:
+            break
+        }
+
+        var location: CLLocation? = nil
+        let updates = CLLocationUpdate.liveUpdates()
+        var iterationCount = 0
+        let maxIterations = 10
+        do {
+            for try await update in updates {
+                iterationCount += 1
+                if let loc = update.location {
+                    location = loc
+                    break
+                }
+                if update.authorizationDenied { break }
+                if iterationCount >= maxIterations { break }
+            }
+        } catch {
+            return
+        }
+
+        guard let location else { return }
+        UserDefaults.standard.set(location.coordinate.latitude, forKey: AppSettingsKey.lastKnownLatitude)
+        UserDefaults.standard.set(location.coordinate.longitude, forKey: AppSettingsKey.lastKnownLongitude)
     }
 }

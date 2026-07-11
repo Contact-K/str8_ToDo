@@ -11,6 +11,8 @@ import SwiftData
 
 struct StudyHubView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var sessions: [FocusSession]
     @Query private var subjects: [Subject]
 
@@ -40,6 +42,7 @@ struct StudyHubView: View {
                     .padding()
                 }
             }
+            .background(c.paper)
             .navigationTitle("Study Hub")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -100,13 +103,13 @@ struct StudyHubView: View {
         let streakText = streak == 0 ? "ストリークなし" : "\(streak)日連続"
         return HStack {
             Image(systemName: streak > 0 ? "flame.fill" : "flame")
-                .foregroundStyle(streak > 0 ? .orange : .gray)
+                .foregroundStyle(streak > 0 ? c.accent : c.fg3)
             Text(streakText)
                 .font(.subheadline)
             Spacer()
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
         .accessibilityLabel("ストリーク")
         .accessibilityValue(streakText)
@@ -170,7 +173,7 @@ struct StudyHubView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
     }
 
@@ -186,7 +189,7 @@ struct StudyHubView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
         .accessibilityLabel("\(title)の集中時間")
         .accessibilityValue(durationText(Double(seconds)))
@@ -219,7 +222,7 @@ struct StudyHubView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
     }
 
@@ -241,7 +244,7 @@ struct StudyHubView: View {
                     HeatmapView(
                         year: cal.component(.year, from: .now),
                         values: focusSecondsByDayMap,
-                        tint: .blue,
+                        tint: c.info,
                         intensity: heatmapIntensity,
                         labelFor: heatmapLabel
                     )
@@ -282,7 +285,7 @@ struct StudyHubView: View {
             ForEach(last7Days, id: \.date) { day in
                 VStack(spacing: 4) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.blue.opacity(0.7))
+                        .fill(c.info.opacity(0.7))
                         .frame(height: max(CGFloat(day.seconds) / CGFloat(maxSeconds) * 100, 8))
 
                     Text("\(cal.component(.day, from: day.date))")
@@ -294,7 +297,7 @@ struct StudyHubView: View {
         }
         .frame(height: 120)
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
     }
 
@@ -316,7 +319,7 @@ struct StudyHubView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(c.surface2)
         .cornerRadius(8)
     }
 

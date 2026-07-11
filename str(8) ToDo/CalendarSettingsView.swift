@@ -9,12 +9,10 @@ struct CalendarSettingsView: View {
     @Query private var assignments: [BandAssignment]
 
     @AppStorage(AppSettingsKey.syncSystemCalendar) var syncSystemCalendar = AppSettingsKey.syncSystemCalendarDefault
-    @AppStorage(AppSettingsKey.syncWeather) var syncWeather = AppSettingsKey.syncWeatherDefault
     @AppStorage(AppSettingsKey.enableNotifications) var enableNotifications = AppSettingsKey.enableNotificationsDefault
     @AppStorage(AppSettingsKey.lastBackupExportDate) var lastBackupExportDate = 0.0
 
     @State private var eventKit = EventKitService()
-    @State private var weather = WeatherProvider()
 
     // バックアップ関連の状態管理
     @State private var exportDocument: Str8BackupDocument?
@@ -82,62 +80,6 @@ struct CalendarSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.bordered)
-
-                // 天気同期
-                HStack {
-                    Toggle("天気を同期", isOn: $syncWeather)
-                        .onChange(of: syncWeather) { oldValue, newValue in
-                            if newValue {
-                                refreshWeatherNow()
-                            }
-                        }
-                }
-
-                // 天気同期状態
-                HStack {
-                    Text("状態")
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(weather.status.rawValue)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            if let statusDetail = weather.statusDetail {
-                                Text(statusDetail)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            if let temp = weather.temperatureText {
-                                Text(temp)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        if let lastUpdated = weather.lastUpdated {
-                            Text("更新: \(formattedTime(lastUpdated))")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                // 天気を取得ボタン
-                Button(action: {
-                    refreshWeatherNow()
-                }) {
-                    HStack {
-                        Image(systemName: "cloud.fill")
-                            .accessibilityLabel("天気")
-                        Text("天気を取得")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-
-                // WeatherKit注記
-                Text("※WeatherKitのCapability追加が必要")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
 
                 // 通知
                 Toggle("通知", isOn: $enableNotifications)
@@ -501,12 +443,6 @@ struct CalendarSettingsView: View {
         }
     }
 
-    private func formattedTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     private func formattedDateTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -521,13 +457,6 @@ struct CalendarSettingsView: View {
                 eventKit.sync(into: modelContext)
                 eventKit.observeChanges(into: modelContext)
             }
-        }
-    }
-
-    /// 天気取得（トグルON・取得ボタン共通）。
-    private func refreshWeatherNow() {
-        Task {
-            await weather.refresh(context: modelContext)
         }
     }
 

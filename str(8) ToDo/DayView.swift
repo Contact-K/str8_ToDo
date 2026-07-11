@@ -14,7 +14,6 @@ struct DayView: View {
     var onSelectTask: ((TaskItem) -> Void)? = nil
 
     @Environment(\.modelContext) private var context
-    @Query private var weatherCache: [WeatherCache]
     @State private var showComposer = false
     @State private var gapPrefill: GapPrefill?
 
@@ -45,36 +44,6 @@ struct DayView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(Color(.systemGray6))
-
-                // Weather bar
-                HStack(spacing: 8) {
-                    let cal = Calendar.current
-                    let displayDay = cal.startOfDay(for: date)
-                    if let cache = weatherCache.first(where: { cal.isDate($0.day, inSameDayAs: displayDay) }) {
-                        Image(systemName: cache.symbolName)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.orange)
-                        Text("最高\(Int(cache.highCelsius))°/最低\(Int(cache.lowCelsius))°")
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        WeatherFreshnessLabel(fetchedAt: cache.fetchedAt)
-                    } else {
-                        Image(systemName: "cloud.sun")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.gray.opacity(0.3))
-                        Text("天気情報なし")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray5))
-                .cornerRadius(8)
-                .padding(12)
 
                 // Agenda view
                 DayAgendaView(

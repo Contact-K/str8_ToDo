@@ -19,7 +19,6 @@ struct WeekView: View {
 
     @Environment(\.modelContext) private var context
     @Query private var tasks: [TaskItem]
-    @Query private var weatherCache: [WeatherCache]
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var bandFrames: [BandFrameInfo] = []
     @State private var travelETAs: [UUID: TimeInterval] = [:]
@@ -81,13 +80,6 @@ struct WeekView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 220)
-
-                    // 週共通の天気鮮度ラベル（7列個別には出さない）
-                    if let fetchedAt = latestWeatherFetch(days: days) {
-                        Text("天気 \(Self.freshnessFormatter.string(from: fetchedAt))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
 
                     if let onOpenSettings {
                         Button(action: onOpenSettings) {
@@ -208,26 +200,11 @@ struct WeekView: View {
     }
 
     private func dayHeaderCell(_ day: Date, width: CGFloat) -> some View {
-        let cal = Calendar.current
-        let displayDay = cal.startOfDay(for: day)
-        let cache = weatherCache.first(where: { cal.isDate($0.day, inSameDayAs: displayDay) })
-
         let header = VStack(spacing: 4) {
-            HStack(spacing: 3) {
-                if let cache = cache {
-                    Image(systemName: cache.symbolName)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                } else {
-                    Image(systemName: "cloud.sun")
-                        .font(.caption)
-                        .foregroundStyle(.gray.opacity(0.5))
-                }
-                Text(dayString(day))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(isToday(day) ? Color.accentColor : weekdayColor(day))
-            }
+            Text(dayString(day))
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(isToday(day) ? Color.accentColor : weekdayColor(day))
             Text("\(weekCalendar.component(.day, from: day))")
                 .font(.subheadline)
                 .fontWeight(.bold)
@@ -368,20 +345,6 @@ struct WeekView: View {
     }
 
     // MARK: - ヘルパー
-
-    private static let freshnessFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "M/d HH:mm"
-        return f
-    }()
-
-    /// その週の WeatherCache のうち最新の fetchedAt（なければ nil）。
-    private func latestWeatherFetch(days: [Date]) -> Date? {
-        weatherCache
-            .filter { cache in days.contains { weekCalendar.isDate(cache.day, inSameDayAs: $0) } }
-            .map(\.fetchedAt)
-            .max()
-    }
 
     private func isToday(_ date: Date) -> Bool { weekCalendar.isDateInToday(date) }
 
