@@ -35,6 +35,10 @@
 | 12 | 空きコマ自動提案 | Sim | W2 |
 | 13 | 週次締めの儀式(週報) | 実機 | W3 |
 | 14 | ローカルP2P集中ルーム | **実機2台+** | W4 |
+| 15 | WH 7分類データモデル+概要タイル/フォーカス編集シート（E0+E1） | Sim | イベント作成シート |
+| 16 | 自然文クイック追加パーサ（E2） | Sim | イベント作成シート |
+| 17 | 辞書管理画面（E3） | Sim | イベント作成シート |
+| 18 | 既存タスク編集の直接ジャンプ導線（E4） | Sim | イベント作成シート |
 
 **順序根拠:**
 
@@ -131,6 +135,8 @@
 
 **受け入れ基準**: エクスポート→ストア全消去→インポートでエンティティ数が完全一致。誤パスフレーズは明確なエラー。フォーマットにバージョンフィールドがあり、後続モデル(Subject / MonthMoneyStat / WeatherCache)を加算的に足せる。
 
+> **メモ（2026-07-11）**: P6 以降は加算的変更のみが原則だが、P13 で `WeekReview` モデル廃止（オーナー判断、後述）のため例外的に非加算変更が発生した。未リリース・開発端末のみのライブストアなのでシミュレータ再起動（ストア破棄）で対応可能（マイグレーション不要）。
+
 ---
 
 ## Phase 7 — 外部情報層 〔Sim(+実機1台で挙動確認)〕
@@ -154,7 +160,7 @@
 
 **受け入れ基準**: 金額入力が月ヘッダに即反映。内訳の合計が一致。サブスクの発生が各月に計上される(月末開始は短い月では月末日にクランプ)。削除で整合が取れる。
 
-> **P8 実装後の改訂(2026-07-10、debate-review の結果)**: TaskDetailView は全フィールド表示専用の既存設計のため、金額の**編集**は将来のタスク編集機能と同時に実装する(その際 `MoneyStats.recompute` の呼び出しを忘れないこと)。recompute は現状「保存/削除時に該当1ヶ月+月ビュー表示時の自己修復」— P13(週報)は MonthMoneyStat を直接読むため、**P13 着手前に** 反復タスク変更時の複数月再計算へ発火戦略を見直す。タイムゾーン変更で月キー(Date)が重複しうる既知の天井あり(クラッシュせず表示が古くなるのみ)→同時に固定カレンダーの月キー化を検討。
+> **P8 実装後の改訂(2026-07-10、debate-review の結果)**: TaskDetailView は全フィールド表示専用の既存設計のため、金額の**編集**は将来のタスク編集機能と同時に実装する(その際 `MoneyStats.recompute` の呼び出しを忘れないこと)。recompute は現状「保存/削除時に該当1ヶ月+月ビュー表示時の自己修復」— P13(週報)は MonthMoneyStat を直接読むため、**P13 着手前に** 反復タスク変更時の複数月再計算へ発火戦略を見直す。タイムゾーン変更で月キー(Date)が重複しうる既知の天井あり(クラッシュせず表示が古くなるのみ)→同時に固定カレンダーの月キー化を検討。**据え置き（2026-07-11 時点で未対応、天井として残置）**。
 
 ---
 
@@ -196,7 +202,7 @@ App Group 追加、SwiftData ストアをグループコンテナへ移動(起�
 
 > **P11 debate-review 繰り越し（2026-07-11、最終ブラッシュアップでまとめて対応）**: 多角レビューで挙がった、実害は限定的だが将来負債になる項目。**#1・#2 は対応済み**（#1 DayStat fetch 失敗時の write スキップ、#2 `ModelContext.didSave` 購読で全ミューテーションから widget refresh 発火）。以下は繰り越し：
 > - **#3 エラー握りつぶし＋テレメトリ皆無**（合意3ロール）: `WidgetSnapshotStore.write/read` の失敗が全経路で無言。App Group 誤設定・旧 JSON 残存などの本番障害が「ウィジェットが更新されない」としか観測できない。最低限の失敗ログ/カウンタを入れる。
-> - **#4 RRULE 繰り返しの当日インスタンス非表示**（合意2ロール）: ウィジェット/日ビュー（DayAgendaView.dayTasks）は同日 startDate のみで `occurs(on:)` 未展開。WeekView だけ展開する既存の全体不整合を継承。**アプリ日ビューごと直すか容認かの方針判断が必要**。**P12（空きコマ提案）も同じ「今日のタスク」解決に依存するため、P12 着手前に方針決定すること**。
+> - **#4 RRULE 繰り返しの当日インスタンス非表示**（合意2ロール）: ウィジェット/日ビュー（DayAgendaView.dayTasks）は同日 startDate のみで `occurs(on:)` 未展開。WeekView だけ展開する既存の全体不整合を継承。**アプリ日ビューごと直すか容認かの方針判断が必要**。**P12（空きコマ提案）も同じ「今日のタスク」解決に依存するため、P12 着手前に方針決定すること**。**据え置き（2026-07-11 時点で方針未決定、P12 は既存の同日 startDate 判定のまま実装済み）**。
 > - **#5 ウィジェット表示の不揃い＋アクセシビリティ**: ファミリ間で「空/古い/読めない」の区別が不揃い（systemSmall/Medium のみ「アプリで更新」）。`pin.fill` に accessibilityLabel 無し、Dynamic Type 非追従（固定10pt）、カテゴリがカード色のみでテキスト表現なし、`lineLimit(1)` で拡大時タイトル欠落。P9 のアクセシビリティ方針に合わせて補修。
 > - **#6 systemSmall/Medium の約60行重複**: stat 表示の helper view 化で簡潔化。
 > - **#7 平文個人情報のバックアップ露出**: 予定タイトル等が App Group に平文 JSON で保存され、NSFileProtection 未指定・iCloud/iTunes バックアップ対象・タスク削除時のパージ経路なし。「オフライン主義」との整合でファイル保護属性/削除方針を判断。
@@ -212,13 +218,13 @@ App Group 追加、SwiftData ストアをグループコンテナへ移動(起�
 
 Round 2 で合意した High/Medium/Low の未対応項目。Critical 3件（gap クランプ / snooze 除外 / scheduleAt での通知 reschedule + save エラー格上げ）は Phase 12 内で修正済み。
 
-- [High] **`[Date: [SlotSuggestion]]` を `[[SlotSuggestion]]` に**: `gap.start` を辞書キーにしているため同一 start の複数 gap で後勝ち上書きが起きる。返り値を配列にして rows の gap を `enumerated()` で対応させる。
-- [High/要判断] **`duration=0` 実データ問題**: `AddTaskSheet` / `TodoListView.quickAdd` の浮遊タスクは `duration=0` が典型で、`effectiveDuration` fallback=1800秒に潰れ「重い順」が崩れる。対処A=`duration=0` 候補を除外、対処B=`AddTaskSheet` で所要を必須入力に。**着手前にオーナー判断が必要**。
-- [Medium] **`gapSuggestions` の毎分再計算をキャッシュ**: `TimelineView(.everyMinute)` の中で `allTasks` 全走査 + `suggest` を無条件再実行している。`sunCache` / `travelData` と対称に、rows のシグネチャ変化検知で `@State` キャッシュ（~8行）。
-- [Medium] **chip 表示の `allTasks.first(where:)` を Dictionary 化**: chip 個ずつ O(n) 走査＝O(n*k)。`body` 内で `tasksByID = Dictionary(uniqueKeysWithValues: ...)` を1行、`gapRow` に受け渡し。
-- [Low] **`SchedulePromoteSheet` の `@State startDate = .now` 陳腐化**: シート開いたまま数分経過→「決定」で過去時刻がコミットされる。ボタン押下時に再取得へ。
-- [Low] **`FocusSession.actualDuration` の累積上限なし**: 長期繰り返しタスクで `effectiveDuration` が肥大化し優先チップを支配しうる。Phase 4 の記録側と合わせて別途検討。
-- [参考] **`SortPhase` を「締切近さ」の代理に使う設計**: 実 `dueDate` フィールドが無いため `.now`/`.today` を代理利用。将来 `.week` 拡張時は `phaseRank` の割り当てを見直す。
+- [x] **`[Date: [SlotSuggestion]]` を `[[SlotSuggestion]]` に**: `gap.start` を辞書キーにしているため同一 start の複数 gap で後勝ち上書きが起きる。返り値を配列にして rows の gap を `enumerated()` で対応させる。実装済み（`FreeSlotSuggester.suggest` が `[[SlotSuggestion]]` を返す）。
+- [x] **`duration=0` 実データ問題**: `AddTaskSheet` / `TodoListView.quickAdd` の浮遊タスクは `duration=0` が典型で、`effectiveDuration` fallback=1800秒に潰れ「重い順」が崩れる。**オーナー判断: 対処A（`duration=0` 候補を除外）で確定、実装済み**（`FreeSlotSuggester.suggest` の `validCandidates` フィルタ）。
+- [Medium] **`gapSuggestions` の毎分再計算をキャッシュ**: `TimelineView(.everyMinute)` の中で `allTasks` 全走査 + `suggest` を無条件再実行している。`sunCache` / `travelData` と対称に、rows のシグネチャ変化検知で `@State` キャッシュ（~8行）。**未対応**。
+- [x] **chip 表示の `allTasks.first(where:)` を Dictionary 化**: chip 個ずつ O(n) 走査＝O(n*k)。`body` 内で `tasksByID = Dictionary(uniqueKeysWithValues: ...)` を1行、`gapRow` に受け渡し。実装済み。
+- [Low] **`SchedulePromoteSheet` の `@State startDate = .now` 陳腐化**: シート開いたまま数分経過→「決定」で過去時刻がコミットされる。ボタン押下時に再取得へ。**実装済み**（決定ボタン押下時に `max(startDate, .now)` へシフト）。
+- [Low] **`FocusSession.actualDuration` の累積上限なし**: 長期繰り返しタスクで `effectiveDuration` が肥大化し優先チップを支配しうる。Phase 4 の記録側と合わせて別途検討。**未対応**。
+- [x] **`SortPhase` を「締切近さ」の代理に使う設計**: 実 `dueDate` フィールドが無いため `.now`/`.today` を代理利用。将来 `.week` 拡張時は `phaseRank` の割り当てを見直す。コメント実装済み（`FreeSlotSuggester.swift` の `suggest` 直上）。
 
 ## Phase 13 — 週次締めの儀式(W3) 〔実機〕
 
@@ -228,23 +234,23 @@ Round 2 で合意した High/Medium/Low の未対応項目。Critical 3件（gap
 
 ### P13 残タスク（debate-review 検出、別フェーズ回し）
 
-Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（WeekReview 重複挿入防止 / 通知権限＆トグル連動 / BackupService への WeekReview 組み込み / fetch 失敗の可視化＋save 失敗時 dismiss 抑止）と既知 3件（save 失敗時 dismiss、scheduleWeeklyReview の os_log 統一、TaskItem.scheduleAt の @MainActor 対応）は Phase 13 内で修正済み。
+Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（WeekReview 重複挿入防止 / 通知権限＆トグル連動 / BackupService への WeekReview 組み込み / fetch 失敗の可視化＋save 失敗時 dismiss 抑止）と既知 3件（save 失敗時 dismiss、scheduleWeeklyReview の os_log 統一、TaskItem.scheduleAt の @MainActor 対応）は Phase 13 内で修正済み。**以下の残タスクは 2026-07-11 の追加ワークで全て対応済み**。
 
-- [High] **`WeekMath` と `WeekView` の週境界二重定義**: `WeekMath` は firstWeekday=2（月曜起点）、`WeekView.swift:37` は firstWeekday=1（日曜起点）で両者ハードコード。アプリ内で「今週」の定義が2種類。`AppSettings.weekShowSevenDays` と連動する共通 helper に統合、`WeekMath` は破棄検討。
-- [High] **`doneCount` の基準を `approved` にする**: 現状は `completedAt` 基準で、承認漏れがあっても締められる／「一掃してから」の儀式指示が数字に反映されない。`approvedCount` 別フィールド追加 or 判定条件変更。
-- [High] **「今週を締める」ボタンが `doneTasks` 空時に消える**: `ApprovalQueueView` の `if !doneTasks.isEmpty` 分岐外にも配置。空でも押せる。
-- [High] **通知タップ→WeekReviewView 自動遷移**: `UNUserNotificationCenterDelegate` を実装、`identifier == weeklyReviewIdentifier` で `showWeekReview` を立てる。もしくは本項を Phase 13 スコープ外として明記。
-- [High] **fetch 重複を `@State` キャッシュ**: `reportSection` / `commitAndClose` / `exportImage` が同じ3関数を独立実行。`@State` で 1 回に。
-- [High] **`#Index` 不在**: FocusSession.end / TaskItem.completedAt / startDate で `#Index` 宣言ゼロ、年単位で線形劣化。SwiftData の Index 検討（キャッシュだけでは解消しない）。
-- [High] **`referenceDate` を `@State` 化**: 現状 View のデフォルト引数 `= .now` で、sheet を開いたまま日付境界を跨ぐ再レンダリングで静かに週が切り替わる。sheet 表示時に固定。
-- [High] **`exportImage` nil 時のフィードバック**: 無反応で終わっている。alert かトースト。
-- [Medium/要判断] **`moneyTotal` を新規集計にするか `MonthMoneyStat` 参照にするか**: 現行実装は `task.occurs(on:)` で日単位走査（`MoneyStats.forEachOccurrence` と同スタイル）。ROADMAP 明記「MonthMoneyStat から読むだけ、新規集計なし」に厳密には反する。`MonthMoneyStat` は月キャッシュのため週単位で切り出すと按分ロジックが必要。**着手前にオーナー判断が必要**。
-- [Medium/要判断] **`WeekReview` の履歴閲覧画面 or モデル廃止**: 現状は書き込み専用（読み出し画面もその計画もない）。過去週閲覧画面を追加するか、`WeekReview` モデル自体を廃止して `WeekReviewView` を都度計算のみにするか、構造的選択が要る。
-- [Low] `ShareSheet` ラッパを `ShareLink` に置換（数行削減）
-- [Low] `UserDefaults.register(defaults:)` で AppSettings の `??` フォールバックを削除
-- [Low] `WeekReviewView.nextRange` の inline 計算を `WeekMath.weekRange` 再利用に
-- [Low] 両 `ToolbarItem` が `.primaryAction` になっている問題、エクスポート側を `.secondaryAction` に
-- [Low] 命名揺れ `doneCount` vs `completedCount` を統一
+- [x] **`WeekMath` と `WeekView` の週境界二重定義**: `WeekMath.firstWeekday(showSevenDays:)` を追加（7日=日曜起点/平日=月曜起点）。`WeekView.weekCalendar` を computed property化してこれを参照、`WeekReviewView.range`/`nextRange` も同じ helper 経由に統一。`WeekMath` は破棄せず、`weekStart`/`weekRange` に `firstWeekday` パラメータを追加（既定値2で既存呼び出し互換）。
+- [x] **`doneCount` の基準を `approved` にする**: `WeekReportSource.doneCount` を `approvedCount` にリネームし、`status == .approved && approvedAt` の範囲判定に変更。
+- [x] **「今週を締める」ボタンが `doneTasks` 空時に消える**: `ApprovalQueueView` の空状態（`ContentUnavailableView`）側にも同じボタンを toolbar に追加。
+- [x] **通知タップ→WeekReviewView 自動遷移**: `NotificationDelegate`（`UNUserNotificationCenterDelegate` 実装）を追加、`weeklyReviewIdentifier` タップで `NotificationService.weeklyReviewTappedNotification` を発行。`ContentView` が `onReceive` で受けて `showWeekReview` を立てる。
+- [x] **fetch 重複を `@State` キャッシュ**: `WeekReportSource.load(in:context:)` が `WeekReport`（focus/money/approvedCount）を1回で返す。`WeekReviewView` は `@State private var cachedReport` に載せて `reportSection`/`exportImage` で共有（`commitAndClose` は WeekReview 廃止により集計不要になったため参照しない）。
+- [x] **`#Index` 不在**: `FocusSession.end`、`TaskItem.completedAt`/`startDate` に `#Index` を追加。
+- [x] **`referenceDate` を `@State` 化**: `WeekReviewView.init(initialReferenceDate:onClose:)` で `@State` に固定。
+- [x] **`exportImage` nil 時のフィードバック**: `renderer.uiImage` が nil の場合 `exportFailed` alert を表示。
+- [x] **`moneyTotal` を新規集計にするか `MonthMoneyStat` 参照にするか**: **オーナー判断（2026-07-11）** — 都度計算のままで OK。週単位の按分ロジックを追加するコストに対してリターンが薄いため見送り。`WeekReportSource.moneyTotal` にコメントで明記。
+- [x] **`WeekReview` の履歴閲覧画面 or モデル廃止**: **オーナー判断（2026-07-11）** — モデル廃止。閲覧 UI なし＋書き込み専用は不要のため、`WeekReview.swift` 削除、スキーマ登録から除去、`BackupService` の DTO/書き込み経路も削除。旧 `.str8` の `weekReviews` キーは `BackupPayload` が対応フィールドを持たないため JSONDecoder が無視して読み飛ぶ（互換維持）。**注**: スキーマから `@Model` を削除すると既存ライブストアとの互換が崩れるため、開発端末はシミュレータ再起動（ストア破棄）で対応すること（P6 メモ参照）。
+- [x] `ShareSheet` ラッパを `ShareLink` に置換
+- [x] `UserDefaults.register(defaults:)` で AppSettings の `??` フォールバックを削除（`str_8__ToDoApp.init()` で `AppSettingsKey.registerDefaults()` 実施。`CalendarSettingsView` 側の同パターンも合わせて簡素化）
+- [x] `WeekReviewView.nextRange` の inline 計算を `WeekMath.weekRange` 再利用に
+- [x] 両 `ToolbarItem` が `.primaryAction` になっている問題、エクスポート側を `.secondaryAction` に
+- [x] 命名揺れ `doneCount` vs `completedCount` を `approvedCount` で統一
 - [参考] ROADMAP の Phase 13 spec を実装に合わせて更新（本節冒頭で「明示ボタン」に反映済み。今後の実装変更に応じて更新継続）
 
 ## Phase 14 — ローカルP2P集中ルーム(W4) 〔実機2台+〕
@@ -257,11 +263,11 @@ Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（Wee
 
 Wave1〜3 で以下は完了: FocusSession スキーマ拡張・BackupService 後方互換・FocusRoom 純粋モデル・p14-selfcheck 7 テスト・PeerRoomSession（送信者検証／unicast pong／`hostPeerID` once-only／`.leave` 送信者検証／`markEnded` 再入ガード）・roomID ホスト→ゲスト伝播・requestClockSync 自動発火・TimerView 二重稼働防止（`guard !showRoom`）・save 失敗 alert（Phase 13 教訓踏襲）・`.background` のみ判定・`hasFinished` フラグで二重 save 防止。
 
-- [High] **統合テストの穴**: `p14-selfcheck` は `FocusRoom` 純粋関数と `RoomMessage` JSON 往復のみ。`markEnded` / `finishAndSave` / `PeerRoomSession.handle` の統合的な再入・二重呼びは未検証。軽量な統合チェック（onEnded 2 回発火で FocusSession が 1 件保存にとどまることの assert 等）を追加。
-- [High] **approverID の記録**: ROADMAP は「終了後は相互承認モードへ直結、approverID 記録」と明記だが、現状は FocusSession に approverID を格納しない（承認は既存 `ApprovalQueueView` の chop 承認に委ねる）。FocusSession に `approverID: String?` フィールド追加＋Wave3 の `finishAndSave` で peer.hostPeerID などを詰める設計判断が必要。
-- [High] **TOFU（Trust-On-First-Use）攻撃耐性**: `hostPeerID` の初回設定を初回のみに限定してあるが、メッシュトポロジー上、悪意ある peer が最初の `.hello` を騙る可能性は残る。`requestJoin(host:)` で選択した peer 由来で host を確定する強化が必要。
-- [High] **`.inactive` 継続監視**: 現状 `.inactive` を無視して `.background` のみで dismiss。長時間 `.inactive`（電話着信等）が続くケースを別途モニタして退出させる。
-- [Medium] **クロック同期の実機検証**: p14-selfcheck の Test 6 は「対称ネットで RTT が真の片道と一致する」構成でオフセット誤差ゼロ。**非対称遅延の実機測定**（Wi-Fi 混雑時等）を実機 2 台で行い、1 秒未満の受け入れ基準を実証。
+- [x] **統合テストの穴**: `p14-selfcheck` は `FocusRoom` 純粋関数と `RoomMessage` JSON 往復のみ。`markEnded` / `finishAndSave` / `PeerRoomSession.handle` の統合的な再入・二重呼びは未検証。軽量な統合チェック（onEnded 2 回発火で FocusSession が 1 件保存にとどまることの assert 等）を追加。実装済み（`p14-selfcheck` Test 8/9/10）。
+- [x] **approverID の記録**: ROADMAP は「終了後は相互承認モードへ直結、approverID 記録」と明記だが、現状は FocusSession に approverID を格納しない（承認は既存 `ApprovalQueueView` の chop 承認に委ねる）。FocusSession に `approverID: String?` フィールド追加＋Wave3 の `finishAndSave` で peer.hostPeerID などを詰める設計判断が必要。実装済み（`FocusSession.approverID` + `PeerRoomSession.approverDisplayName`）。
+- [x] **TOFU（Trust-On-First-Use）攻撃耐性**: `hostPeerID` の初回設定を初回のみに限定してあるが、メッシュトポロジー上、悪意ある peer が最初の `.hello` を騙る可能性は残る。`requestJoin(host:)` で選択した peer 由来で host を確定する強化が必要。実装済み（`requestJoin(host:)` でのみ `hostPeerID` を確定、`.hello` からは確定しない）。
+- [x] **`.inactive` 継続監視**: 現状 `.inactive` を無視して `.background` のみで dismiss。長時間 `.inactive`（電話着信等）が続くケースを別途モニタして退出させる。実装済み（`inactiveWatchTask` で 10 秒監視）。
+- [Medium] **クロック同期の実機検証**: p14-selfcheck の Test 6 は「対称ネットで RTT が真の片道と一致する」構成でオフセット誤差ゼロ。**非対称遅延の実機測定**（Wi-Fi 混雑時等）を実機 2 台で行い、1 秒未満の受け入れ基準を実証。**未対応（実機作業）**。
 - [Medium/要判断] **`.inactive` を含む一時遷移中の退出方針**: 実機 2 台で権限ダイアログの挙動を観察してから最終判断。
 - [Low] `discoveredHosts` の並び順を安定化（現状 append 順、UI で peer 名称でソートが望ましい）
 - [Low] `HourglassMotionService` を FocusRoomView と TimerView で **別インスタンス** が生成される現状を、共有 service に統一（今は `guard !showRoom` で回避しているだけ）
@@ -271,21 +277,89 @@ Wave1〜3 で以下は完了: FocusSession スキーマ拡張・BackupService �
 
 Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Critical 4 件は Phase 14 内で修正済み**：Info.plist の `_str8-focusroom` 追加 / `.start` reject（`hasClockSynced` gate） / `isDeviceFaceDown` accessor + FocusRoomView 側で初期姿勢検出（共有 FSM は無傷） / `FocusSession.record()` 経由への一本化。以下は残タスク。
 
-- [High] **`RoomMessage.hello` から `isHost` フラグ削除**: 現状は自己申告で複数人が isHost:true を名乗ることを participants 配列が防いでいない → UI 表示で「(ホスト)」がなりすまし可能。フラグを削除し、内部状態（`.startHosting()` を呼んだ側が host）で判定。
-- [High] **`participantID` を connectedPeer 実 ID に紐付け検証**: 詐称による架空参加者無制限注入で `participantCount` 改ざん・7 人上限誤誘発が可能。`.hello` 受信時に participantID と MCSession の実 peerID の対応を検証。
-- [High] **退出ボタン / scenePhase / save 失敗時の cleanup を一元化**: 現状 timer.invalidate/motion.stop/peer.stop の呼び忘れ経路が複数あり（安全性 #1/#7/extra 2）。defer 相当のヘルパで一元化。
-- [High] **`PeerRoomSession.end()` を実際に呼ぶ経路を実装**: 現状デッドコードで終了検知が 1Hz Timer の自己申告方式。ホスト側 Timer 満了で `broadcast(.end)`、全端末が受信時に `finishAndSave` → 1Hz ずれ解消。
-- [High] **受信レート制限**: `.leave` / `.hello` 高頻度連投で participants の連続 mutation → UI 遅延。デバウンス or 単位時間内の許容回数上限。
-- [High] **満員判定と切断反映のシリアライズ**: `advertiser(_:didReceiveInvitation:)` と `session(_:peer:didChange:)` が nonisolated から独立 Task 生成 → MainActor 実行順が実イベント順と一致しない。単一シリアルキュー or MainActor 上での明示的順序管理。
-- [High] **`ApprovalQueueView` への直行動線実装**: `endedSection` の「承認へ進みます」文言だけで実際の遷移が無い。sheet 閉じ後にタブ切替 or NavigationLink。ROADMAP の「終了後は相互承認モードへ直結」を満たすために必要。
-- [Medium] **ホスト昇格 or 明示 abort UI**: ホストの一時 background で全ピアが `.aborted` 遷移 → 全滅（単一障害点）。残ピア最若をホスト昇格、または明示的「ホスト離脱、再開不能」表示。
-- [Medium] **複数サンプル ping-pong + 再送タイムアウト**: 現状は 1 発 RTT/2 で外れ値除去なし、輻輳時の悪サンプルがセッション全体を狂わせる。3-5 サンプル中央値 + 200ms 再送タイムアウト。
-- [Medium] **`PeerSession` との接続層抽出**: `PeerRoomSession` は `PeerSession` を逐語コピーしている箇所が多い（MCSession 生成・delegate 配線・encoder/decoder）。共通 protocol / helper で集約。
+- [x] **`RoomMessage.hello` から `isHost` フラグ削除**: 現状は自己申告で複数人が isHost:true を名乗ることを participants 配列が防いでいない → UI 表示で「(ホスト)」がなりすまし可能。フラグを削除し、内部状態（`.startHosting()` を呼んだ側が host）で判定。実装済み（`RoomMessage.hello(participantID:)` に isHost 無し）。
+- [x] **`participantID` を connectedPeer 実 ID に紐付け検証**: 詐称による架空参加者無制限注入で `participantCount` 改ざん・7 人上限誤誘発が可能。`.hello` 受信時に participantID と MCSession の実 peerID の対応を検証。実装済み（`.hello`/`.leave` は既存、`.faceDown` も 2026-07-11 に検証追加）。
+- [x] **退出ボタン / scenePhase / save 失敗時の cleanup を一元化**: 現状 timer.invalidate/motion.stop/peer.stop の呼び忘れ経路が複数あり（安全性 #1/#7/extra 2）。defer 相当のヘルパで一元化。実装済み（`FocusRoomView.cleanup(reason:)` に集約、save 失敗経路も 2026-07-11 に追加）。
+- [x] **`PeerRoomSession.end()` を実際に呼ぶ経路を実装**: 現状デッドコードで終了検知が 1Hz Timer の自己申告方式。ホスト側 Timer 満了で `broadcast(.end)`、全端末が受信時に `finishAndSave` → 1Hz ずれ解消。実装済み。
+- [x] **受信レート制限**: `.leave` / `.hello` 高頻度連投で participants の連続 mutation → UI 遅延。デバウンス or 単位時間内の許容回数上限。実装済み、2026-07-11 に peer ごとの独立レート制限に強化（`helloTimestamps`/`leaveTimestamps` を `[String: [TimeInterval]]` 化）。
+- [x] **満員判定と切断反映のシリアライズ**: `advertiser(_:didReceiveInvitation:)` と `session(_:peer:didChange:)` が nonisolated から独立 Task 生成 → MainActor 実行順が実イベント順と一致しない。単一シリアルキュー or MainActor 上での明示的順序管理。実装済み（`handlePeerStateChange`/`handleInvitation` を @MainActor に集約）。
+- [x] **`ApprovalQueueView` への直行動線実装**: `endedSection` の「承認へ進みます」文言だけで実際の遷移が無い。sheet 閉じ後にタブ切替 or NavigationLink。ROADMAP の「終了後は相互承認モードへ直結」を満たすために必要。実装済み（`FocusRoomView.proceedToApprovalNotification` → `ContentView` がタブ切替）。
+- [Medium/据え置き] **ホスト昇格 or 明示 abort UI**: ホストの一時 background で全ピアが `.aborted` 遷移 → 全滅（単一障害点）。残ピア最若をホスト昇格、または明示的「ホスト離脱、再開不能」表示。現状は `abortedSection` の明示メッセージのみ。ホスト昇格は据え置き。
+- [Medium/据え置き] **複数サンプル ping-pong + 再送タイムアウト**: 現状は 1 発 RTT/2 で外れ値除去なし、輻輳時の悪サンプルがセッション全体を狂わせる。3-5 サンプル中央値 + 200ms 再送タイムアウト。据え置き。
+- [Medium/据え置き] **`PeerSession` との接続層抽出**: `PeerRoomSession` は `PeerSession` を逐語コピーしている箇所が多い（MCSession 生成・delegate 配線・encoder/decoder）。共通 protocol / helper で集約。据え置き。
 - [Low] `runningSection` の時刻フォーマット（`Int(remain/60)` + `String(format:...)`）を既存 `Formatting.swift` の helper に集約
 - [Low] `FocusRoomView.setupCallbacks` を onAppear inline に（分離不要）
 - [Low] `Participant.id: String`（MCPeerID.displayName）vs 他モデルの `id: UUID` の型混在整理
 - [Low] `onStartScheduled` が host `announceStartIfReady` とゲスト `.start` 受信の両経路から発火。単一経路化 or 2 重発火防止 assert
 - [参考] `p4-selfcheck.swift` は現状 TaskItem/NotificationService 依存でビルド不能（Sonnet 実測）。既存インフラの技術的負債、HourglassStateMachine 回帰防止網が機能していない。Phase 14 スコープ外だが要対処。
+
+---
+
+## Phase 15 — WH 7分類データモデル+概要タイル/フォーカス編集シート（E0+E1）〔Sim〕
+
+企画書「イベント作成シート（2026-07-07 新設）」E0+E1 統合。既存 `AddTaskSheet.swift` の項目連続 Form を 7 分類のタイル＋フォーカス編集画面へ置き換える。連続テキスト行の情報過多を、視覚的操作（タイル・チップ・時刻バー）で解消する。
+
+1. **WHCategory enum**: `what/when/where_/which/who/how/other` の 7 分類。`label` 計算プロパティで日本語ラベル。
+2. **Profile @Model**（which）: `id: UUID / name: String / iconName: String`。会社/個人などの文脈タグ。スキーマ登録に追加。
+3. **PhraseAlias @Model**（辞書。Phase 16/17 と共有）: `id / keyword / whCategory / replacement / isBuiltIn / isEnabled`。Phase 15 ではモデルだけ用意（UI は Phase 17）。
+4. **TaskItem 拡張**: `profile: Profile?`（which）と `participantNames: [String] = []`（who、CNContactPicker 選択のみ、連携なし）を加算的に追加。
+5. **`EventComposerView`（新規、AddTaskSheet 置き換え）**: 
+   - タイトルは常時表示の固定入力欄（what）。
+   - 残り 6 分類（when/where/which/who/how/other）を 2 列グリッドのアイコン付きタイルで表示、プレビュー付き（未設定は淡色）。
+   - タイルタップで該当トピックのフォーカス編集画面へ。フォーカス内は他タイルへの直接ジャンプアイコン列を上部常設。
+   - when は時間帯バー、where はサムネ＋最近使った場所チップ、who はイニシャル丸、which はカテゴリ/プロフィール併記チップ。
+6. **既存呼び出し側の切替**: `TodoListView.quickAdd`（クイック追加は Phase 16 で改修、Phase 15 はまず「詳細を追加」経由）、`DayAgendaView` 空きカードタップ、`CalendarSettingsView` 等の `AddTaskSheet` 呼び出しを `EventComposerView` に差し替え。**旧 `AddTaskSheet.swift` は削除**（1 タイミングで置換、両立させない）。
+
+**受け入れ基準**: タイル 7 枚（タイトル固定 + 6 タイル）が表示される。タップでフォーカス編集に遷移、他タイルへ横移動できる。when で時間帯バー・where でチップ・which でチップが選べる。既存の全 CRUD（新規作成・詳細編集導線）が回帰なしで動く。xcodebuild build 通過。
+
+---
+
+## Phase 16 — 自然文クイック追加パーサ（E2）〔Sim〕
+
+企画書 E2。タイトル欄を「自然文 1 行入力」に置き換え、日時・場所・カテゴリ・所要時間を自動認識してチップ化。ML なし、完全ローカル。
+
+1. **`PhraseParser.swift`（新規、純関数）**: 
+   - ①自前の日時・相対日付の正規表現層（明日/来週/14:00 など）
+   - ②`NLTokenizer` で残りを分かち書き
+   - ③各トークンを `PhraseAlias`（isEnabled）と照合、ヒットしたら `replacement` を元の文に埋め戻して①からパース（再帰は 2 段まで）
+   - ④どれにも当たらない単語はタイトルの残りとして保持（情報を握りつぶさない）
+2. **クイック追加 UI**（`EventComposerView` のクイック追加モード or `TodoListView` の quickAdd 差し替え）:
+   - ①入力フィールド ②自動認識フィールド（パース済みチップ） ③サジェストフィールド（未認識ワードの辞書登録候補、`AppSettings.enableDictionarySuggestions` で ON/OFF）④「詳細を追加」ボタン（パース結果でプリフィルした `EventComposerView` を開く）
+3. **`AppSettings.enableDictionarySuggestions: Bool = true`** 追加。設定画面に ON/OFF トグル。
+4. **オンデバイス LLM 不採用**の判断コメント: `PhraseParser.swift` のヘッダに「iOS26 Foundation Models framework は不採用（対応端末限定を避けるため）」を明記。
+
+**受け入れ基準**: 「明日 14:00 大学図書館でレポート」入力で 日時/場所/タイトル が正しくチップ化。「詳細を追加」でプリフィルされた EventComposerView が開く。認識できない語はタイトル残りに保持。xcodebuild build 通過。
+
+---
+
+## Phase 17 — 辞書管理画面（E3）〔Sim〕
+
+企画書 E3。認識精度の天井を「ユーザーが埋められる」仕組みにする。
+
+1. **`DictionarySettingsView`（新規、`CalendarSettingsView` から遷移）**:
+   - 既定表現（`isBuiltIn=true`）は ON/OFF のみ可能（削除不可）
+   - ユーザー登録分は追加/編集/削除可能
+   - カテゴリ/場所の別名もこの画面から追加（既存 `Category`/`PlaceTag` 名にチップで別名を紐付け、内部的には `PhraseAlias` として保存）
+2. **サジェスト機能の受け口**: Phase 16 のサジェストフィールドでタップした未認識ワードを、この画面の「登録待ち」セクションに一時保存 → 分類選んで確定
+3. **既定表現のシード**: 初回起動時に `PhraseAlias(isBuiltIn=true)` を挿入（例: "ポモ" → "25 分"、"今日" → 相対日付、"大学" → "大学図書館" 等）。シード集は最小限（10-20 件）
+4. **`AppSettings.enableDictionarySuggestions`** の設定 UI もこの画面に配置
+
+**受け入れ基準**: 既定表現の ON/OFF が効く。ユーザー登録分の CRUD が完動。カテゴリ別名を登録すると Phase 16 のパーサが認識する。xcodebuild build 通過。
+
+---
+
+## Phase 18 — 既存タスク編集の直接ジャンプ導線（E4）〔Sim〕
+
+企画書 E4。既存タスクの編集は、概要タイルを介さず 1 トピックへ直行できるようにする。「サクッと直したい編集」と「新規のじっくり整理」を別哲学として扱う。
+
+1. **`TaskDetailView` の再構成**: 
+   - 現状の全フィールド表示専用を、各フィールド（title/when/where/who/which/how/other）の右にペン型アイコンボタンを配置。タップで `EventComposerView` の該当トピックだけをフォーカス画面で開く（他タイルへの横移動は Phase 15 と共通）
+   - 削除ボタンは既存維持
+2. **編集時の recompute**: 金額（how）の編集で `MoneyStats.recompute(for: task)` を呼ぶ（P8 debate-review 繰り越しで「編集時 recompute は将来のタスク編集機能と同時に」と保留していた項目の解消）
+3. **通知の再スケジュール**: when の編集で `NotificationService.reschedule(for: task)` を呼ぶ
+4. **仕分けデッキ・空きカード等の遷移経路の整合**: 全ての「編集」導線を新 API に統一
+
+**受け入れ基準**: TaskDetail から 1 トピックだけを直接開いて編集できる。金額編集で MonthMoneyStat が更新される。when 編集で通知が再スケジュールされる。既存の他フローに回帰なし。xcodebuild build 通過。
 
 ---
 
@@ -356,5 +430,6 @@ Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Criti
 - 5本柱: カレンダー(P0〜2,7〜9)/タイマー(P4)/仕分け(P3)/承認(P5)/リスト(P3) ✅
 - 追加①リスト(P3)・②集中stats(P4+P10)・③Study Hub(P10) ✅
 - お金(P8)、第2弾 W0(P6)/W1(P11)/W2(P12)/W3(P13)/W4(P14) ✅
+- イベント作成シート（2026-07-07 新設）: E0+E1(P15)/E2(P16)/E3(P17)/E4(P18) ✅ Phase 15〜18 として組込済
 - 企画書明示の優先事項: 横断キャプセル最優先検証(P2-1)/W0前倒し(P6)/actualDuration 早期記録(P0+P4) ✅
 - 旧仕様残存の解消: 24hタイムライン(P1)/ピンチ(P0)/pending(P0)/FixedSchedule・Band不在(P0)/チップ式週セル・キャプセル不在(P2)/お金不在(P8)/Morphクロスフェード(P2)/YearViewのDayStat未使用(P9)/天気キャッシュ不在(P7)/4タブプレースホルダ(P3,4,5,10)/仕分けUI不在(P3) ✅

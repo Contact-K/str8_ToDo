@@ -78,7 +78,7 @@ func testRoundtrip() {
     ctx.insert(task2)
 
     // DayStat
-    let stat = DayStat(day: Date(), completedCount: 5, focusSeconds: 3600)
+    let stat = DayStat(day: Date(), completedCount: 5)
     ctx.insert(stat)
 
     // FocusSession (taskID・subjectID 付き)

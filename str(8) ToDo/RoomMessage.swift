@@ -9,8 +9,10 @@
 import Foundation
 
 enum RoomMessage: Codable {
-    /// 参加通知（ホストは自身の入室時、ゲストは接続完了時）
-    case hello(participantID: String, isHost: Bool)
+    /// 参加通知（ホストは自身の入室時、ゲストは接続完了時）。
+    /// isHost フラグは持たない（自己申告でなりすませるため）。host かどうかは受信側が
+    /// 内部状態（`.startHosting()` を呼んだか / `requestJoin` で選んだ peer か）で判定する。
+    case hello(participantID: String)
     /// faceDown 状態変化（自分が伏せた or 起こした）
     case faceDown(participantID: String, isFaceDown: Bool)
     /// クロック同期 ping（ゲストが送る）
@@ -26,17 +28,16 @@ enum RoomMessage: Codable {
 
     // Codable: 各ケースの構造化エンコード/デコード
     enum CodingKeys: String, CodingKey {
-        case type, participantID, isHost, isFaceDown, pingSentAt, hostReplyTime, hostStartAt, roomID
+        case type, participantID, isFaceDown, pingSentAt, hostReplyTime, hostStartAt, roomID
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case .hello(let participantID, let isHost):
+        case .hello(let participantID):
             try container.encode("hello", forKey: .type)
             try container.encode(participantID, forKey: .participantID)
-            try container.encode(isHost, forKey: .isHost)
         case .faceDown(let participantID, let isFaceDown):
             try container.encode("faceDown", forKey: .type)
             try container.encode(participantID, forKey: .participantID)
@@ -67,8 +68,7 @@ enum RoomMessage: Codable {
         switch type {
         case "hello":
             let participantID = try container.decode(String.self, forKey: .participantID)
-            let isHost = try container.decode(Bool.self, forKey: .isHost)
-            self = .hello(participantID: participantID, isHost: isHost)
+            self = .hello(participantID: participantID)
         case "faceDown":
             let participantID = try container.decode(String.self, forKey: .participantID)
             let isFaceDown = try container.decode(Bool.self, forKey: .isFaceDown)

@@ -93,4 +93,32 @@ enum NotificationService {
     static func cancelWeeklyReview() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [weeklyReviewIdentifier])
     }
+
+    /// 週次締め通知がタップされたことを知らせる通知名。ContentView が受けて showWeekReview を立てる。
+    static let weeklyReviewTappedNotification = Notification.Name("weeklyReviewTapped")
+
+    /// コールドスタート対策：delegate が起動直後にタップを受けた場合、ContentView の
+    /// onReceive がまだ購読していない可能性がある。true の間は ContentView.onAppear が拾って消費する。
+    static var pendingWeeklyReviewTap: Bool = false
+
+    /// UNUserNotificationCenter.current().delegate に設定するインスタンス（App 起動時に一度だけ）。
+    static let delegate = NotificationDelegate()
+}
+
+/// UNUserNotificationCenterDelegate 実装。週次締め通知タップで NotificationService.weeklyReviewTappedNotification を発行する。
+/// enum の NotificationService は NSObject を継承できないため、別クラスとして持つ（最小実装）。
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.notification.request.identifier == NotificationService.weeklyReviewIdentifier {
+            // コールドスタートで ContentView の onReceive がまだ購読していない場合の取りこぼし対策
+            NotificationService.pendingWeeklyReviewTap = true
+            NotificationCenter.default.post(name: NotificationService.weeklyReviewTappedNotification, object: nil)
+        }
+        completionHandler()
+    }
+
+    // フォアグラウンド中も通知バナーを表示する（既定では抑制されるため）。
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
 }

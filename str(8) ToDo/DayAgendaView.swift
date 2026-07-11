@@ -21,7 +21,6 @@ struct DayAgendaView: View {
     @Query private var allTasks: [TaskItem]
     @State private var expandedIDs: Set<UUID> = []
     @State private var travelData: [UUID: TimeInterval] = [:]
-    /// 日+位置単位の SunCalc キャッシュ（毎分の再計算を避ける）。key = "startOfDay-lat-lon"
     @State private var sunCache: (key: String, times: (sunrise: Date, sunset: Date)?)? = nil
 
     private let cal = Calendar.current
@@ -39,7 +38,8 @@ struct DayAgendaView: View {
                 return row
             } : rawRows
 
-            let gapSuggestions: [Date: [SlotSuggestion]] = isToday ? {
+            // rows の gap を index 対応で受ける（同時刻 gap の後勝ち上書き防止）
+            let gapSuggestions: [[SlotSuggestion]] = isToday ? {
                 let candidates = allTasks
                     .filter { $0.startDate == nil && $0.status == .active && ($0.phase == .now || $0.phase == .today) && !(($0.snoozeUntil ?? .distantPast) > now) }
                     .map { FreeSlotSuggester.Candidate(
@@ -51,12 +51,28 @@ struct DayAgendaView: View {
                     if case .gap(let s, let d) = $0 { return (s, d) } else { return nil }
                 }
                 return FreeSlotSuggester.suggest(gaps: gaps, candidates: candidates)
-            }() : [:]
+            }() : []
+
+            // chip 描画時の O(n*k) 走査を O(k) に。allTasks は tasksByID から引く。
+            let tasksByID: [UUID: TaskItem] = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
+
+            // row index → gap index の対応。gap を上から数えて何番目か。
+            let gapIndexByRow: [Int: Int] = {
+                var map: [Int: Int] = [:]
+                var g = 0
+                for (i, row) in rows.enumerated() {
+                    if case .gap = row {
+                        map[i] = g
+                        g += 1
+                    }
+                }
+                return map
+            }()
 
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(rows) { row in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { (index, row) in
                             switch row {
                             case .bandHeading(let band):
                                 bandHeadingRow(band)
@@ -77,7 +93,8 @@ struct DayAgendaView: View {
                                     }
 
                             case .gap(let start, let duration):
-                                gapRow(start: start, duration: duration, suggestions: gapSuggestions[start] ?? [])
+                                let sug = (gapIndexByRow[index].flatMap { gapSuggestions.indices.contains($0) ? gapSuggestions[$0] : nil }) ?? []
+                                gapRow(start: start, duration: duration, suggestions: sug, tasksByID: tasksByID)
                                     .id(row.id)
 
                             case .nowSeparator:
@@ -227,7 +244,7 @@ struct DayAgendaView: View {
         }
     }
 
-    private func gapRow(start: Date, duration: TimeInterval, suggestions: [SlotSuggestion]) -> some View {
+    private func gapRow(start: Date, duration: TimeInterval, suggestions: [SlotSuggestion], tasksByID: [UUID: TaskItem]) -> some View {
         HStack(spacing: 12) {
             // 静的情報（タップ対応、単一アクセシビリティ要素）
             VStack(alignment: .leading, spacing: 8) {
@@ -257,7 +274,7 @@ struct DayAgendaView: View {
             if !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(suggestions) { suggestion in
-                        if let task = allTasks.first(where: { $0.id == suggestion.taskID }) {
+                        if let task = tasksByID[suggestion.taskID] {
                             Button {
                                 task.scheduleAt(start: suggestion.start, duration: suggestion.duration, context: context)
                             } label: {
@@ -422,6 +439,7 @@ struct DayAgendaView: View {
             return departure >= now ? (task, departure, eta) : nil
         }.sorted { $0.departure < $1.departure }.first
     }
+
 }
 
 #Preview {

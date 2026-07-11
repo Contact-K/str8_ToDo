@@ -24,30 +24,33 @@ enum WidgetSnapshotService {
             // fetch 失敗時は write をスキップし、既存の良いキャッシュを残す
             return
         }
-        // ponytail: アプリ本体の日アジェンダ（DayAgendaView.dayTasks / nextFutureTask）と同じ同日 startDate 判定に合わせる。
-        // RRULE の当日インスタンス展開は日ビュー自体が未対応の全体課題で、ここだけ occurs(on:) 展開するとアプリと乖離するため意図的に不採用。
+        // 当日の RRULE インスタンスも展開（DayAgendaView と同一ルール）
+        let cal = Calendar.current
         let upcoming = allTasks
-            .filter { task in
-                // status == .active
-                guard task.status == .active else { return false }
-                // startDate != nil && !isAllDay
-                guard let startDate = task.startDate, !task.isAllDay else { return false }
-                // same day as today
-                guard Calendar.current.isDate(startDate, inSameDayAs: today) else { return false }
-                // endDate > now
-                guard let endDate = task.endDate, endDate > now else { return false }
-                return true
-            }
-            .sorted { ($0.startDate ?? now) < ($1.startDate ?? now) }
-            .map { task in
-                WidgetSnapshot.Card(
+            .compactMap { task -> WidgetSnapshot.Card? in
+                guard task.status == .active, !task.isAllDay else { return nil }
+                guard let start = task.startDate else { return nil }
+                guard task.occurs(on: today, calendar: cal) else { return nil }
+                // 反復タスクは today の同時刻に投影
+                let projectedStart = cal.date(
+                    bySettingHour: cal.component(.hour, from: start),
+                    minute: cal.component(.minute, from: start),
+                    second: 0,
+                    of: today
+                ) ?? start
+                let projectedEnd = projectedStart.addingTimeInterval(task.duration)
+                guard projectedEnd > now else { return nil }
+                return WidgetSnapshot.Card(
                     title: task.title,
-                    start: task.startDate ?? now,
-                    end: task.endDate ?? now,
+                    start: projectedStart,
+                    end: projectedEnd,
                     colorHex: task.colorHex ?? task.category?.colorHex,
                     isTimePinned: task.isTimePinned
                 )
             }
+            .sorted { $0.start < $1.start }
+            .prefix(20)   // Widget メモリ制約下のデコード上限
+            .map { $0 }
 
         // 3. bands: BandAssignment.resolveTemplate(for: today, context: context)?.orderedBands ?? []
         let bands: [WidgetSnapshot.BandInfo] = (BandAssignment.resolveTemplate(for: today, context: context)?.orderedBands ?? [])

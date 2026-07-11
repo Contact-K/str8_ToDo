@@ -47,6 +47,26 @@ enum MoneyStats {
         }
     }
 
+    /// タスク単位で影響月を全て再計算する。反復タスクは開始月〜今から12ヶ月先まで。単発は 1 ヶ月。
+    /// ponytail: 反復タスクの amount 変更時に翌月以降が更新されない問題（P8 debate-review 繰り越し）の解消。
+    /// EventComposerView が UNTIL を書かないため無期限反復として扱う。12 ヶ月先まで再計算し、それ以降は必要に応じ月ビュー閲覧時の自己修復に任せる。
+    static func recompute(for task: TaskItem, context: ModelContext) {
+        guard let start = task.startDate ?? (task.rrule != nil ? .now : nil) else {
+            // 浮遊タスクは今月のみ（既存挙動）
+            recompute(month: .now, context: context)
+            return
+        }
+        let cal = Calendar.current
+        let cap = cal.date(byAdding: .month, value: 12, to: .now) ?? .now
+        var cursor = cal.dateInterval(of: .month, for: start)?.start ?? cal.startOfDay(for: start)
+        let endMonth = cal.dateInterval(of: .month, for: cap)?.end ?? cap
+        while cursor < endMonth {
+            recompute(month: cursor, context: context)
+            guard let next = cal.date(byAdding: .month, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+    }
+
     /// 指定月の支出を再計算し、MonthMoneyStat に upsert する。
     /// - Parameters:
     ///   - month: startOfMonth のその月

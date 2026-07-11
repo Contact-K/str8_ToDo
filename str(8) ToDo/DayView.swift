@@ -15,7 +15,7 @@ struct DayView: View {
 
     @Environment(\.modelContext) private var context
     @Query private var weatherCache: [WeatherCache]
-    @State private var showAddTaskSheet = false
+    @State private var showComposer = false
     @State private var gapPrefill: GapPrefill?
 
     var body: some View {
@@ -93,7 +93,7 @@ struct DayView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Button(action: { showAddTaskSheet = true }) {
+                    Button(action: { showComposer = true }) {
                         Image(systemName: "plus")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
@@ -106,13 +106,13 @@ struct DayView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddTaskSheet) {
-            AddTaskSheet(defaultDate: date)
+        .sheet(isPresented: $showComposer) {
+            EventComposerView(initialStart: date)
         }
         .sheet(item: $gapPrefill) { prefill in
-            AddTaskSheet(
-                defaultDate: prefill.start,
-                prefillDuration: prefill.duration
+            EventComposerView(
+                initialStart: prefill.start,
+                initialDuration: prefill.duration
             )
         }
     }

@@ -9,6 +9,10 @@
 import SwiftUI
 import SwiftData
 
+enum AppTab: Hashable {
+    case calendar, timer, list, approval, studyHub
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [TaskItem]
@@ -16,6 +20,7 @@ struct ContentView: View {
     @AppStorage("lastSortPromptDay") private var lastSortPromptDay = 0
     @State private var showMorningDeck = false
     @State private var showWeekReview = false
+    @State private var selectedTab: AppTab = .calendar
 
     /// ponytail: stats 側の控えめ表示+導線はこのタブバッジで満たす。
     private var pendingCount: Int {
@@ -23,22 +28,29 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView {
-            Tab("カレンダー", systemImage: "calendar") {
+        TabView(selection: $selectedTab) {
+            Tab("カレンダー", systemImage: "calendar", value: .calendar) {
                 CalendarRootView()
             }
-            Tab("タイマー", systemImage: "hourglass") {
+            Tab("タイマー", systemImage: "hourglass", value: .timer) {
                 TimerView()
             }
-            Tab("リスト", systemImage: "checklist") {
+            Tab("リスト", systemImage: "checklist", value: .list) {
                 TodoListView()
             }
-            Tab("承認", systemImage: "checkmark.seal") {
+            Tab("承認", systemImage: "checkmark.seal", value: .approval) {
                 ApprovalQueueView(showWeekReview: $showWeekReview)
             }
             .badge(pendingCount)
-            Tab("Study Hub", systemImage: "books.vertical") {
+            Tab("Study Hub", systemImage: "books.vertical", value: .studyHub) {
                 StudyHubView()
+            }
+        }
+        .onAppear {
+            // コールドスタート競合対策：delegate が起動時にタップを検出済みなら拾う（H6）
+            if NotificationService.pendingWeeklyReviewTap {
+                showWeekReview = true
+                NotificationService.pendingWeeklyReviewTap = false
             }
         }
         .onChange(of: scenePhase) {
@@ -53,6 +65,14 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showWeekReview) {
             WeekReviewView()
+        }
+        // 週次締め通知タップ→WeekReviewView 自動遷移（NotificationDelegate 経由）
+        .onReceive(NotificationCenter.default.publisher(for: NotificationService.weeklyReviewTappedNotification)) { _ in
+            showWeekReview = true
+        }
+        // 集中ルーム終了「承認へ進む」→ 承認タブへ直行（P14 debate-review #11）
+        .onReceive(NotificationCenter.default.publisher(for: FocusRoomView.proceedToApprovalNotification)) { _ in
+            selectedTab = .approval
         }
     }
 }

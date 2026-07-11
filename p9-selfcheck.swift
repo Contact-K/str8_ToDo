@@ -78,35 +78,6 @@ func testRebuildDayStats_ApprovedCount() {
     print("testRebuildDayStats_ApprovedCount: passed（approved 件数計上）")
 }
 
-// MARK: - Test 2: rebuildDayStats の FocusSession focusSeconds 計上
-
-@MainActor
-func testRebuildDayStats_FocusSeconds() {
-    let (container, context) = makeContext()
-    _ = container
-
-    let d1 = day(2026, 7, 10)
-    let d1Start = d1.addingTimeInterval(10 * 3600)  // 10:00 → 20:00
-    let d1End = d1Start.addingTimeInterval(60 * 60)  // 1時間
-
-    // 7/10 に FocusSession 60分
-    context.insert(FocusSession(start: d1Start, end: d1End))
-
-    // 7/10 に FocusSession 30分
-    let d1End2 = d1Start.addingTimeInterval(30 * 60)
-    context.insert(FocusSession(start: d1Start, end: d1End2))
-
-    try! context.save()
-
-    DayStat.rebuildDayStats(context: context)
-
-    let stat = fetchDayStat(day: d1, context: context)
-    let expectedSeconds = 60 * 60 + 30 * 60  // 90分
-    assert(stat?.focusSeconds == expectedSeconds, "7/10 の focusSeconds 期待\(expectedSeconds) 実際\(stat?.focusSeconds ?? -1)")
-
-    print("testRebuildDayStats_FocusSeconds: passed（focusSeconds 計上）")
-}
-
 // MARK: - Test 3: rebuildDayStats の冪等性（二重実行で二重カウントなし）
 
 @MainActor
@@ -135,30 +106,6 @@ func testRebuildDayStats_Idempotent() {
     assert(stat2?.completedCount == 2, "2回目 期待2（二重カウントなし）実際\(stat2?.completedCount ?? -1)")
 
     print("testRebuildDayStats_Idempotent: passed（冪等性確認）")
-}
-
-// MARK: - Test 4: focus のみの日は completedCount == 0 の DayStat 行になる（消費側でストリークに混ぜてはいけない危険箇所）
-
-@MainActor
-func testRebuildDayStats_FocusOnlyDay() {
-    let (container, context) = makeContext()
-    _ = container
-
-    let d1 = day(2026, 7, 10)
-    let d1Start = d1.addingTimeInterval(10 * 3600)
-
-    // approved タスクなし、FocusSession のみ
-    context.insert(FocusSession(start: d1Start, end: d1Start.addingTimeInterval(60 * 60)))
-    try! context.save()
-
-    DayStat.rebuildDayStats(context: context)
-
-    let stat = fetchDayStat(day: d1, context: context)
-    assert(stat != nil, "focus のみの日にも DayStat 行が作られるべき")
-    assert(stat?.completedCount == 0, "focus のみの日は completedCount == 0（承認ゼロ）実際\(stat?.completedCount ?? -1)")
-    assert(stat?.focusSeconds == 3600, "focus のみの日の focusSeconds 期待3600 実際\(stat?.focusSeconds ?? -1)")
-
-    print("testRebuildDayStats_FocusOnlyDay: passed（focus のみ→completedCount 0 行）")
 }
 
 // MARK: - Test 5: resolveTemplate の date 優先（date > weekday）
@@ -198,9 +145,7 @@ func testResolveTemplate_DatePriority() {
 struct P9SelfCheck {
     static func main() {
         testRebuildDayStats_ApprovedCount()
-        testRebuildDayStats_FocusSeconds()
         testRebuildDayStats_Idempotent()
-        testRebuildDayStats_FocusOnlyDay()
         testResolveTemplate_DatePriority()
 
         print("p9-selfcheck: all passed")

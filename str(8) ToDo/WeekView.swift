@@ -32,11 +32,12 @@ struct WeekView: View {
     @ScaledMetric private var headerHeight: CGFloat = 60
     @ScaledMetric private var allDayRowHeight: CGFloat = 26
 
-    private let weekCalendar: Calendar = {
+    /// WeekMath と週境界を統一（showSevenDays に連動。ハードコードしない）。
+    private var weekCalendar: Calendar {
         var c = Calendar.current
-        c.firstWeekday = 1
+        c.firstWeekday = WeekMath.firstWeekday(showSevenDays: showSevenDays)
         return c
-    }()
+    }
 
     private let gridLine = Color(.systemGray4)
 

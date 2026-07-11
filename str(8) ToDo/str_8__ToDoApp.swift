@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import UserNotifications
 
 @main
 struct str_8__ToDoApp: App {
@@ -28,9 +29,10 @@ struct str_8__ToDoApp: App {
                 BandTemplate.self,
                 BandAssignment.self,
                 FocusSession.self,
-                WeekReview.self,
                 Subject.self,
-                WeatherCache.self
+                WeatherCache.self,
+                Profile.self,
+                PhraseAlias.self
             ])
             let configuration = ModelConfiguration(
                 schema: schema,
@@ -39,12 +41,18 @@ struct str_8__ToDoApp: App {
             )
             modelContainer = try ModelContainer(for: schema, configurations: configuration)
 
+            // UserDefaults に既定値を登録（?? フォールバックを個々の読み出し側に書かない）
+            AppSettingsKey.registerDefaults()
+
+            // 通知タップ→WeekReviewView 遷移のための delegate（週次締め通知の identifier だけ拾う）
+            UNUserNotificationCenter.current().delegate = NotificationService.delegate
+
             // 週次締めリマインダーを起動時に予約（enableNotifications OFF なら解除）
             let d = UserDefaults.standard
-            let enabled = (d.object(forKey: AppSettingsKey.enableNotifications) as? Bool) ?? AppSettingsKey.enableNotificationsDefault
+            let enabled = d.bool(forKey: AppSettingsKey.enableNotifications)
             if enabled {
-                let w = (d.object(forKey: AppSettingsKey.weekReviewWeekday) as? Int) ?? AppSettingsKey.weekReviewWeekdayDefault
-                let h = (d.object(forKey: AppSettingsKey.weekReviewHour) as? Int) ?? AppSettingsKey.weekReviewHourDefault
+                let w = d.integer(forKey: AppSettingsKey.weekReviewWeekday)
+                let h = d.integer(forKey: AppSettingsKey.weekReviewHour)
                 NotificationService.scheduleWeeklyReview(weekday: w, hour: h)
             } else {
                 NotificationService.cancelWeeklyReview()
@@ -72,6 +80,7 @@ private struct RootView: View {
         ContentView()
             .task {
                 BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext)
+                seedPhraseAliasesIfNeeded(modelContainer.mainContext)
                 // seed 後の初回 refresh
                 await WidgetSnapshotService.refresh(modelContainer.mainContext)
                 // 起動時に通知権限を要求
@@ -96,4 +105,34 @@ private struct RootView: View {
                 WidgetSnapshotService.refresh(modelContainer.mainContext)
             }
     }
+}
+
+/// 辞書の既定表現シード（企画書 E3 / P17）。初回起動時のみ、PhraseAlias が1件も無ければ挿入する。
+@MainActor
+private func seedPhraseAliasesIfNeeded(_ context: ModelContext) {
+    var descriptor = FetchDescriptor<PhraseAlias>()
+    descriptor.fetchLimit = 1
+    guard ((try? context.fetch(descriptor)) ?? []).isEmpty else { return }
+
+    let seeds: [(keyword: String, category: WHCategory, replacement: String)] = [
+        ("ポモ", .which, "25 分"),
+        ("今日", .when, "今日 09:00"),
+        ("明日", .when, "明日 09:00"),
+        ("朝", .when, "09:00"),
+        ("昼", .when, "12:00"),
+        ("夕方", .when, "17:00"),
+        ("夜", .when, "20:00"),
+        ("大学", .where_, "大学図書館"),
+        ("会社", .where_, "オフィス"),
+        ("買い物", .where_, "スーパー"),
+        ("会議", .which, "ミーティング"),
+        ("レポート", .what, "レポート作成"),
+        ("運動", .which, "運動"),
+        ("散歩", .what, "散歩 30 分"),
+        ("打ち合わせ", .what, "打ち合わせ 60 分")
+    ]
+    for seed in seeds {
+        context.insert(PhraseAlias(keyword: seed.keyword, whCategory: seed.category, replacement: seed.replacement, isBuiltIn: true))
+    }
+    try? context.save()
 }

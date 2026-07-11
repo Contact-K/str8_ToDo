@@ -7,10 +7,13 @@
 //
 
 import Foundation
+import os
 
 enum AppGroup {
     static let identifier = "group.str8.todo.str8"
 }
+
+private let widgetLog = Logger(subsystem: "str8.todo.str8", category: "widget-snapshot")
 
 /// ウィジェット表示用スナップショット。アプリが算出して App Group に書き出す。
 struct WidgetSnapshot: Codable {
@@ -68,26 +71,41 @@ enum WidgetSnapshotStore {
     }
 
     static func write(_ snapshot: WidgetSnapshot) {
-        guard let url = url() else { return }
+        guard var url = url() else {
+            widgetLog.error("write: App Group container URL not available")
+            return
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
 
         do {
             let data = try encoder.encode(snapshot)
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            // バックアップ除外（NSFileProtection と合わせて平文個人情報の露出を最小化）
+            var resourceValues = URLResourceValues()
+            resourceValues.isExcludedFromBackup = true
+            try? url.setResourceValues(resourceValues)
         } catch {
-            // 失敗時は握りつぶす（ウィジェット・アプリ両方を落とさない）
+            widgetLog.error("write failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     static func read() -> WidgetSnapshot? {
-        guard let url = url() else { return nil }
-        guard let data = try? Data(contentsOf: url) else { return nil }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        return try? decoder.decode(WidgetSnapshot.self, from: data)
+        guard let url = url() else {
+            widgetLog.error("read: App Group container URL not available")
+            return nil
+        }
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(WidgetSnapshot.self, from: data)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil   // 初回起動は正常
+        } catch {
+            widgetLog.error("read failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 }

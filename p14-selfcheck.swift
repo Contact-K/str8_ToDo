@@ -77,11 +77,11 @@ struct P14SelfCheck {
             assert(error < 1.0, "sync error should be < 1 sec, got \(error)")
         }
 
-        // Test 7: RoomMessage の JSON ラウンドトリップ
+        // Test 7: RoomMessage の JSON ラウンドトリップ（hello は isHost フラグ廃止済み）
         do {
             let testRoomID = UUID()
             let msgs: [RoomMessage] = [
-                .hello(participantID: "abc", isHost: true),
+                .hello(participantID: "abc"),
                 .faceDown(participantID: "def", isFaceDown: true),
                 .clockPing(pingSentAt: 123.456),
                 .clockPong(pingSentAt: 123.456, hostReplyTime: 789.012),
@@ -95,7 +95,7 @@ struct P14SelfCheck {
                 let back = try! dec.decode(RoomMessage.self, from: data)
                 // Equatable が無いので switch でパターンマッチして比較
                 switch (m, back) {
-                case (.hello(let a, let b), .hello(let c, let d)): assert(a == c && b == d)
+                case (.hello(let a), .hello(let b)): assert(a == b)
                 case (.faceDown(let a, let b), .faceDown(let c, let d)): assert(a == c && b == d)
                 case (.clockPing(let a), .clockPing(let b)): assert(a == b)
                 case (.clockPong(let a, let b), .clockPong(let c, let d)): assert(a == c && b == d)
@@ -105,6 +105,63 @@ struct P14SelfCheck {
                 default: assert(false, "roundtrip mismatch")
                 }
             }
+        }
+
+        // Test 8（統合テスト）: FocusRoom.shouldAddParticipant — PeerRoomSession.handle(.hello) の
+        // 重複メッセージ処理そのものが使う判定。同じ id の hello が2回来ても2件目は弾かれる。
+        do {
+            var existing: [Participant] = [Participant(id: "a", isFaceDown: false, isHost: true)]
+            assert(FocusRoom.shouldAddParticipant(existing: existing, id: "b"), "new id -> should add")
+            assert(!FocusRoom.shouldAddParticipant(existing: existing, id: "a"), "duplicate hello -> reject")
+            // 実際に1回だけ追加されるシミュレーション
+            if FocusRoom.shouldAddParticipant(existing: existing, id: "b") {
+                existing.append(Participant(id: "b", isFaceDown: false, isHost: false))
+            }
+            if FocusRoom.shouldAddParticipant(existing: existing, id: "b") {
+                existing.append(Participant(id: "b", isFaceDown: false, isHost: false))
+            }
+            assert(existing.filter { $0.id == "b" }.count == 1, "duplicate hello must not double-insert")
+        }
+
+        // Test 9（統合テスト）: FocusRoom.tryTransitionToEnded — PeerRoomSession.markEnded()/end() の
+        // 再入ガードそのもの。onEnded に相当するコールバックが2回目は呼ばれないことを検証。
+        do {
+            var state: RoomState = .running
+            var onEndedCallCount = 0
+            func markEnded() {
+                guard FocusRoom.tryTransitionToEnded(&state) else { return }
+                onEndedCallCount += 1
+            }
+            markEnded()
+            markEnded()  // 2回目発火（例: .end の重複受信 or 呼び忘れ経路からの再呼び出し）
+            assert(state == .ended, "state should be .ended")
+            assert(onEndedCallCount == 1, "onEnded must fire exactly once, got \(onEndedCallCount)")
+        }
+
+        // Test 10（統合テスト）: FocusRoom.markFinishedOnce — FocusRoomView.finishAndSave が使う
+        // ガードそのもの。onEnded が2回発火しても FocusSession の保存(相当処理)は1回だけ実行される。
+        do {
+            var hasFinished = false
+            var saveCount = 0
+            func finishAndSave() {
+                guard FocusRoom.markFinishedOnce(&hasFinished) else { return }
+                saveCount += 1  // FocusSession.record 相当（実際の保存は SwiftData 依存のため selfcheck 対象外）
+            }
+            finishAndSave()  // 1回目: onStartScheduled の Timer 満了
+            finishAndSave()  // 2回目: onEnded からもほぼ同時に発火（1Hz self-report と .end broadcast の競合）
+            assert(saveCount == 1, "FocusSession must be saved exactly once, got \(saveCount)")
+        }
+
+        // Test 11（統合テスト）: FocusRoom.isRateLimited — PeerRoomSession.handle の .hello/.leave
+        // 受信レート制限そのもの。5秒窓で3回まで許容、4回目は拒否。窓を過ぎれば再度許容される。
+        do {
+            var timestamps: [TimeInterval] = []
+            assert(!FocusRoom.isRateLimited(&timestamps, now: 0.0, limit: 3, window: 5), "1st within window -> allowed")
+            assert(!FocusRoom.isRateLimited(&timestamps, now: 0.5, limit: 3, window: 5), "2nd within window -> allowed")
+            assert(!FocusRoom.isRateLimited(&timestamps, now: 1.0, limit: 3, window: 5), "3rd within window -> allowed")
+            assert(FocusRoom.isRateLimited(&timestamps, now: 1.2, limit: 3, window: 5), "4th within window -> rejected")
+            // 5秒経過後は古いタイムスタンプが剪定されて再度許容される
+            assert(!FocusRoom.isRateLimited(&timestamps, now: 10.0, limit: 3, window: 5), "after window elapses -> allowed again")
         }
 
         print("P14 self-check: ALL PASS")

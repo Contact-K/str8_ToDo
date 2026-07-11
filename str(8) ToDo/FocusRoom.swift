@@ -66,4 +66,36 @@ enum FocusRoom {
     static func recommendedHostStartAt(hostNow: TimeInterval, delaySec: TimeInterval = 3) -> TimeInterval {
         hostNow + delaySec
     }
+
+    // MARK: - PeerRoomSession が使う純ロジック（p14-selfcheck で検証できるよう分離）
+
+    /// `.hello` の重複メッセージ処理：既に参加済みの id なら追加しない。
+    static func shouldAddParticipant(existing: [Participant], id: String) -> Bool {
+        !existing.contains(where: { $0.id == id })
+    }
+
+    /// 終了状態への再入防止ガード。既に `.ended` なら false（呼び出し側は何もしない）、
+    /// まだなら `.ended` に進めて true を返す。`markEnded`/`end()` の両方がこれを使う。
+    static func tryTransitionToEnded(_ state: inout RoomState) -> Bool {
+        guard state != .ended else { return false }
+        state = .ended
+        return true
+    }
+
+    /// 「一度だけ実行」ガード。`onEnded` が二重発火しても FocusSession の保存が1回に
+    /// とどまることを保証する（FocusRoomView.finishAndSave が使う）。
+    static func markFinishedOnce(_ hasFinished: inout Bool) -> Bool {
+        guard !hasFinished else { return false }
+        hasFinished = true
+        return true
+    }
+
+    /// 受信レート制限：window 秒内に limit 回を超えたメッセージは拒否する（`.hello` / `.leave` の連投対策）。
+    /// timestamps は呼び出し側が保持する直近受信時刻のリスト。古いものは呼び出しごとに剪定する。
+    static func isRateLimited(_ timestamps: inout [TimeInterval], now: TimeInterval, limit: Int = 3, window: TimeInterval = 5) -> Bool {
+        timestamps.removeAll { now - $0 > window }
+        if timestamps.count >= limit { return true }
+        timestamps.append(now)
+        return false
+    }
 }

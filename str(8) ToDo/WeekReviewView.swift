@@ -3,32 +3,41 @@
 //  str8ToDo
 //
 //  週次締めの儀式（Phase 13）。3 セクション: 確定キュー一掃 / 週報 / 来週プレビュー。
-//  chop で締めて WeekReview を1件保存。静止画エクスポート付き。読み取りは WeekReportSource 経由。
+//  WeekReview モデルは廃止（閲覧 UI なし＋書き込み専用は不要というオーナー判断、2026-07-11）。
+//  「締める」は都度計算した週報を確認して閉じるだけの操作で、永続化はしない。
+//  読み取りは WeekReportSource 経由。
 //
 
 import SwiftUI
 import SwiftData
-import os.log
 
 struct WeekReviewView: View {
     // MARK: - Inits and State
     /// 対象週内の任意の日（既定は今日）。この日を含む週の月曜〜次週月曜を対象とする。
-    var referenceDate: Date = .now
+    /// sheet 表示中に日付境界を跨いでも週が切り替わらないよう、init 時に @State へ固定する。
+    @State private var referenceDate: Date
     var onClose: (() -> Void)? = nil
+
+    init(initialReferenceDate: Date = .now, onClose: (() -> Void)? = nil) {
+        _referenceDate = State(initialValue: initialReferenceDate)
+        self.onClose = onClose
+    }
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var isShareSheetPresented = false
     @State private var shareImage: UIImage? = nil
-    @State private var isSaving = false
     @State private var fetchError = false
-    @State private var saveFailed = false
-    @State private var saveErrorMessage = ""
+    @State private var exportFailed = false
+    @State private var cachedReport: WeekReportSource.WeekReport? = nil
 
-    private var range: Range<Date> { WeekMath.weekRange(of: referenceDate) }
+    /// WeekView と週境界（firstWeekday）を統一する（WeekMath 参照、ハードコードしない）。
+    private var firstWeekday: Int { WeekMath.firstWeekday(showSevenDays: showSevenDays) }
+    private var range: Range<Date> { WeekMath.weekRange(of: referenceDate, firstWeekday: firstWeekday) }
     private var nextRange: Range<Date> {
-        let nextStart = Calendar.current.date(byAdding: .day, value: 7, to: range.lowerBound)!
-        return nextStart ..< Calendar.current.date(byAdding: .day, value: 7, to: nextStart)!
+        let nextDate = Calendar.current.date(byAdding: .day, value: 7, to: referenceDate) ?? referenceDate
+        return WeekMath.weekRange(of: nextDate, firstWeekday: firstWeekday)
     }
 
     var body: some View {
@@ -51,15 +60,20 @@ struct WeekReviewView: View {
                     Button(action: commitAndClose) {
                         Label("締める", systemImage: "checkmark.circle.fill")
                     }
-                    .disabled(isSaving || fetchError)
+                    .disabled(fetchError)
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .secondaryAction) {
                     Button(action: exportImage) {
                         Image(systemName: "square.and.arrow.up")
                     }
                 }
             }
+            .task(id: referenceDate) {
+                cachedReport = WeekReportSource.load(in: range, context: context)
+            }
             .sheet(isPresented: $isShareSheetPresented) {
+                // ponytail: ShareLink(item:) は URL/String のみ対応（このSDKに UIImage 向けの直接オーバーロードなし）。
+                // Data/URL 化するには一時ファイル書き出しが必要で ShareSheet より複雑になるため、UIActivityViewController のままにする。
                 if let img = shareImage {
                     ShareSheet(items: [img])
                 }
@@ -69,11 +83,10 @@ struct WeekReviewView: View {
             } message: {
                 Text("データ取得に失敗しました。もう一度お試しください。")
             }
-            .alert("エラー", isPresented: $saveFailed) {
-                Button("リトライ") { saveFailed = false; commitAndClose() }
-                Button("閉じる") { saveFailed = false; dismiss(); onClose?() }
+            .alert("エラー", isPresented: $exportFailed) {
+                Button("OK") { exportFailed = false }
             } message: {
-                Text("保存に失敗しました：\(saveErrorMessage)")
+                Text("画像の生成に失敗しました")
             }
         }
     }
@@ -92,15 +105,17 @@ struct WeekReviewView: View {
 
     // MARK: 週報
     private var reportSection: some View {
-        let focus = WeekReportSource.focusTotalSec(in: range, context: context)
-        let money = WeekReportSource.moneyTotal(in: range, context: context)
-        let done = WeekReportSource.doneCount(in: range, context: context)
-        return VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("週報").font(.headline)
-            HStack {
-                statTile(label: "集中", value: formatDuration(focus))
-                statTile(label: "完了", value: "\(done)")
-                statTile(label: "収支", value: formatMoney(money))
+            if let report = cachedReport {
+                HStack {
+                    statTile(label: "集中", value: formatDuration(report.focusTotalSec))
+                    statTile(label: "完了", value: "\(report.approvedCount)")
+                    statTile(label: "収支", value: formatMoney(report.moneyTotal))
+                }
+            } else {
+                // .task(id: referenceDate) が読み込むまでの初回描画用（M3）
+                ProgressView("読み込み中…")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,46 +152,17 @@ struct WeekReviewView: View {
         .cornerRadius(8)
     }
 
-    // MARK: 締め（chop or ボタン）
+    // MARK: 締め（確認して閉じるだけ。WeekReview モデル廃止のため永続化はしない）
     private func commitAndClose() {
-        guard !isSaving else { return }
-        isSaving = true
-
-        // fetch 失敗時の保護（修正3）
+        // fetch 失敗時の保護：データが読めない状態のまま締めない
         do {
             _ = try context.fetch(FetchDescriptor<TaskItem>())
         } catch {
             fetchError = true
-            isSaving = false
             return
         }
-
-        let focus = WeekReportSource.focusTotalSec(in: range, context: context)
-        let money = WeekReportSource.moneyTotal(in: range, context: context)
-        let done = WeekReportSource.doneCount(in: range, context: context)
-
-        // upsert パターン：既存の同 weekStart レコードを fetch し、あれば値を上書き、無ければ insert（修正1b）
-        let descriptor = FetchDescriptor<WeekReview>(predicate: #Predicate { $0.weekStart == range.lowerBound })
-        do {
-            if let existing = try context.fetch(descriptor).first {
-                existing.closedAt = .now
-                existing.focusTotalSec = focus
-                existing.moneyTotal = money
-                existing.doneCount = done
-            } else {
-                let review = WeekReview(weekStart: range.lowerBound, closedAt: .now, focusTotalSec: focus, moneyTotal: money, doneCount: done)
-                context.insert(review)
-            }
-            try context.save()
-            isSaving = false
-            dismiss()
-            onClose?()
-        } catch {
-            os_log("WeekReview save failed: %@", log: .default, type: .error, error.localizedDescription)
-            saveErrorMessage = error.localizedDescription
-            saveFailed = true
-            isSaving = false
-        }
+        dismiss()
+        onClose?()
     }
 
     // MARK: 静止画エクスポート
@@ -184,8 +170,12 @@ struct WeekReviewView: View {
     private func exportImage() {
         let renderer = ImageRenderer(content: reportSection.padding(20).background(Color(.systemBackground)))
         renderer.scale = UIScreen.main.scale
-        shareImage = renderer.uiImage
-        if shareImage != nil { isShareSheetPresented = true }
+        guard let image = renderer.uiImage else {
+            exportFailed = true
+            return
+        }
+        shareImage = image
+        isShareSheetPresented = true
     }
 
     // MARK: ヘルパー

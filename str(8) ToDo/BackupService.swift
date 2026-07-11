@@ -47,6 +47,10 @@ enum BackupService {
         var lastSortedDay: Date?
         var snoozeUntil: Date?
         var subjectID: UUID?
+        /// P15 加算。旧 .str8（profileID キー無し）でも keyNotFound にならず nil で読める。
+        var profileID: UUID? = nil
+        /// P15 加算。旧 .str8（participantNames キー無し）でも keyNotFound にならず nil で読める（optional、読み手側で ?? [] にフォールバック）。
+        var participantNames: [String]? = nil
     }
 
     struct CategoryDTO: Codable {
@@ -72,10 +76,28 @@ enum BackupService {
         var longitude: Double?
     }
 
+    /// P15 加算。which（プロフィール）の文脈タグ。
+    struct ProfileDTO: Codable {
+        var id: UUID
+        var name: String
+        var iconName: String
+    }
+
+    /// P15 加算。辞書エントリ（Phase 16/17 と共有、モデルのみ）。
+    struct PhraseAliasDTO: Codable {
+        var id: UUID
+        var keyword: String
+        var whCategory: String  // WHCategory.rawValue
+        var replacement: String
+        var isBuiltIn: Bool
+        var isEnabled: Bool
+    }
+
     struct DayStatDTO: Codable {
         var day: Date
         var completedCount: Int
-        var focusSeconds: Int
+        /// ponytail: P6 以降の後方互換。旧 .str8 に focusSeconds キーがあっても無視（読み手ゼロの死にフィールド削除）
+        var focusSeconds: Int? = nil
     }
 
     struct BandDTO: Codable {
@@ -106,15 +128,8 @@ enum BackupService {
         var subjectID: UUID?
         var roomID: UUID? = nil
         var participantCount: Int? = nil
-    }
-
-    struct WeekReviewDTO: Codable {
-        var id: UUID
-        var weekStart: Date
-        var closedAt: Date
-        var focusTotalSec: TimeInterval
-        var moneyTotal: Decimal
-        var doneCount: Int
+        /// P14 加算。旧 .str8（approverID キー無し）でも keyNotFound にならず nil で読める。
+        var approverID: String? = nil
     }
 
     /// 後方互換の規約：
@@ -135,8 +150,12 @@ enum BackupService {
         var focusSessions: [FocusSessionDTO]
         /// P10 加算。規約どおり optional：旧 .str8（subjects キー無し）でも keyNotFound にならず nil で読める。
         var subjects: [SubjectDTO]?
-        /// P13 加算。規約どおり optional：旧 .str8（weekReviews キー無し）でも keyNotFound にならず nil で読める。
-        var weekReviews: [WeekReviewDTO]?
+        // WeekReview モデル廃止（2026-07-11 オーナー判断）。weekReviews キーは書かなくなったが、
+        // JSONDecoder は未知キーを無視するため旧 .str8（weekReviews 有り）もこのまま読み飛ばせる。
+        /// P15 加算。規約どおり optional：旧 .str8（profiles キー無し）でも keyNotFound にならず nil で読める。
+        var profiles: [ProfileDTO]?
+        /// P15 加算。規約どおり optional：旧 .str8（phraseAliases キー無し）でも keyNotFound にならず nil で読める。
+        var phraseAliases: [PhraseAliasDTO]?
     }
 
     // MARK: - エラー型
@@ -291,7 +310,9 @@ enum BackupService {
         try deleteAll(PlaceTag.self, context: context)
         // Subject は一次データ（科目名/色/目標/ポモ）。subjectID のダングリング防止に必ず含める。
         try deleteAll(Subject.self, context: context)
-        try deleteAll(WeekReview.self, context: context)
+        // Profile / PhraseAlias（P15）。Profile は TaskItem から参照される側なので TaskItem 削除後でよい。
+        try deleteAll(Profile.self, context: context)
+        try deleteAll(PhraseAlias.self, context: context)
     }
 
     // MARK: - export / restore
@@ -309,7 +330,8 @@ enum BackupService {
         let bandAssignments = try context.fetch(FetchDescriptor<BandAssignment>())
         let focusSessions = try context.fetch(FetchDescriptor<FocusSession>())
         let subjects = try context.fetch(FetchDescriptor<Subject>())
-        let weekReviews = try context.fetch(FetchDescriptor<WeekReview>())
+        let profiles = try context.fetch(FetchDescriptor<Profile>())
+        let phraseAliases = try context.fetch(FetchDescriptor<PhraseAlias>())
 
         // DTO に変換
         let taskDTOs = tasks.map { task in
@@ -343,7 +365,9 @@ enum BackupService {
                 sortIndex: task.sortIndex,
                 lastSortedDay: task.lastSortedDay,
                 snoozeUntil: task.snoozeUntil,
-                subjectID: task.subjectID
+                subjectID: task.subjectID,
+                profileID: task.profile?.id,
+                participantNames: task.participantNames
             )
         }
 
@@ -356,7 +380,7 @@ enum BackupService {
         }
 
         let dayStatDTOs = dayStats.map { stat in
-            DayStatDTO(day: stat.day, completedCount: stat.completedCount, focusSeconds: stat.focusSeconds)
+            DayStatDTO(day: stat.day, completedCount: stat.completedCount)
         }
 
         let bandTemplateDTOs = bandTemplates.map { template in
@@ -372,7 +396,7 @@ enum BackupService {
         }
 
         let focusSessionDTOs = focusSessions.map { session in
-            FocusSessionDTO(id: session.id, start: session.start, end: session.end, taskID: session.taskID, subjectID: session.subjectID, roomID: session.roomID, participantCount: session.participantCount)
+            FocusSessionDTO(id: session.id, start: session.start, end: session.end, taskID: session.taskID, subjectID: session.subjectID, roomID: session.roomID, participantCount: session.participantCount, approverID: session.approverID)
         }
 
         let subjectDTOs = subjects.map { subject in
@@ -382,9 +406,13 @@ enum BackupService {
                        pomodoroMinutes: subject.pomodoroMinutes)
         }
 
-        let weekReviewDTOs = weekReviews.map { wr in
-            WeekReviewDTO(id: wr.id, weekStart: wr.weekStart, closedAt: wr.closedAt,
-                         focusTotalSec: wr.focusTotalSec, moneyTotal: wr.moneyTotal, doneCount: wr.doneCount)
+        let profileDTOs = profiles.map { profile in
+            ProfileDTO(id: profile.id, name: profile.name, iconName: profile.iconName)
+        }
+
+        let phraseAliasDTOs = phraseAliases.map { alias in
+            PhraseAliasDTO(id: alias.id, keyword: alias.keyword, whCategory: alias.whCategory.rawValue,
+                            replacement: alias.replacement, isBuiltIn: alias.isBuiltIn, isEnabled: alias.isEnabled)
         }
 
         let payload = BackupPayload(
@@ -399,7 +427,8 @@ enum BackupService {
             bandAssignments: bandAssignmentDTOs,
             focusSessions: focusSessionDTOs,
             subjects: subjectDTOs,
-            weekReviews: weekReviewDTOs
+            profiles: profileDTOs,
+            phraseAliases: phraseAliasDTOs
         )
 
         // ペイロード暗号化
@@ -464,6 +493,7 @@ enum BackupService {
         var placeMap: [UUID: PlaceTag] = [:]
         var templateMap: [UUID: BandTemplate] = [:]
         var bandMap: [UUID: Band] = [:]
+        var profileMap: [UUID: Profile] = [:]
 
         // Category 挿入
         for catDTO in payload.categories {
@@ -473,11 +503,31 @@ enum BackupService {
         }
 
         // Subject 挿入（subjectID は UUID 値参照なので順序依存なし。旧 .str8 は nil → 空配列）
+        // ponytail: 復元値のクランプ。selectedMinutes * 60 の乗算オーバーフロー防止（最大 24時間×7日 = 10080分）
+        let maxMinutes = 24 * 60 * 7
         for subjectDTO in payload.subjects ?? [] {
+            let dailyMinutes = max(0, min(subjectDTO.dailyGoalMinutes, maxMinutes))
+            let weeklyMinutes = max(0, min(subjectDTO.weeklyGoalMinutes, maxMinutes))
+            let pomodoroMinutes = max(0, min(subjectDTO.pomodoroMinutes, maxMinutes))
             context.insert(Subject(id: subjectDTO.id, name: subjectDTO.name, colorHex: subjectDTO.colorHex,
-                                   dailyGoalMinutes: subjectDTO.dailyGoalMinutes,
-                                   weeklyGoalMinutes: subjectDTO.weeklyGoalMinutes,
-                                   pomodoroMinutes: subjectDTO.pomodoroMinutes))
+                                   dailyGoalMinutes: dailyMinutes,
+                                   weeklyGoalMinutes: weeklyMinutes,
+                                   pomodoroMinutes: pomodoroMinutes))
+        }
+
+        // Profile 挿入（P15。task.profile でリンクするため TaskItem より先に挿入）
+        for profileDTO in payload.profiles ?? [] {
+            let profile = Profile(id: profileDTO.id, name: profileDTO.name, iconName: profileDTO.iconName)
+            context.insert(profile)
+            profileMap[profile.id] = profile
+        }
+
+        // PhraseAlias 挿入（P15。旧 .str8 は nil → 空配列。不正な whCategory は捨てる）
+        for aliasDTO in payload.phraseAliases ?? [] {
+            guard let category = WHCategory(rawValue: aliasDTO.whCategory) else { continue }
+            context.insert(PhraseAlias(id: aliasDTO.id, keyword: aliasDTO.keyword, whCategory: category,
+                                        replacement: aliasDTO.replacement, isBuiltIn: aliasDTO.isBuiltIn,
+                                        isEnabled: aliasDTO.isEnabled))
         }
 
         // PlaceTag 挿入
@@ -553,29 +603,27 @@ enum BackupService {
                 sortIndex: taskDTO.sortIndex,
                 lastSortedDay: taskDTO.lastSortedDay,
                 snoozeUntil: taskDTO.snoozeUntil,
-                subjectID: taskDTO.subjectID
+                subjectID: taskDTO.subjectID,
+                profile: taskDTO.profileID.flatMap { profileMap[$0] },
+                participantNames: taskDTO.participantNames ?? []
             )
             context.insert(task)
         }
 
-        // DayStat 挿入
+        // DayStat 挿入（focusSeconds は削除済み死にフィールド、無視）
         for statDTO in payload.dayStats {
-            let stat = DayStat(day: statDTO.day, completedCount: statDTO.completedCount, focusSeconds: statDTO.focusSeconds)
+            let stat = DayStat(day: statDTO.day, completedCount: statDTO.completedCount)
             context.insert(stat)
         }
 
         // FocusSession 挿入
         for sessionDTO in payload.focusSessions {
-            let session = FocusSession(id: sessionDTO.id, start: sessionDTO.start, end: sessionDTO.end, taskID: sessionDTO.taskID, subjectID: sessionDTO.subjectID, roomID: sessionDTO.roomID, participantCount: sessionDTO.participantCount)
+            let session = FocusSession(id: sessionDTO.id, start: sessionDTO.start, end: sessionDTO.end, taskID: sessionDTO.taskID, subjectID: sessionDTO.subjectID, roomID: sessionDTO.roomID, participantCount: sessionDTO.participantCount, approverID: sessionDTO.approverID)
             context.insert(session)
         }
 
-        // WeekReview 挿入
-        for wrDTO in payload.weekReviews ?? [] {
-            let wr = WeekReview(id: wrDTO.id, weekStart: wrDTO.weekStart, closedAt: wrDTO.closedAt,
-                               focusTotalSec: wrDTO.focusTotalSec, moneyTotal: wrDTO.moneyTotal, doneCount: wrDTO.doneCount)
-            context.insert(wr)
-        }
+        // WeekReview モデル廃止（読み飛ばし）: payload に旧 weekReviews キーがあっても BackupPayload が
+        // 該当フィールドを持たないため JSONDecoder が無視する。挿入コードも不要。
 
         do {
             try context.save()

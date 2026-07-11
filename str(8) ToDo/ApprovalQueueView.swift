@@ -37,6 +37,14 @@ struct ApprovalQueueView: View {
                     Text("完了待ちのタスクはありません。")
                 }
                 .navigationTitle("承認キュー")
+                .toolbar {
+                    // 承認漏れがなくても、一掃済みの状態から週を締められるように空状態でも表示する
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { showWeekReview = true }) {
+                            Label("今週を締める", systemImage: "calendar.badge.checkmark")
+                        }
+                    }
+                }
             } else {
                 List {
                     let locked = doneTasks.filter { $0.isAwaitingFutureSelf }

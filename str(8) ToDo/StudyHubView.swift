@@ -208,6 +208,14 @@ struct StudyHubView: View {
                 .padding(8)
                 .accessibilityLabel("\(subject.name)")
                 .accessibilityValue(durationText(Double(focusSecondsBySubject[subject.id] ?? 0)))
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        context.delete(subject)
+                        try? context.save()
+                    } label: {
+                        Label("削除", systemImage: "trash")
+                    }
+                }
             }
         }
         .padding()

@@ -13,7 +13,8 @@ enum PreviewData {
     @MainActor static let container: ModelContainer = {
         let schema = Schema([
             TaskItem.self, Category.self, PlaceTag.self, DayStat.self, MonthMoneyStat.self,
-            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self, WeatherCache.self
+            Band.self, BandTemplate.self, BandAssignment.self, FocusSession.self, Subject.self, WeatherCache.self,
+            Profile.self, PhraseAlias.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: config)
@@ -34,6 +35,20 @@ enum PreviewData {
         context.insert(englishSubject)
         context.insert(exerciseSubject)
 
+        // プロフィールサンプル（P15 which）
+        let workProfile = Profile(name: "会社", iconName: "briefcase.fill")
+        let personalProfile = Profile(name: "個人", iconName: "person.fill")
+        context.insert(workProfile)
+        context.insert(personalProfile)
+
+        // 辞書サンプル（P15 モデルのみ、UI は P17）
+        [
+            PhraseAlias(keyword: "ポモ", whCategory: .how, replacement: "25分", isBuiltIn: true),
+            PhraseAlias(keyword: "今日", whCategory: .when, replacement: "今日", isBuiltIn: true),
+            PhraseAlias(keyword: "大学", whCategory: .where_, replacement: "大学図書館", isBuiltIn: true),
+            PhraseAlias(keyword: "会社", whCategory: .which, replacement: "会社", isBuiltIn: true)
+        ].forEach { context.insert($0) }
+
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
 
@@ -43,7 +58,8 @@ enum PreviewData {
 
         let samples: [TaskItem] = [
             TaskItem(title: "線形代数の課題", category: study,
-                     startDate: at(10), duration: 3600, phase: .today, status: .active, subjectID: mathSubject.id),
+                     startDate: at(10), duration: 3600, phase: .today, status: .active, subjectID: mathSubject.id,
+                     profile: workProfile),
             TaskItem(title: "ポモドーロ：統計レポート", category: study,
                      startDate: at(14), duration: 25 * 60, phase: .now, status: .done,
                      completedAt: .now, unlockDate: TaskItem.nextMidnight(), subjectID: mathSubject.id),
@@ -128,14 +144,12 @@ enum PreviewData {
 
         // 合成 DayStat（過去365日）
         let counts = [1, 2, 0, 3, 1, 2, 0, 1]
-        let focusSecs = [0, 900, 1800, 3600, 2700, 5400, 0, 1200]
         for i in 0..<365 {
             let dayOffset = -i
             let dayKey = cal.date(byAdding: .day, value: dayOffset, to: today) ?? today
             let completedCount = counts[i % counts.count]
-            let focusSeconds = focusSecs[i % focusSecs.count]
-            if completedCount > 0 || focusSeconds > 0 {
-                context.insert(DayStat(day: dayKey, completedCount: completedCount, focusSeconds: focusSeconds))
+            if completedCount > 0 {
+                context.insert(DayStat(day: dayKey, completedCount: completedCount))
             }
         }
 

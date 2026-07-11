@@ -18,16 +18,20 @@ enum WeekReportSource {
         return sessions.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
     }
 
-    /// 対象週の完了タスク数。TaskItem.completedAt が週内のもの（completedAt は完了時にのみ設定される）。
-    static func doneCount(in range: Range<Date>, context: ModelContext) -> Int {
+    /// 対象週の承認済みタスク数。approvedAt が週内のもの（approvedAt は TaskItem.approve() で
+    /// status が .approved になった時にしか設定されないため、これ自体が承認済みの判定になる）。
+    /// （P13 残タスク: 承認漏れがあっても締められる／「一掃してから」の儀式指示を数字に反映するため completedAt 基準から変更。
+    /// ※ #Predicate は enum ケースへの keyPath 比較（`task.status == .approved`）をサポートしないため、approvedAt のみで判定）。
+    static func approvedCount(in range: Range<Date>, context: ModelContext) -> Int {
         let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-            task.completedAt != nil && task.completedAt! >= range.lowerBound && task.completedAt! < range.upperBound
+            task.approvedAt != nil && task.approvedAt! >= range.lowerBound && task.approvedAt! < range.upperBound
         })
         let tasks = (try? context.fetch(descriptor)) ?? []
         return tasks.count
     }
 
     /// 対象週の収支合計（JPY, Decimal）。amount > 0 のタスクを対象に、rrule 展開しつつ週内の各発生日で amount を合算する（既存 MoneyStats.recompute と同じ発生カウント方式）。
+    /// オーナー判断（2026-07-11）: MonthMoneyStat 参照への切り替えは見送り、都度計算のままで OK（週単位の按分ロジックを追加するコストに対してリターンが薄いため）。
     static func moneyTotal(in range: Range<Date>, context: ModelContext) -> Decimal {
         let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { $0.startDate != nil })
         guard let tasks = try? context.fetch(descriptor) else { return 0 }
@@ -53,5 +57,21 @@ enum WeekReportSource {
             sortBy: [SortDescriptor(\.startDate)]
         )
         return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// 週報の3値をまとめて1回で読む（WeekReviewView の reportSection/commitAndClose/exportImage が
+    /// 個別に fetch していた重複をなくすための集約 load。新規集計は書かない：既存3関数を束ねるだけ）。
+    struct WeekReport {
+        var focusTotalSec: TimeInterval
+        var moneyTotal: Decimal
+        var approvedCount: Int
+    }
+
+    static func load(in range: Range<Date>, context: ModelContext) -> WeekReport {
+        WeekReport(
+            focusTotalSec: focusTotalSec(in: range, context: context),
+            moneyTotal: moneyTotal(in: range, context: context),
+            approvedCount: approvedCount(in: range, context: context)
+        )
     }
 }

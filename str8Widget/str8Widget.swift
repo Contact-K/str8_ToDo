@@ -77,70 +77,59 @@ struct StrWidgetView: View {
         }
     }
 
+    // MARK: - System Small / Medium 共通ヘッダー
+    @ViewBuilder
+    private func topHeadline() -> some View {
+        if let card = currentCard {
+            cardView(card)
+        } else if isCurrent {
+            Text("今日の予定は完了")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+        } else {
+            Text("アプリで更新")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+        }
+    }
+
+    /// 達成／未確定の統計チップ列。`isCurrent` が false の時は "—" を出す。
+    @ViewBuilder
+    private func statTiles(unconfirmedBold: Bool = false) -> some View {
+        let achieve = isCurrent ? "\(entry.snapshot?.achievementCount ?? 0)" : "—"
+        let unconfirm = isCurrent ? "\(entry.snapshot?.unconfirmedCount ?? 0)" : "—"
+        Text("達成 \(achieve)").font(.caption2)
+        Text("未確定 \(unconfirm)")
+            .font(.caption2)
+            .fontWeight(unconfirmedBold ? .semibold : .regular)
+    }
+
     // MARK: - System Small
     private var systemSmallView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let card = currentCard {
-                cardView(card)
-            } else if isCurrent {
-                Text("今日の予定は完了")
-                    .font(.system(.subheadline, design: .default))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-            } else {
-                Text("アプリで更新")
-                    .font(.system(.subheadline, design: .default))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-            }
-
+            topHeadline()
             Spacer()
-
-            HStack(spacing: 12) {
-                if isCurrent {
-                    Text("達成 \(entry.snapshot?.achievementCount ?? 0)")
-                        .font(.system(.caption2, design: .default))
-                    Text("未確定 \(entry.snapshot?.unconfirmedCount ?? 0)")
-                        .font(.system(.caption2, design: .default))
-                } else {
-                    Text("達成 —")
-                        .font(.system(.caption2, design: .default))
-                    Text("未確定 —")
-                        .font(.system(.caption2, design: .default))
-                }
-            }
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 12)
+            HStack(spacing: 12) { statTiles() }
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
         }
         .padding(.vertical, 12)
-        .containerBackground(for: .widget) {
-            Color.clear
-        }
+        .containerBackground(for: .widget) { Color.clear }
     }
 
     // MARK: - System Medium
     private var systemMediumView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let card = currentCard {
-                cardView(card)
-            } else if isCurrent {
-                Text("今日の予定は完了")
-                    .font(.system(.subheadline, design: .default))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-            } else {
-                Text("アプリで更新")
-                    .font(.system(.subheadline, design: .default))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-            }
+            topHeadline()
 
             if isCurrent, let bands = entry.snapshot?.bands, !bands.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(bands.prefix(5), id: \.name) { band in
                             Text(band.name)
-                                .font(.system(.caption2, design: .default))
+                                .font(.caption2)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(Color.blue.opacity(0.2))
@@ -152,28 +141,14 @@ struct StrWidgetView: View {
             }
 
             HStack(spacing: 16) {
-                if isCurrent {
-                    Text("達成 \(entry.snapshot?.achievementCount ?? 0)")
-                        .font(.system(.caption2, design: .default))
-                    Text("未確定 \(entry.snapshot?.unconfirmedCount ?? 0)")
-                        .font(.system(.caption2, design: .default))
-                        .fontWeight(.semibold)
-                } else {
-                    Text("達成 —")
-                        .font(.system(.caption2, design: .default))
-                    Text("未確定 —")
-                        .font(.system(.caption2, design: .default))
-                        .fontWeight(.semibold)
-                }
+                statTiles(unconfirmedBold: true)
                 Spacer()
             }
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
         }
         .padding(.vertical, 12)
-        .containerBackground(for: .widget) {
-            Color.clear
-        }
+        .containerBackground(for: .widget) { Color.clear }
     }
 
     // MARK: - Accessory Rectangular
@@ -235,15 +210,16 @@ struct StrWidgetView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Text(card.title)
-                    .font(.system(.subheadline, design: .default))
+                    .font(.subheadline)
                     .lineLimit(2)
                 if card.isTimePinned {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: 10))
+                        .font(.caption2)
+                        .accessibilityLabel("時刻厳守")
                 }
             }
             Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
-                .font(.system(.caption, design: .default))
+                .font(.caption)
                 .opacity(0.7)
         }
         .padding(.horizontal, 12)

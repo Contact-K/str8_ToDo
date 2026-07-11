@@ -106,8 +106,19 @@ final class TaskItem {
     /// 先送り期限。この日時まではデッキに出さない。
     var snoozeUntil: Date? = nil
 
-    /// 紐付き科目（勉強タスク）。任意。
+    /// 紐付き科目（勉強タスク）。任意。ponytail: 生 UUID 保持（@Relationship 非採用）。Subject 削除 UI での nullify は現状 UI 側の責務。
     var subjectID: UUID? = nil
+
+    /// プロフィール（which）。会社/個人などの文脈タグ。削除時はタスクは残し、関連だけ外す（P15）。
+    @Relationship(deleteRule: .nullify, inverse: \Profile.tasks)
+    var profile: Profile?
+
+    /// 参加者名（who）。CNContactPicker で選択した表示名の保持のみ、連携なし（P15）。
+    var participantNames: [String] = []
+
+    /// 週報の approvedCount 集計（WeekReportSource）や日別集計が startDate/completedAt の範囲 fetch で
+    /// 年単位に線形劣化しないための Index。
+    #Index<TaskItem>([\.completedAt], [\.startDate])
 
     init(
         id: UUID = UUID(),
@@ -139,7 +150,9 @@ final class TaskItem {
         sortIndex: Int = 0,
         lastSortedDay: Date? = nil,
         snoozeUntil: Date? = nil,
-        subjectID: UUID? = nil
+        subjectID: UUID? = nil,
+        profile: Profile? = nil,
+        participantNames: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -171,6 +184,8 @@ final class TaskItem {
         self.lastSortedDay = lastSortedDay
         self.snoozeUntil = snoozeUntil
         self.subjectID = subjectID
+        self.profile = profile
+        self.participantNames = participantNames
     }
 }
 
@@ -253,7 +268,7 @@ extension TaskItem {
 
     /// 最小 RRULE 展開：その日 day に出現するか。startDate 当日は常に true。
     /// rrule ありなら startDate 翌日以降も周期一致で true（開始日より前は false）。
-    // ponytail: AddTaskSheet が書く4パターンのみ対応。INTERVAL/UNTIL 等は未対応
+    // ponytail: EventComposerView が書くパターン（DAILY/WEEKLY;BYDAY=.../WEEKLY/MONTHLY）のみ対応。INTERVAL/UNTIL 等は未対応
     func occurs(on day: Date, calendar: Calendar = .current) -> Bool {
         guard let startDate else { return false }
         if calendar.isDate(startDate, inSameDayAs: day) { return true }
@@ -288,6 +303,9 @@ extension TaskItem {
         do {
             try context.save()
             NotificationService.reschedule(for: self)
+            if amount != nil {
+                MoneyStats.recompute(for: self, context: context)
+            }
         } catch {
             assertionFailure("Failed to schedule task: \(error)")
         }

@@ -34,36 +34,31 @@ enum FreeSlotSuggester {
     /// 貪欲フィット。candidates を「締切近い順(phaseRank昇順)→重い順(effectiveDuration降順)→sortIndex昇順→id昇順」で整列し、
     /// 各空きに先頭から詰める（First-Fit-Decreasing 風、1タスクは全空き通して高々1回）。
     /// 各空き内では start から順に配置し、配置ごとに cursor を effectiveDuration 分進める。
-    /// - Returns: 空きの start をキーにした提案列（提案が1件以上ある空きのみキーを持つ）。収まらないタスクは現れない。
+    /// - Returns: `gaps` と同順の 2 次元配列。`result[i]` は `gaps[i]` に対する提案列（空きに何も入らなかった場合は空配列）。
+    ///   ponytail: 以前は `[Date: [SlotSuggestion]]` を返していたが、同一 `gap.start` の複数 gap で後勝ち上書きが起きるため index 対応に変更。
+    ///   ponytail: 実 dueDate なし → SortPhase.now/today を締切近さの代理に利用。`.week` 拡張時は phaseRank の割り当てを見直す。
     static func suggest(gaps: [(start: Date, duration: TimeInterval)],
-                        candidates: [Candidate]) -> [Date: [SlotSuggestion]] {
-        // 1. candidates を (phaseRank, -effectiveDuration, sortIndex, id.uuidString) で整列
-        let sorted = candidates.sorted { a, b in
-            if a.phaseRank != b.phaseRank {
-                return a.phaseRank < b.phaseRank
-            }
-            if a.effectiveDuration != b.effectiveDuration {
-                return a.effectiveDuration > b.effectiveDuration
-            }
-            if a.sortIndex != b.sortIndex {
-                return a.sortIndex < b.sortIndex
-            }
+                        candidates: [Candidate]) -> [[SlotSuggestion]] {
+        // duration=0（見積無し・実績無し・fallback にも達しない）候補は「重い順」の並びを崩すため除外
+        let validCandidates = candidates.filter { $0.effectiveDuration > 0 }
+
+        let sorted = validCandidates.sorted { a, b in
+            if a.phaseRank != b.phaseRank { return a.phaseRank < b.phaseRank }
+            if a.effectiveDuration != b.effectiveDuration { return a.effectiveDuration > b.effectiveDuration }
+            if a.sortIndex != b.sortIndex { return a.sortIndex < b.sortIndex }
             return a.id.uuidString < b.id.uuidString
         }
 
-        // 2. placed: Set<UUID> を用意
         var placed = Set<UUID>()
-        var result: [Date: [SlotSuggestion]] = [:]
+        var result: [[SlotSuggestion]] = []
+        result.reserveCapacity(gaps.count)
 
-        // 3. 各 gap（与えられた順＝時刻順前提）について:
         for gap in gaps {
             var cursor = gap.start
             var remaining = gap.duration
             var suggestions: [SlotSuggestion] = []
 
-            // 整列済み candidates を走査
             for candidate in sorted {
-                // 未 placed かつ effectiveDuration <= remaining なら
                 if !placed.contains(candidate.id) && candidate.effectiveDuration <= remaining {
                     suggestions.append(SlotSuggestion(taskID: candidate.id, start: cursor, duration: candidate.effectiveDuration))
                     cursor = Date(timeInterval: candidate.effectiveDuration, since: cursor)
@@ -72,10 +67,7 @@ enum FreeSlotSuggester {
                 }
             }
 
-            // 4. 1件も入らなかった gap はキーを作らない
-            if !suggestions.isEmpty {
-                result[gap.start] = suggestions
-            }
+            result.append(suggestions)
         }
 
         return result

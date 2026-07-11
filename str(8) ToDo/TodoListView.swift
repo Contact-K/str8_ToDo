@@ -18,6 +18,8 @@ struct TodoListView: View {
     @State private var selectedTask: TaskItem?
     @State private var schedulingTask: TaskItem?
     @State private var showDeck = false
+    @State private var showComposer = false
+    @State private var showQuickAddParser = false
     @State private var selectedSubjectFilter: UUID? = nil
 
     /// 浮遊 active タスク（リストの対象）。
@@ -52,6 +54,13 @@ struct TodoListView: View {
                         }
                         .disabled(quickTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityLabel("タスクを追加")
+                    }
+                    Button(action: { showComposer = true }) {
+                        Label("詳細を追加", systemImage: "square.and.pencil")
+                    }
+                    // P16: 自然文1行入力（日時/場所/カテゴリ/所要時間を自動認識）
+                    Button(action: { showQuickAddParser = true }) {
+                        Label("自然文で追加", systemImage: "text.badge.plus")
                     }
                 }
 
@@ -104,6 +113,12 @@ struct TodoListView: View {
             }
             .sheet(isPresented: $showDeck) {
                 SortDeckView(tasks: allTasks)
+            }
+            .sheet(isPresented: $showComposer) {
+                EventComposerView()
+            }
+            .sheet(isPresented: $showQuickAddParser) {
+                QuickAddParserView()
             }
         }
     }
@@ -186,7 +201,7 @@ struct TodoListView: View {
 }
 
 // MARK: - 日時確定シート（カレンダーへの一方向昇格）
-// ponytail: AddTaskSheet と日時UIが似るが2画面のサブセット関係のうちは統合しない
+// ponytail: EventComposerView と日時UIが似るが2画面のサブセット関係のうちは統合しない
 
 private struct SchedulePromoteSheet: View {
     let task: TaskItem
@@ -217,7 +232,10 @@ private struct SchedulePromoteSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("決定") {
-                        task.scheduleAt(start: startDate, duration: duration, context: context)
+                        // ponytail: sheet を開いたまま時間が経過→過去時刻がコミットされる問題を回避。
+                        // 押下時に startDate が過去なら現時刻へシフト。
+                        let effective = max(startDate, .now)
+                        task.scheduleAt(start: effective, duration: duration, context: context)
                         dismiss()
                     }
                 }

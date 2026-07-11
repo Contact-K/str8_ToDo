@@ -62,20 +62,18 @@ final class DayStat {
     @Attribute(.unique) var day: Date
     /// 承認済みタスク数。
     var completedCount: Int
-    /// 集中時間の合計（秒）。
-    var focusSeconds: Int
 
-    init(day: Date, completedCount: Int = 0, focusSeconds: Int = 0) {
+    init(day: Date, completedCount: Int = 0) {
         self.day = day
         self.completedCount = completedCount
-        self.focusSeconds = focusSeconds
     }
 }
 
 // MARK: - 再構築
 
 extension DayStat {
-    /// 全 DayStat を削除して approved タスク + FocusSession から再構築する。
+    /// 全 DayStat を削除して approved タスクから再構築する。
+    /// 集中時間は FocusSession をライブ集計する（focusSeconds は削除済みの死にフィールド）。
     /// 冪等（二重実行で二重カウントなし）。
     @MainActor
     static func rebuildDayStats(context: ModelContext) {
@@ -86,34 +84,20 @@ extension DayStat {
         allStats.forEach { context.delete($0) }
 
         // approved タスクを日ごと集計
-        var dayMap: [Date: (count: Int, focusSeconds: Int)] = [:]
+        var dayMap: [Date: Int] = [:]
 
         let allTasks = (try? context.fetch(FetchDescriptor<TaskItem>())) ?? []
         for task in allTasks where task.status == .approved {
             let achieveDate = task.approvedAt ?? task.completedAt ?? task.startDate
             if let date = achieveDate {
                 let dayStart = cal.startOfDay(for: date)
-                if dayMap[dayStart] == nil {
-                    dayMap[dayStart] = (count: 0, focusSeconds: 0)
-                }
-                dayMap[dayStart]!.count += 1
+                dayMap[dayStart, default: 0] += 1
             }
-        }
-
-        // FocusSession の end フィールドから focusSeconds を集計
-        let allSessions = (try? context.fetch(FetchDescriptor<FocusSession>())) ?? []
-        for session in allSessions {
-            let dayStart = cal.startOfDay(for: session.end)
-            let duration = Int(session.end.timeIntervalSince(session.start))
-            if dayMap[dayStart] == nil {
-                dayMap[dayStart] = (count: 0, focusSeconds: 0)
-            }
-            dayMap[dayStart]!.focusSeconds += duration
         }
 
         // 全 DayStat は冒頭で delete 済みなので素直に insert（既存行は残っていない）
-        for (day, stats) in dayMap {
-            context.insert(DayStat(day: day, completedCount: stats.count, focusSeconds: stats.focusSeconds))
+        for (day, count) in dayMap {
+            context.insert(DayStat(day: day, completedCount: count))
         }
 
         try? context.save()

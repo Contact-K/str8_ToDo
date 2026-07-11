@@ -21,6 +21,12 @@ func durationText(_ seconds: TimeInterval) -> String {
     return "\(hours)時間\(remainder)分"
 }
 
+/// 秒 → 「3:45」形式のカウントダウン表示（負値は 0 にクランプ）。
+func countdownText(_ seconds: TimeInterval) -> String {
+    let clamped = max(0, Int(seconds))
+    return "\(clamped / 60):\(String(format: "%02d", clamped % 60))"
+}
+
 /// 金額（Decimal）→ 「¥1,490」形式（ja_JP 通貨）。
 func currencyText(_ amount: Decimal) -> String {
     let formatter = NumberFormatter()

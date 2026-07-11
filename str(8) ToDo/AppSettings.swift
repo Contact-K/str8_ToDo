@@ -23,6 +23,10 @@ enum AppSettingsKey {
     static let weekReviewHour = "weekReviewHour"
     static let weekReviewHourDefault = 20  // 20時
 
+    /// クイック追加（P16）のサジェストフィールド（未認識ワードの辞書登録候補）を表示するか。
+    static let enableDictionarySuggestions = "enableDictionarySuggestions"
+    static let enableDictionarySuggestionsDefault = true
+
     /// 最終バックアップエクスポート日時（TimeInterval）。
     static let lastBackupExportDate = "lastBackupExportDate"
 
@@ -30,6 +34,20 @@ enum AppSettingsKey {
     static let lastKnownLatitude = "lastKnownLatitude"
     /// 最後に取得した現在地の経度（SunCalc/出発逆算が使う）
     static let lastKnownLongitude = "lastKnownLongitude"
+
+    /// UserDefaults.standard に既定値を登録する。App 起動時に一度だけ呼ぶことで、
+    /// 各読み出し側の `?? xxxDefault` フォールバックを不要にする。
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [
+            syncSystemCalendar: syncSystemCalendarDefault,
+            syncWeather: syncWeatherDefault,
+            enableNotifications: enableNotificationsDefault,
+            weekShowSevenDays: weekShowSevenDaysDefault,
+            weekReviewWeekday: weekReviewWeekdayDefault,
+            weekReviewHour: weekReviewHourDefault,
+            enableDictionarySuggestions: enableDictionarySuggestionsDefault
+        ])
+    }
 }
 
 // MARK: - 現在地ヘルパー

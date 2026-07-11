@@ -147,14 +147,19 @@ struct CalendarSettingsView: View {
                                 await NotificationService.requestAuthorization()
                                 // 週次締めリマインダーをスケジュール
                                 let d = UserDefaults.standard
-                                let w = (d.object(forKey: AppSettingsKey.weekReviewWeekday) as? Int) ?? AppSettingsKey.weekReviewWeekdayDefault
-                                let h = (d.object(forKey: AppSettingsKey.weekReviewHour) as? Int) ?? AppSettingsKey.weekReviewHourDefault
+                                let w = d.integer(forKey: AppSettingsKey.weekReviewWeekday)
+                                let h = d.integer(forKey: AppSettingsKey.weekReviewHour)
                                 NotificationService.scheduleWeeklyReview(weekday: w, hour: h)
                             } else {
                                 NotificationService.cancelWeeklyReview()
                             }
                         }
                     }
+            }
+
+            // MARK: - 辞書セクション
+            Section(header: Text("入力の設定")) {
+                NavigationLink("辞書管理", destination: DictionarySettingsView())
             }
 
             // MARK: - マイ時間割セクション

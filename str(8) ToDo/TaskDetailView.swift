@@ -15,6 +15,11 @@ struct TaskDetailView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var showDeleteConfirmation = false
+    /// P18: フィールド右のペンから該当トピックだけをフォーカス編集で直接開く。
+    @State private var focusedTopic: WHCategory? = nil
+    /// P18: タイトル横のペンはトピック固定がない（what はフォーカス画面を持たない）ので、
+    /// タイルグリッドの EventComposerView をそのまま開く。
+    @State private var showFullEditor = false
 
     var body: some View {
         ScrollView {
@@ -27,8 +32,9 @@ struct TaskDetailView: View {
                     timeSection
                 }
 
-                // MARK: - カテゴリ・場所
-                if task.category != nil || task.place != nil {
+                // MARK: - カテゴリ・場所・参加者・金額
+                if task.category != nil || task.profile != nil || task.place != nil
+                    || !task.participantNames.isEmpty || task.amount != nil {
                     metadataSection
                 }
 
@@ -75,6 +81,12 @@ struct TaskDetailView: View {
                 Text("\"\(task.title)\" を削除しますか？")
             }
         )
+        .sheet(item: $focusedTopic) { category in
+            EventComposerView(task: task, initialFocus: category)
+        }
+        .sheet(isPresented: $showFullEditor) {
+            EventComposerView(task: task)
+        }
     }
 
     // MARK: - Header Section
@@ -104,6 +116,7 @@ struct TaskDetailView: View {
                     statusBadge
                 }
                 Spacer()
+                editPencil { showFullEditor = true }
             }
         }
     }
@@ -124,9 +137,13 @@ struct TaskDetailView: View {
     // MARK: - Time Section
     private var timeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("スケジュール")
-                .font(.headline)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("スケジュール")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                editPencil { focusedTopic = .when }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 if task.isAllDay {
@@ -186,6 +203,19 @@ struct TaskDetailView: View {
                     Text(category.name)
                         .font(.subheadline)
                     Spacer()
+                    editPencil { focusedTopic = .which }
+                }
+                .padding(.vertical, 4)
+            }
+
+            if let profile = task.profile {
+                HStack {
+                    Image(systemName: profile.iconName)
+                        .foregroundColor(.secondary)
+                    Text(profile.name)
+                        .font(.subheadline)
+                    Spacer()
+                    editPencil { focusedTopic = .which }
                 }
                 .padding(.vertical, 4)
             }
@@ -197,6 +227,19 @@ struct TaskDetailView: View {
                     Text(place.name)
                         .font(.subheadline)
                     Spacer()
+                    editPencil { focusedTopic = .where_ }
+                }
+                .padding(.vertical, 4)
+            }
+
+            if !task.participantNames.isEmpty {
+                HStack {
+                    Image(systemName: "person.2.fill")
+                        .foregroundColor(.purple)
+                    Text(task.participantNames.joined(separator: ", "))
+                        .font(.subheadline)
+                    Spacer()
+                    editPencil { focusedTopic = .who }
                 }
                 .padding(.vertical, 4)
             }
@@ -208,6 +251,7 @@ struct TaskDetailView: View {
                     Text(currencyText(amount))
                         .font(.subheadline)
                     Spacer()
+                    editPencil { focusedTopic = .how }
                 }
                 .padding(.vertical, 4)
 
@@ -228,9 +272,13 @@ struct TaskDetailView: View {
     // MARK: - Notification Section
     private var notificationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("通知")
-                .font(.headline)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("通知")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                editPencil { focusedTopic = .when }
+            }
 
             if task.notificationOffsets.isEmpty {
                 HStack {
@@ -258,9 +306,13 @@ struct TaskDetailView: View {
     // MARK: - Notes Section
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("メモ")
-                .font(.headline)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("メモ")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                editPencil { focusedTopic = .other }
+            }
 
             Text(task.notes)
                 .font(.subheadline)
@@ -345,6 +397,18 @@ struct TaskDetailView: View {
         }
     }
 
+    // MARK: - Edit Pencil
+    /// P18: フィールド右の共通ペンボタン。タップで該当トピックのフォーカス編集を開く。
+    private func editPencil(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "pencil")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("編集")
+    }
+
     // MARK: - Actions
     private func toggleImportant() {
         task.isImportant.toggle()
@@ -365,17 +429,35 @@ struct TaskDetailView: View {
         // 削除後にプロパティへ触れないよう先に退避
         let hadAmount = task.amount != nil
         let startDate = task.startDate
+        let rrule = task.rrule
 
         NotificationService.cancel(for: task)
         modelContext.delete(task)
         save()
 
-        // 金額がある場合は月別統計を再計算
+        // 金額がある場合は月別統計を再計算（反復タスクは全月）
         if hadAmount, let startDate {
-            MoneyStats.recompute(month: startDate, context: modelContext)
+            recomputeMonthRange(from: startDate, rrule: rrule)
         }
 
         dismiss()
+    }
+
+    /// 削除後にタスク参照が使えないので、start＋rrule だけ受け取って月範囲を独立に再計算する。
+    private func recomputeMonthRange(from start: Date, rrule: String?) {
+        let cal = Calendar.current
+        if rrule == nil {
+            MoneyStats.recompute(month: start, context: modelContext)
+            return
+        }
+        let cap = cal.date(byAdding: .year, value: 3, to: .now) ?? .now
+        var cursor = cal.dateInterval(of: .month, for: start)?.start ?? cal.startOfDay(for: start)
+        let endMonth = cal.dateInterval(of: .month, for: cap)?.end ?? cap
+        while cursor < endMonth {
+            MoneyStats.recompute(month: cursor, context: modelContext)
+            guard let next = cal.date(byAdding: .month, value: 1, to: cursor) else { break }
+            cursor = next
+        }
     }
 
     private func save() {

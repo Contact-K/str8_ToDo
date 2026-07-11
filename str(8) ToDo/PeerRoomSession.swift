@@ -38,10 +38,20 @@ final class PeerRoomSession: NSObject {
     private(set) var clockOffsetToHost: TimeInterval = 0
     private(set) var discoveredHosts: [MCPeerID] = []
     var roomID: UUID = UUID()
+    /// TOFU 対策：`requestJoin(host:)` で選んだ peer にのみピン留めする。以後の `.hello` からは確定しない。
     private var hostPeerID: MCPeerID?
     private var pendingPingSentAt: TimeInterval?
     /// pong を1回でも受け取ってオフセットを算出したか。start 受信時のガードに使う。
     private var hasClockSynced: Bool = false
+    /// 受信レート制限用の直近タイムスタンプ（.hello / .leave）。peer.displayName ごとに独立させ、1 peer の連投が他 peer を巻き込まないようにする。
+    private var helloTimestamps: [String: [TimeInterval]] = [:]
+    private var leaveTimestamps: [String: [TimeInterval]] = [:]
+
+    /// FocusSession.approverID に詰める識別子。ホストなら自分の ID、ゲストなら
+    /// requestJoin で確定したホストの ID（TaskItem.approverID パターン踏襲）。
+    var approverDisplayName: String? {
+        isHost ? myID : hostPeerID?.displayName
+    }
 
     var onStateChanged: ((RoomState) -> Void)?
     var onStartScheduled: ((TimeInterval) -> Void)?
@@ -89,7 +99,11 @@ final class PeerRoomSession: NSObject {
     }
 
     /// ゲスト向け：発見済みホストに参加リクエスト。
+    /// TOFU 対策：host はここで選んだ peer にのみ確定する（`.hello` からは確定しない）。
     func requestJoin(host: MCPeerID) {
+        if hostPeerID == nil {
+            hostPeerID = host
+        }
         browser.invitePeer(host, to: session, withContext: nil, timeout: 30)
     }
 
@@ -115,8 +129,10 @@ final class PeerRoomSession: NSObject {
     }
 
     /// ホストのみ：全員 faceDown なら hostStartAt を計算して broadcast。
+    /// `state != .running` ガードで、開始後に faceDown が再送されても二重 announce しない
+    /// （onStartScheduled の二重発火防止）。
     func announceStartIfReady() {
-        guard isHost, FocusRoom.isReadyToStart(participants: participants) else { return }
+        guard isHost, state != .running, FocusRoom.isReadyToStart(participants: participants) else { return }
 
         let hostNow = Date().timeIntervalSince1970
         let hostStartAt = FocusRoom.recommendedHostStartAt(hostNow: hostNow)
@@ -129,19 +145,19 @@ final class PeerRoomSession: NSObject {
         onStartScheduled?(localStart)
     }
 
-    /// 終了通知。
+    /// 終了通知。ホストの Timer 満了から呼ばれる想定（1Hz 自己申告からの脱却）。
+    /// 全端末（ホスト自身含む）は onEnded 経由で finishAndSave する。
     func end() {
+        guard FocusRoom.tryTransitionToEnded(&state) else { return }
         broadcast(.end)
-        state = .ended
         onStateChanged?(state)
         onEnded?()
     }
 
-    /// 終了状態を設定（FocusSession 保存前に呼び出す）。
+    /// 終了状態を設定（FocusSession 保存前に呼び出す）。再入ガード付き。
     func markEnded() {
-        guard self.state != .ended else { return }
-        self.state = .ended
-        self.onEnded?()
+        guard FocusRoom.tryTransitionToEnded(&state) else { return }
+        onEnded?()
     }
 
     /// 停止（advertiser/browser/session を止める）。
@@ -157,6 +173,8 @@ final class PeerRoomSession: NSObject {
         hostPeerID = nil
         pendingPingSentAt = nil
         hasClockSynced = false
+        helloTimestamps = [:]
+        leaveTimestamps = [:]
     }
 
     /// clock ping-pong を投げる（ゲスト側から起動）。
@@ -169,17 +187,25 @@ final class PeerRoomSession: NSObject {
     /// 内部: 受信メッセージをハンドル。
     private func handle(_ message: RoomMessage, from peerID: MCPeerID) {
         switch message {
-        case .hello(let participantID, let isHostFlag):
-            // ゲスト側でホストの peerID を記録（初回のみ）
-            if isHostFlag && !isHost && hostPeerID == nil {
-                hostPeerID = peerID
-            }
-            // 既存の参加者なら無視
-            guard !participants.contains(where: { $0.id == participantID }) else { return }
-            participants.append(Participant(id: participantID, isFaceDown: false, isHost: isHostFlag))
+        case .hello(let participantID):
+            // 詐称防止：participantID は実際に接続してきた peerID の displayName と一致必須
+            guard participantID == peerID.displayName else { return }
+            // 受信レート制限（.hello 連投対策、peer ごとに独立）
+            guard !FocusRoom.isRateLimited(&helloTimestamps[participantID, default: []], now: Date().timeIntervalSince1970) else { return }
+            // 重複メッセージ処理：既に参加済みなら無視
+            guard FocusRoom.shouldAddParticipant(existing: participants, id: participantID) else { return }
+            // isHost は自己申告を信用しない：自分がホストなら hello の送り主は常にゲスト、
+            // 自分がゲストなら requestJoin で確定した hostPeerID と一致するかで判定。
+            let helloIsHost = isHost ? false : (peerID == hostPeerID)
+            participants.append(Participant(id: participantID, isFaceDown: false, isHost: helloIsHost))
             onParticipantsChanged?()
 
         case .faceDown(let participantID, let isFaceDown):
+            // 詐称防止：participantID は実際に送信してきた peerID の displayName と一致必須
+            guard participantID == peerID.displayName else {
+                os_log("faceDown participantID mismatch from %{public}s", log: .default, type: .debug, peerID.displayName)
+                return
+            }
             if let idx = participants.firstIndex(where: { $0.id == participantID }) {
                 participants[idx].isFaceDown = isFaceDown
             }
@@ -215,6 +241,8 @@ final class PeerRoomSession: NSObject {
         case .start(let hostStartAt, let receivedRoomID):
             // ゲスト側のみ受信、かつホストからのみ
             guard !isHost, peerID == hostPeerID else { return }
+            // 二重発火防止：既に running なら再announceを無視
+            guard state != .running else { return }
             // クロック同期未完了で start を受け付けると過去/未来にジャンプしうる。安全側に aborted。
             guard hasClockSynced else {
                 self.state = .aborted
@@ -232,12 +260,14 @@ final class PeerRoomSession: NSObject {
         case .end:
             // ゲスト側のみ受信、かつホストからのみ
             guard !isHost, peerID == hostPeerID else { return }
-            state = .ended
+            guard FocusRoom.tryTransitionToEnded(&state) else { return }
             onStateChanged?(state)
             onEnded?()
 
         case .leave(let participantID):
             guard peerID.displayName == participantID else { return }
+            // 受信レート制限（.leave 連投対策、peer ごとに独立）
+            guard !FocusRoom.isRateLimited(&leaveTimestamps[participantID, default: []], now: Date().timeIntervalSince1970) else { return }
             participants.removeAll { $0.id == participantID }
             onParticipantsChanged?()
             let nextState = FocusRoom.nextStateAfterLeft(current: state, remaining: participants)
@@ -249,40 +279,63 @@ final class PeerRoomSession: NSObject {
     }
 }
 
+// MARK: - MainActor 集約ハンドラ
+//
+// MCNearbyServiceAdvertiser と MCSession は別々の内部キューから delegate を呼ぶため、
+// 満員判定（advertiser）と切断反映（session:peer:didChange:）が実イベント順と食い違う余地がある。
+// 両方の本体を @MainActor メソッドに集約し、nonisolated 側は Task { @MainActor in ... } で
+// この単一の実行列に乗せるだけにする（MainActor は直列実行なので、ここに来た時点で順序が揃う）。
+extension PeerRoomSession {
+    @MainActor
+    private func handlePeerStateChange(peerID: MCPeerID, state: MCSessionState) {
+        switch state {
+        case .connected:
+            // 接続完了時に hello を送る（isHost は自己申告しない）
+            self.broadcast(.hello(participantID: self.myID))
+            // ゲスト側のみ clock sync を要求
+            if !self.isHost {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                    self.requestClockSync()
+                }
+            }
+
+        case .notConnected:
+            // 切断された参加者を削除
+            let participantID = peerID.displayName
+            self.participants.removeAll { $0.id == participantID }
+            self.onParticipantsChanged?()
+            let nextState = FocusRoom.nextStateAfterLeft(current: self.state, remaining: self.participants)
+            if nextState != self.state {
+                self.state = nextState
+                self.onStateChanged?(nextState)
+            }
+
+        case .connecting:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    @MainActor
+    private func handleInvitation(from peerID: MCPeerID, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        // ponytail: 参加人数制限（MCSession standard max = 8、ここでは 7 上限）
+        if self.participants.count >= 7 {
+            invitationHandler(false, nil)
+            return
+        }
+        // 自動 accept
+        invitationHandler(true, self.session)
+    }
+}
+
 // MARK: - MCSessionDelegate
 
 extension PeerRoomSession: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         Task { @MainActor in
-            switch state {
-            case .connected:
-                // 接続完了時に hello を送る
-                let isHostFlag = self.isHost
-                self.broadcast(.hello(participantID: self.myID, isHost: isHostFlag))
-                // ゲスト側のみ clock sync を要求
-                if !self.isHost {
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                        self.requestClockSync()
-                    }
-                }
-
-            case .notConnected:
-                // 切断された参加者を削除
-                let participantID = peerID.displayName
-                self.participants.removeAll { $0.id == participantID }
-                self.onParticipantsChanged?()
-                let nextState = FocusRoom.nextStateAfterLeft(current: self.state, remaining: self.participants)
-                if nextState != self.state {
-                    self.state = nextState
-                    self.onStateChanged?(nextState)
-                }
-
-            case .connecting:
-                break
-            @unknown default:
-                break
-            }
+            self.handlePeerStateChange(peerID: peerID, state: state)
         }
     }
 
@@ -320,13 +373,7 @@ extension PeerRoomSession: MCNearbyServiceAdvertiserDelegate {
 
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         Task { @MainActor in
-            // ponytail: 参加人数制限（MCSession standard max = 8、ここでは 7 上限）
-            if self.participants.count >= 7 {
-                invitationHandler(false, nil)
-                return
-            }
-            // 自動 accept
-            invitationHandler(true, self.session)
+            self.handleInvitation(from: peerID, invitationHandler: invitationHandler)
         }
     }
 }

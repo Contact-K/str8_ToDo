@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		FF0000000000000000000102 /* AddTaskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000101 /* AddTaskSheet.swift */; };
 		FF0000000000000000000104 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* AppSettings.swift */; };
 		FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000105 /* CalendarSettingsView.swift */; };
 		FF0000000000000000000108 /* CategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* CategoryPickerView.swift */; };
@@ -58,7 +57,6 @@
 		FF0000000000000000000167 /* FocusRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000166 /* FocusRoom.swift */; };
 		FF0000000000000000000163 /* WeekReportSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000162 /* WeekReportSource.swift */; };
 		FF0000000000000000000164 /* WeekMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000165 /* WeekMath.swift */; };
-		FF0000000000000000000238 /* WeekReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000237 /* WeekReview.swift */; };
 		FF0000000000000000000239 /* WeekReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023A /* WeekReviewView.swift */; };
 		FF0000000000000000000204 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
 		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
@@ -69,12 +67,19 @@
 		FF000000000000000000023B /* RoomMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023C /* RoomMessage.swift */; };
 		FF000000000000000000023D /* PeerRoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023E /* PeerRoomSession.swift */; };
 		FF000000000000000000023F /* FocusRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000240 /* FocusRoomView.swift */; };
+		FF0000000000000000000242 /* WHCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000241 /* WHCategory.swift */; };
+		FF0000000000000000000244 /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000243 /* Profile.swift */; };
+		FF0000000000000000000246 /* PhraseAlias.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000245 /* PhraseAlias.swift */; };
+		FF0000000000000000000248 /* EventComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000247 /* EventComposerView.swift */; };
+		FF000000000000000000024A /* PhraseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000249 /* PhraseParser.swift */; };
+		FF000000000000000000024C /* QuickAddParserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024B /* QuickAddParserView.swift */; };
+		FF000000000000000000024E /* DictionarySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024D /* DictionarySettingsView.swift */; };
+		FF0000000000000000000250 /* SuggestionQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024F /* SuggestionQueue.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A116F6232FE51E57005A6590 /* str(8) ToDo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "str(8) ToDo.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "str(8) ToDo.entitlements"; sourceTree = "<group>"; };
-		FF0000000000000000000101 /* AddTaskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTaskSheet.swift; sourceTree = "<group>"; };
 		FF0000000000000000000103 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		FF0000000000000000000105 /* CalendarSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000107 /* CategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPickerView.swift; sourceTree = "<group>"; };
@@ -125,7 +130,6 @@
 		FF0000000000000000000166 /* FocusRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRoom.swift; sourceTree = "<group>"; };
 		FF0000000000000000000162 /* WeekReportSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekReportSource.swift; sourceTree = "<group>"; };
 		FF0000000000000000000165 /* WeekMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekMath.swift; sourceTree = "<group>"; };
-		FF0000000000000000000237 /* WeekReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekReview.swift; sourceTree = "<group>"; };
 		FF000000000000000000023A /* WeekReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekReviewView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000201 /* str8Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000000000000000000203 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
@@ -136,6 +140,14 @@
 		FF000000000000000000023C /* RoomMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMessage.swift; sourceTree = "<group>"; };
 		FF000000000000000000023E /* PeerRoomSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerRoomSession.swift; sourceTree = "<group>"; };
 		FF0000000000000000000240 /* FocusRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRoomView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000241 /* WHCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WHCategory.swift; sourceTree = "<group>"; };
+		FF0000000000000000000243 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
+		FF0000000000000000000245 /* PhraseAlias.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraseAlias.swift; sourceTree = "<group>"; };
+		FF0000000000000000000247 /* EventComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventComposerView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000249 /* PhraseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraseParser.swift; sourceTree = "<group>"; };
+		FF000000000000000000024B /* QuickAddParserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddParserView.swift; sourceTree = "<group>"; };
+		FF000000000000000000024D /* DictionarySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettingsView.swift; sourceTree = "<group>"; };
+		FF000000000000000000024F /* SuggestionQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionQueue.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -202,7 +214,6 @@
 			isa = PBXGroup;
 			children = (
 				A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */,
-				FF0000000000000000000101 /* AddTaskSheet.swift */,
 				FF0000000000000000000146 /* AlarmService.swift */,
 				FF0000000000000000000148 /* ApprovalQueueView.swift */,
 				FF0000000000000000000150 /* ApprovalMessage.swift */,
@@ -243,6 +254,14 @@
 				FF000000000000000000023C /* RoomMessage.swift */,
 				FF000000000000000000023E /* PeerRoomSession.swift */,
 				FF0000000000000000000240 /* FocusRoomView.swift */,
+				FF0000000000000000000241 /* WHCategory.swift */,
+				FF0000000000000000000243 /* Profile.swift */,
+				FF0000000000000000000245 /* PhraseAlias.swift */,
+				FF0000000000000000000247 /* EventComposerView.swift */,
+				FF0000000000000000000249 /* PhraseParser.swift */,
+				FF000000000000000000024B /* QuickAddParserView.swift */,
+				FF000000000000000000024D /* DictionarySettingsView.swift */,
+				FF000000000000000000024F /* SuggestionQueue.swift */,
 				FF0000000000000000000162 /* WeekReportSource.swift */,
 				FF0000000000000000000165 /* WeekMath.swift */,
 				FF000000000000000000012E /* TaskCardView.swift */,
@@ -252,7 +271,6 @@
 				FF000000000000000000013C /* TodoListView.swift */,
 				FF0000000000000000000121 /* WeatherProvider.swift */,
 				FF0000000000000000000134 /* WeekLayout.swift */,
-				FF0000000000000000000237 /* WeekReview.swift */,
 				FF000000000000000000023A /* WeekReviewView.swift */,
 				FF0000000000000000000123 /* WeekView.swift */,
 				FF0000000000000000000125 /* YearView.swift */,
@@ -374,7 +392,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FF0000000000000000000102 /* AddTaskSheet.swift in Sources */,
 				FF0000000000000000000147 /* AlarmService.swift in Sources */,
 				FF0000000000000000000149 /* ApprovalQueueView.swift in Sources */,
 				FF0000000000000000000151 /* ApprovalMessage.swift in Sources */,
@@ -415,6 +432,14 @@
 				FF000000000000000000023B /* RoomMessage.swift in Sources */,
 				FF000000000000000000023D /* PeerRoomSession.swift in Sources */,
 				FF000000000000000000023F /* FocusRoomView.swift in Sources */,
+				FF0000000000000000000242 /* WHCategory.swift in Sources */,
+				FF0000000000000000000244 /* Profile.swift in Sources */,
+				FF0000000000000000000246 /* PhraseAlias.swift in Sources */,
+				FF0000000000000000000248 /* EventComposerView.swift in Sources */,
+				FF000000000000000000024A /* PhraseParser.swift in Sources */,
+				FF000000000000000000024C /* QuickAddParserView.swift in Sources */,
+				FF000000000000000000024E /* DictionarySettingsView.swift in Sources */,
+				FF0000000000000000000250 /* SuggestionQueue.swift in Sources */,
 				FF0000000000000000000163 /* WeekReportSource.swift in Sources */,
 				FF000000000000000000012F /* TaskCardView.swift in Sources */,
 				FF000000000000000000011E /* TaskDetailView.swift in Sources */,
@@ -424,7 +449,6 @@
 				FF0000000000000000000122 /* WeatherProvider.swift in Sources */,
 				FF0000000000000000000135 /* WeekLayout.swift in Sources */,
 				FF0000000000000000000164 /* WeekMath.swift in Sources */,
-				FF0000000000000000000238 /* WeekReview.swift in Sources */,
 				FF0000000000000000000239 /* WeekReviewView.swift in Sources */,
 				FF0000000000000000000124 /* WeekView.swift in Sources */,
 				FF0000000000000000000126 /* YearView.swift in Sources */,
