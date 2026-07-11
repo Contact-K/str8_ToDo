@@ -104,6 +104,8 @@ enum BackupService {
         var end: Date
         var taskID: UUID?
         var subjectID: UUID?
+        var roomID: UUID? = nil
+        var participantCount: Int? = nil
     }
 
     struct WeekReviewDTO: Codable {
@@ -370,7 +372,7 @@ enum BackupService {
         }
 
         let focusSessionDTOs = focusSessions.map { session in
-            FocusSessionDTO(id: session.id, start: session.start, end: session.end, taskID: session.taskID, subjectID: session.subjectID)
+            FocusSessionDTO(id: session.id, start: session.start, end: session.end, taskID: session.taskID, subjectID: session.subjectID, roomID: session.roomID, participantCount: session.participantCount)
         }
 
         let subjectDTOs = subjects.map { subject in
@@ -564,7 +566,7 @@ enum BackupService {
 
         // FocusSession 挿入
         for sessionDTO in payload.focusSessions {
-            let session = FocusSession(id: sessionDTO.id, start: sessionDTO.start, end: sessionDTO.end, taskID: sessionDTO.taskID, subjectID: sessionDTO.subjectID)
+            let session = FocusSession(id: sessionDTO.id, start: sessionDTO.start, end: sessionDTO.end, taskID: sessionDTO.taskID, subjectID: sessionDTO.subjectID, roomID: sessionDTO.roomID, participantCount: sessionDTO.participantCount)
             context.insert(session)
         }
 

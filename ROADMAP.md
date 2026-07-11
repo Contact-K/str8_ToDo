@@ -249,9 +249,23 @@ Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（Wee
 
 ## Phase 14 — ローカルP2P集中ルーム(W4) 〔実機2台+〕
 
-PeerSession(P5)流用。2〜7人、ホストが時間設定、全員の faceDown が揃って開始(クロックオフセット交換で同期)。途中離脱の表示。終了後は相互承認モードへ直結(approverID 記録)。FocusSession に roomID / participantCount 追加。フォアグラウンド限定。
+`PeerRoomSession`（PeerSession とは別クラス、承認フロー無傷）を新設。2〜7人、ホストが時間設定、全員の faceDown が揃って開始（RTT/2 のクロックオフセット交換で同期）。途中離脱を検知して縮退。終了時に各端末が自身の `FocusSession` を保存（`roomID` / `participantCount` 付与）。フォアグラウンド限定（`.background` で退出）。
 
 **受け入れ基準**: 2台が1秒未満のズレで同時開始。切断時に破綻せず縮退する。
+
+### P14 残タスク（Wave3 レビューで検出・要オーナー判断も含む）
+
+Wave1〜3 で以下は完了: FocusSession スキーマ拡張・BackupService 後方互換・FocusRoom 純粋モデル・p14-selfcheck 7 テスト・PeerRoomSession（送信者検証／unicast pong／`hostPeerID` once-only／`.leave` 送信者検証／`markEnded` 再入ガード）・roomID ホスト→ゲスト伝播・requestClockSync 自動発火・TimerView 二重稼働防止（`guard !showRoom`）・save 失敗 alert（Phase 13 教訓踏襲）・`.background` のみ判定・`hasFinished` フラグで二重 save 防止。
+
+- [High] **統合テストの穴**: `p14-selfcheck` は `FocusRoom` 純粋関数と `RoomMessage` JSON 往復のみ。`markEnded` / `finishAndSave` / `PeerRoomSession.handle` の統合的な再入・二重呼びは未検証。軽量な統合チェック（onEnded 2 回発火で FocusSession が 1 件保存にとどまることの assert 等）を追加。
+- [High] **approverID の記録**: ROADMAP は「終了後は相互承認モードへ直結、approverID 記録」と明記だが、現状は FocusSession に approverID を格納しない（承認は既存 `ApprovalQueueView` の chop 承認に委ねる）。FocusSession に `approverID: String?` フィールド追加＋Wave3 の `finishAndSave` で peer.hostPeerID などを詰める設計判断が必要。
+- [High] **TOFU（Trust-On-First-Use）攻撃耐性**: `hostPeerID` の初回設定を初回のみに限定してあるが、メッシュトポロジー上、悪意ある peer が最初の `.hello` を騙る可能性は残る。`requestJoin(host:)` で選択した peer 由来で host を確定する強化が必要。
+- [High] **`.inactive` 継続監視**: 現状 `.inactive` を無視して `.background` のみで dismiss。長時間 `.inactive`（電話着信等）が続くケースを別途モニタして退出させる。
+- [Medium] **クロック同期の実機検証**: p14-selfcheck の Test 6 は「対称ネットで RTT が真の片道と一致する」構成でオフセット誤差ゼロ。**非対称遅延の実機測定**（Wi-Fi 混雑時等）を実機 2 台で行い、1 秒未満の受け入れ基準を実証。
+- [Medium/要判断] **`.inactive` を含む一時遷移中の退出方針**: 実機 2 台で権限ダイアログの挙動を観察してから最終判断。
+- [Low] `discoveredHosts` の並び順を安定化（現状 append 順、UI で peer 名称でソートが望ましい）
+- [Low] `HourglassMotionService` を FocusRoomView と TimerView で **別インスタンス** が生成される現状を、共有 service に統一（今は `guard !showRoom` で回避しているだけ）
+- [参考] ROADMAP の Phase 14 spec を実装に合わせて更新済み（本節冒頭で「PeerRoomSession 新設」に反映）
 
 ---
 

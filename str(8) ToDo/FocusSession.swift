@@ -18,14 +18,19 @@ final class FocusSession {
     var taskID: UUID?
     /// 科目（P10）。タイマーで科目を選んで終了すると記録される（未選択なら nil）。
     var subjectID: UUID?
-    // ponytail: roomID/participantCount は P14 で追加
+    /// 集中ルーム（P14）。セッションが生成されたルームの ID。
+    var roomID: UUID? = nil
+    /// ルーム参加者数（P14）。ホストを含む。
+    var participantCount: Int? = nil
 
-    init(id: UUID = UUID(), start: Date, end: Date, taskID: UUID? = nil, subjectID: UUID? = nil) {
+    init(id: UUID = UUID(), start: Date, end: Date, taskID: UUID? = nil, subjectID: UUID? = nil, roomID: UUID? = nil, participantCount: Int? = nil) {
         self.id = id
         self.start = start
         self.end = end
         self.taskID = taskID
         self.subjectID = subjectID
+        self.roomID = roomID
+        self.participantCount = participantCount
     }
 
     /// セッションを保存し、紐付けタスクがあれば actualDuration に経過を累積する。

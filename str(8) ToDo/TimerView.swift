@@ -35,6 +35,7 @@ struct TimerView: View {
 
     /// View 再生成で変わらないよう @State（cancel が schedule と同じ ID を指す）。
     @State private var alarmID = UUID()
+    @State private var showRoom = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isSessionActive: Bool { sessionStart != nil }
@@ -124,7 +125,8 @@ struct TimerView: View {
                 restoreSnapshot()
             }
             .onDisappear { motion.stop() }
-            .onChange(of: motion.phase) {
+            .onChange(of: motion.phase) { _, _ in
+                guard !showRoom else { return }
                 syncWithMotion()
             }
             .onChange(of: linkedTaskID) {
@@ -222,32 +224,44 @@ struct TimerView: View {
     @ViewBuilder
     private var controls: some View {
         // シミュレータ（センサーなし）では手動ボタン、実機でも代替操作として常設
-        HStack(spacing: 16) {
-            if !isSessionActive {
-                Button("開始") { startRun() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityLabel("タイマーを開始")
-                    .sensoryFeedback(.impact(flexibility: .soft), trigger: isSessionActive)
-            } else {
-                Button(isRunning ? "一時停止" : "再開") {
-                    isRunning ? pauseRun() : resumeRun()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .sensoryFeedback(.impact(flexibility: .soft), trigger: isRunning)
-
-                Button("終了") { finish() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityLabel("タイマーを終了して記録")
-                    .sensoryFeedback(.success, trigger: isSessionActive)
-
-                Button("キャンセル") { cancelSession() }
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                if !isSessionActive {
+                    Button("開始") { startRun() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .accessibilityLabel("タイマーを開始")
+                        .sensoryFeedback(.impact(flexibility: .soft), trigger: isSessionActive)
+                } else {
+                    Button(isRunning ? "一時停止" : "再開") {
+                        isRunning ? pauseRun() : resumeRun()
+                    }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .tint(.red)
-                    .accessibilityLabel("記録せずにキャンセル")
+                    .sensoryFeedback(.impact(flexibility: .soft), trigger: isRunning)
+
+                    Button("終了") { finish() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .accessibilityLabel("タイマーを終了して記録")
+                        .sensoryFeedback(.success, trigger: isSessionActive)
+
+                    Button("キャンセル") { cancelSession() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(.red)
+                        .accessibilityLabel("記録せずにキャンセル")
+                }
+            }
+            if !isSessionActive {
+                Button(action: { showRoom = true }) {
+                    Label("ルームで集中", systemImage: "person.3.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .sheet(isPresented: $showRoom) {
+                    FocusRoomView()
+                }
             }
         }
     }
