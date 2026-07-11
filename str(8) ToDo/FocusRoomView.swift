@@ -73,10 +73,12 @@ struct FocusRoomView: View {
                     // 全端末（ホスト含む）が onEnded → finishAndSave する（1Hz 自己申告から脱却）。
                     self.timer?.invalidate()
                     self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-                        self.now = .now
-                        let elapsed = self.now.timeIntervalSince1970 - localStart
-                        if elapsed >= Double(self.selectedMinutes * 60), self.peer.isHost {
-                            self.peer.end()
+                        Task { @MainActor in
+                            self.now = .now
+                            let elapsed = self.now.timeIntervalSince1970 - localStart
+                            if elapsed >= Double(self.selectedMinutes * 60), self.peer.isHost {
+                                self.peer.end()
+                            }
                         }
                     }
                 }
@@ -187,7 +189,7 @@ struct FocusRoomView: View {
                         Spacer()
                     }
                 }
-                Text("全員が端末を伏せると開始します").font(.caption).foregroundStyle(.secondary)
+                Text("全員が端末を上下反転すると開始します").font(.caption).foregroundStyle(.secondary)
             }
 
             if !isHost && !peer.discoveredHosts.isEmpty {

@@ -78,8 +78,8 @@ struct LocationPickerView: View {
             do {
                 let response = try await search.start()
                 searchResults = response.mapItems.compactMap { mapItem in
-                    let name = mapItem.name ?? mapItem.placemark.name ?? "Unknown"
-                    let coordinate = mapItem.placemark.coordinate
+                    let name = mapItem.name ?? mapItem.address?.shortAddress ?? "Unknown"
+                    let coordinate = mapItem.location.coordinate
                     return (name: name, coordinate: coordinate)
                 }
             } catch {

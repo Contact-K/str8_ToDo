@@ -16,13 +16,18 @@ import Foundation
 
 /// setting →(faceUp)→ armed →(faceDown+意図フリップ)→ running →(faceUp)→ paused →(faceDown)→ running。
 /// 姿勢はヒステリシス付き、全遷移に 0.3 秒デバウンス。キャンセルは UI 側の長押し（reset()）。
+///
+/// ponytail: 物理的な検出は「充電口を床につけて端末を垂直に立てた状態＝ faceUp（gravity.y ≈ -1）」を 0°、
+/// 「上端を床につけて端末を垂直に立てた状態＝ faceDown（gravity.y ≈ +1）」を 180° と定義。
+/// ingest には gravity.y を渡す（旧仕様は gravity.z による画面フリップ検出。仕様修正 2026-07-11）。
+/// enum ケース名（faceUp/faceDown）は後方互換のため据え置き。意味は「端末上部が上／下」に置換。
 struct HourglassStateMachine {
     enum Posture { case portrait, faceUp, faceDown, other }
     enum Phase { case setting, armed, running, paused }
 
     /// 実機チューニングで触るのはここだけ。
     enum Tuning {
-        /// |gravity.z| がこれを超えたら faceUp/faceDown に入る（CoreMotion 規約: faceDown ≈ +1 / faceUp ≈ -1）。
+        /// |gravity.y| がこれを超えたら faceUp/faceDown に入る（端末垂直判定: 上端上 ≈ -1 / 上端下 ≈ +1）。
         static let enter = 0.75
         /// これを下回ったら faceUp/faceDown から抜ける（ヒステリシス）。
         static let exit = 0.6
@@ -47,6 +52,7 @@ struct HourglassStateMachine {
         lastGyroPeakAt = -.infinity
     }
 
+    /// ingest には gravity.y を渡す（端末垂直軸方向の重力成分）。旧引数名 gravityZ は互換のため据え置き。
     @discardableResult
     mutating func ingest(gravityZ: Double, gyroPeak: Bool, at time: TimeInterval) -> Phase {
         if gyroPeak { lastGyroPeakAt = time }
@@ -111,14 +117,15 @@ import SwiftUI
 final class HourglassMotionService {
     private let manager = CMMotionManager()
     private(set) var machine = HourglassStateMachine()
-    private(set) var gravityZ: Double = 0
+    /// 端末垂直軸方向の重力成分。上端上 ≈ -1、上端下（フリップ後）≈ +1。仕様修正 2026-07-11。
+    private(set) var gravityY: Double = 0
     private(set) var rotationRateX: Double = 0
 
     var phase: HourglassStateMachine.Phase { machine.phase }
     /// シミュレータでは false（UI は手動モードにフォールバック）。
     var isAvailable: Bool { manager.isDeviceMotionAvailable }
-    /// 現在の端末姿勢が faceDown か否かを返す（gravity.z > 0.7）。
-    var isDeviceFaceDown: Bool { gravityZ > HourglassStateMachine.Tuning.enter }
+    /// 現在の端末姿勢が faceDown（上端が床側、gravity.y > 0.75）か否か。
+    var isDeviceFaceDown: Bool { gravityY > HourglassStateMachine.Tuning.enter }
 
     func start() {
         guard isAvailable, !manager.isDeviceMotionActive else { return }
@@ -127,10 +134,10 @@ final class HourglassMotionService {
             guard let motion else { return }
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.gravityZ = motion.gravity.z
+                self.gravityY = motion.gravity.y
                 self.rotationRateX = motion.rotationRate.x
                 let peak = abs(motion.rotationRate.x) > HourglassStateMachine.Tuning.gyroPeakThreshold
-                self.machine.ingest(gravityZ: motion.gravity.z, gyroPeak: peak, at: motion.timestamp)
+                self.machine.ingest(gravityZ: motion.gravity.y, gyroPeak: peak, at: motion.timestamp)
             }
         }
     }
@@ -152,7 +159,7 @@ struct MotionHUDView: View {
     var body: some View {
         List {
             Section("ライブ値") {
-                LabeledContent("gravity.z", value: String(format: "%+.3f", service.gravityZ))
+                LabeledContent("gravity.y", value: String(format: "%+.3f", service.gravityY))
                 LabeledContent("rotationRate.x", value: String(format: "%+.3f", service.rotationRateX))
                 LabeledContent("Phase", value: phaseLabel(service.phase))
                 LabeledContent("センサー", value: service.isAvailable ? "利用可" : "利用不可（Sim）")

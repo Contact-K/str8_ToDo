@@ -25,6 +25,7 @@ struct WeekReviewView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var isShareSheetPresented = false
     @State private var shareImage: UIImage? = nil
@@ -169,7 +170,7 @@ struct WeekReviewView: View {
     @MainActor
     private func exportImage() {
         let renderer = ImageRenderer(content: reportSection.padding(20).background(Color(.systemBackground)))
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = displayScale
         guard let image = renderer.uiImage else {
             exportFailed = true
             return

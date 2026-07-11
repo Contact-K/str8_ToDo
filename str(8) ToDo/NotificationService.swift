@@ -39,9 +39,10 @@ enum NotificationService {
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
 
             let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            let taskIDString = task.id.uuidString
             UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
-                    os_log("Failed to schedule notification for task %@: %@", log: .default, type: .error, task.id.uuidString, error.localizedDescription)
+                    os_log("Failed to schedule notification for task %@: %@", log: .default, type: .error, taskIDString, error.localizedDescription)
                 }
             }
         }

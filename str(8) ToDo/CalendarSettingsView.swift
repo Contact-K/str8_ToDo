@@ -144,7 +144,7 @@ struct CalendarSettingsView: View {
                     .onChange(of: enableNotifications) { oldValue, newValue in
                         Task {
                             if newValue {
-                                await NotificationService.requestAuthorization()
+                                _ = await NotificationService.requestAuthorization()
                                 // 週次締めリマインダーをスケジュール
                                 let d = UserDefaults.standard
                                 let w = d.integer(forKey: AppSettingsKey.weekReviewWeekday)

@@ -24,7 +24,12 @@ final class EventKitService {
 
     private let store = EKEventStore()
     private(set) var authState: AuthState = .unknown
+    @ObservationIgnored
     nonisolated(unsafe) private var changeObserver: NSObjectProtocol?
+    /// 外部変更時の再同期先。observeChanges の呼び出し元と常に同一の ModelContext
+    /// （呼び出し側は毎回 modelContext を渡している）。closure に直接 ModelContext を
+    /// capture すると非 Sendable 型の capture 警告になるため、MainActor 上のプロパティ経由にする。
+    private var syncContext: ModelContext?
 
     /// 取り込み対象の期間（前後）。
     private let pastDays = 7
@@ -144,13 +149,15 @@ final class EventKitService {
     /// 外部変更（.EKEventStoreChanged）を購読して自動再同期する。
     func observeChanges(into context: ModelContext) {
         guard changeObserver == nil else { return }
+        syncContext = context
         changeObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
             object: store,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.sync(into: context)
+        ) { _ in
+            Task { @MainActor [weak self] in
+                guard let self, let ctx = self.syncContext else { return }
+                self.sync(into: ctx)
             }
         }
     }

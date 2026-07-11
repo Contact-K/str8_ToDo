@@ -96,6 +96,9 @@ extension WHCategory: Identifiable {
 struct EventComposerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var aliases: [PhraseAlias]
+    @Query private var categories: [Category]
+    @Query private var placeTags: [PlaceTag]
 
     private let existingTask: TaskItem?
     @State private var draft: ComposerDraft
@@ -105,6 +108,10 @@ struct EventComposerView: View {
     @State private var pendingPlaceHint: String?
     /// P18 H2: 金額が上限（1兆円）を超えた保存操作を弾いた時に表示するアラート。
     @State private var showAmountTooLargeAlert = false
+    /// 自然文パース入力（Phase 16 の QuickAddParserView をカレンダー作成側にも接続）。
+    @State private var nlInput: String = ""
+    @State private var nlDebounceTask: Task<Void, Never>? = nil
+    @State private var recognizedChips: [(WHCategory, String)] = []
 
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
     /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
@@ -156,6 +163,34 @@ struct EventComposerView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // 自然文パース入力（新規作成のみ表示。編集時は不要）
+                if existingTask == nil {
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("自然文で入力（例: 明日 14:00 大学でレポート）", text: $nlInput, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...2)
+                            .onChange(of: nlInput) { _, newValue in
+                                scheduleParse(newValue)
+                            }
+                        if !recognizedChips.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
+                                        Text("\(chip.0.label): \(chip.1)")
+                                            .font(.caption2)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    Divider().padding(.top, 8)
+                }
+
                 TextField("タスク名", text: $draft.title)
                     .font(.title3)
                     .padding()
@@ -203,6 +238,59 @@ struct EventComposerView: View {
         let fetch = FetchDescriptor<PlaceTag>(predicate: #Predicate<PlaceTag> { $0.name == hint })
         draft.place = try? modelContext.fetch(fetch).first
         pendingPlaceHint = nil
+    }
+
+    /// 自然文入力の 300ms デバウンス。空文字ならクリア。
+    private func scheduleParse(_ text: String) {
+        nlDebounceTask?.cancel()
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            recognizedChips = []
+            return
+        }
+        nlDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            applyParse(trimmed)
+        }
+    }
+
+    /// PhraseParser 結果を draft に反映。既存の手動編集を尊重しつつヒントを埋める。
+    private func applyParse(_ text: String) {
+        let result = PhraseParser.parse(text, aliases: aliases)
+        // タイトル: 残り文字列を反映（自然文入力を使う=手動入力より優先）
+        draft.title = result.titleRemainder
+        // when
+        if let start = result.startDate {
+            draft.isTimeSpecified = true
+            draft.startDate = start
+        }
+        if let duration = result.duration {
+            draft.duration = duration
+            draft.isTimeSpecified = true
+        }
+        // where: PlaceTag 名でマッチ、無ければ pendingPlaceHint に置く（後で解決）
+        if let placeHint = result.placeHint {
+            if let match = placeTags.first(where: { $0.name == placeHint }) {
+                draft.place = match
+            } else {
+                pendingPlaceHint = placeHint
+            }
+        }
+        // which
+        if let categoryHint = result.categoryHint,
+           let match = categories.first(where: { $0.name == categoryHint }) {
+            draft.category = match
+        }
+        // who / other は既存 EventComposer プリフィル経路と同じ
+        if let who = result.whoHint, !draft.participantNames.contains(who) {
+            draft.participantNames.append(who)
+        }
+        if let other = result.otherHint {
+            if draft.notes.isEmpty { draft.notes = other }
+            else if !draft.notes.contains(other) { draft.notes += "\n" + other }
+        }
+        recognizedChips = result.recognizedChips
     }
 
     private var isSaveDisabled: Bool {

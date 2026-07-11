@@ -83,16 +83,14 @@ private struct RootView: View {
                 seedPhraseAliasesIfNeeded(modelContainer.mainContext)
                 seedProfilesIfNeeded(modelContainer.mainContext)
                 // seed 後の初回 refresh
-                await WidgetSnapshotService.refresh(modelContainer.mainContext)
+                WidgetSnapshotService.refresh(modelContainer.mainContext)
                 // 起動時に通知権限を要求
-                await NotificationService.requestAuthorization()
+                _ = await NotificationService.requestAuthorization()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
                 case .active, .background:
-                    Task {
-                        await WidgetSnapshotService.refresh(modelContainer.mainContext)
-                    }
+                    WidgetSnapshotService.refresh(modelContainer.mainContext)
                 case .inactive:
                     break
                 @unknown default:

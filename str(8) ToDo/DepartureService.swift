@@ -92,10 +92,8 @@ final class DepartureService {
             defer { self?.inFlight[taskID] = nil }
 
             let mkRequest = MKDirections.Request()
-            mkRequest.source = MKMapItem(placemark: MKPlacemark(
-                coordinate: CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)))
-            mkRequest.destination = MKMapItem(placemark: MKPlacemark(
-                coordinate: CLLocationCoordinate2D(latitude: destLat, longitude: destLon)))
+            mkRequest.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
+            mkRequest.destination = MKMapItem(location: CLLocation(latitude: destLat, longitude: destLon), address: nil)
             // ponytail: 移動手段は .automobile 固定。手段選択が要るなら TaskItem にフィールド追加から
             mkRequest.transportType = .automobile
             mkRequest.requestsAlternateRoutes = false

@@ -49,10 +49,9 @@ enum AlarmService {
                 // requestAuthorization 後に世代チェック
                 if generations[id] != currentGen { return }
 
-                let stopButton = AlarmButton(text: "停止", textColor: .white, systemImageName: "stop.fill")
+                // iOS 26.1+: stopButton は廃止、システム標準の停止ボタンが自動表示される
                 let alert = AlarmPresentation.Alert(
-                    title: LocalizedStringResource(stringLiteral: title),
-                    stopButton: stopButton
+                    title: LocalizedStringResource(stringLiteral: title)
                 )
                 let attributes = AlarmAttributes<TimerAlarmMetadata>(
                     presentation: AlarmPresentation(alert: alert),

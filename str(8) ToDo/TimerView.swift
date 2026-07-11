@@ -2,10 +2,10 @@
 //  TimerView.swift
 //  str8ToDo
 //
-//  砂時計タイマー。実機ではモーション（伏せて開始・起こして一時停止・長押しキャンセル）、
+//  砂時計タイマー。実機ではモーション（上下反転で開始・元姿勢に戻して一時停止・長押しキャンセル）、
 //  シミュレータでは手動ボタンにフォールバック。完了で FocusSession を記録する。
 //
-//  実機残項目: 伏せて開始/起こして一時停止の実機確認、意図フリップ 10/10、机バンプ誤発火 0。
+//  実機残項目: 上下反転で開始/元姿勢に戻して一時停止の実機確認、意図フリップ 10/10、机バンプ誤発火 0。
 //
 
 import SwiftUI
@@ -86,7 +86,7 @@ struct TimerView: View {
 
                 if motion.isAvailable && !isSessionActive {
                     if motion.phase == .armed {
-                        Label("待機中 — 伏せると開始", systemImage: "bell.ring")
+                        Label("待機中 — 上下反転で開始", systemImage: "bell.ring")
                             .font(.caption)
                             .foregroundStyle(.blue)
                     } else if motion.phase == .setting {
