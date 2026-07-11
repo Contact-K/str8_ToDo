@@ -352,6 +352,34 @@ func testZeroSecondDayNotCounted() {
     print("testZeroSecondDayNotCounted: passed（0秒日は非活動、ストリーク/hasSession/byDay から除外）")
 }
 
+// MARK: - Test 11: 当日0秒日が mostRecentDay に誤選出されない（本命シナリオ）
+
+@MainActor
+func testZeroSecondTodayNotMostRecent() {
+    let dBeforeYesterday = day(2026, 7, 8)  // 一昨日: 30分
+    let dYesterday = day(2026, 7, 9)        // 昨日: 25分
+    let dToday = day(2026, 7, 10)           // 今日: 0秒(end<start)のみ
+
+    let sessions = [
+        FocusSession(start: dBeforeYesterday, end: dBeforeYesterday.addingTimeInterval(30 * 60)),
+        FocusSession(start: dYesterday, end: dYesterday.addingTimeInterval(25 * 60)),
+        // 今日は 0秒のみ（ghost 日）
+        FocusSession(start: dToday.addingTimeInterval(3600),
+                     end: dToday.addingTimeInterval(3600 - 10 * 60))  // 10分マイナス
+    ]
+
+    // (a) 今日のキーは作られない
+    let todayStart = Calendar.current.startOfDay(for: dToday)
+    let byDay = StudyStats.focusSecondsByDay(sessions)
+    assert(byDay[todayStart] == nil, "今日(0秒) キーなし 期待nil 実際\(byDay[todayStart] ?? -1)")
+
+    // (b) mostRecentDay は昨日に巻き戻り、streak は一昨日・昨日の2
+    let streak = StudyStats.currentStreakDays(sessions, asOf: dToday)
+    assert(streak == 2, "当日ghostを数えず巻き戻って2 期待2 実際\(streak)")
+
+    print("testZeroSecondTodayNotMostRecent: passed（当日0秒はmostRecentDayに選出されず巻き戻る）")
+}
+
 // MARK: - Main
 
 @main
@@ -368,6 +396,7 @@ struct P10SelfCheck {
         testFocusSecondsForSubject()
         testCurrentStreakDays()
         testZeroSecondDayNotCounted()
+        testZeroSecondTodayNotMostRecent()
 
         print("p10-selfcheck: all passed")
     }

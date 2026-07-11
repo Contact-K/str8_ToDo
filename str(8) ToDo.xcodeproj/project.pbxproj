@@ -54,6 +54,12 @@
 		FF000000000000000000015B /* Subject.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015A /* Subject.swift */; };
 		FF000000000000000000015D /* HeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015C /* HeatmapView.swift */; };
 		FF000000000000000000015F /* StudyHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000015E /* StudyHubView.swift */; };
+		FF0000000000000000000204 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
+		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
+		FF0000000000000000000208 /* str8Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000207 /* str8Widget.swift */; };
+		FF0000000000000000000210 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
+		FF0000000000000000000211 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
+		FF0000000000000000000202 /* str8Widget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000201 /* str8Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,10 +112,47 @@
 		FF000000000000000000015A /* Subject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Subject.swift; sourceTree = "<group>"; };
 		FF000000000000000000015C /* HeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapView.swift; sourceTree = "<group>"; };
 		FF000000000000000000015E /* StudyHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyHubView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000201 /* str8Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF0000000000000000000203 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
+		FF0000000000000000000205 /* WidgetSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotService.swift; sourceTree = "<group>"; };
+		FF0000000000000000000207 /* str8Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = str8Widget.swift; sourceTree = "<group>"; };
+		FF0000000000000000000209 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FF000000000000000000020B /* str8Widget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = str8Widget.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		FF0000000000000000000236 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A116F61B2FE51E57005A6590 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FF0000000000000000000230;
+			remoteInfo = str8Widget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FF0000000000000000000223 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FF0000000000000000000202 /* str8Widget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A116F6202FE51E57005A6590 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF0000000000000000000221 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,6 +166,7 @@
 			isa = PBXGroup;
 			children = (
 				FF000000000000000000012B /* str(8) ToDo */,
+				FF0000000000000000000234 /* str8Widget */,
 				A116F6242FE51E57005A6590 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -131,6 +175,7 @@
 			isa = PBXGroup;
 			children = (
 				A116F6232FE51E57005A6590 /* str(8) ToDo.app */,
+				FF0000000000000000000201 /* str8Widget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -185,9 +230,21 @@
 				FF0000000000000000000123 /* WeekView.swift */,
 				FF0000000000000000000125 /* YearView.swift */,
 				FF0000000000000000000127 /* str_8__ToDoApp.swift */,
+				FF0000000000000000000203 /* WidgetShared.swift */,
+				FF0000000000000000000205 /* WidgetSnapshotService.swift */,
 				FF0000000000000000000129 /* Assets.xcassets */,
 			);
 			path = "str(8) ToDo";
+			sourceTree = "<group>";
+		};
+		FF0000000000000000000234 /* str8Widget */ = {
+			isa = PBXGroup;
+			children = (
+				FF0000000000000000000207 /* str8Widget.swift */,
+				FF0000000000000000000209 /* Info.plist */,
+				FF000000000000000000020B /* str8Widget.entitlements */,
+			);
+			path = str8Widget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -200,15 +257,34 @@
 				A116F61F2FE51E57005A6590 /* Sources */,
 				A116F6202FE51E57005A6590 /* Frameworks */,
 				A116F6212FE51E57005A6590 /* Resources */,
+				FF0000000000000000000223 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FF0000000000000000000235 /* PBXTargetDependency */,
 			);
 			name = "str(8) ToDo";
 			productName = "str(8) ToDo";
 			productReference = A116F6232FE51E57005A6590 /* str(8) ToDo.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FF0000000000000000000230 /* str8Widget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF0000000000000000000231 /* Build configuration list for PBXNativeTarget "str8Widget" */;
+			buildPhases = (
+				FF0000000000000000000220 /* Sources */,
+				FF0000000000000000000221 /* Frameworks */,
+				FF0000000000000000000222 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = str8Widget;
+			productName = str8Widget;
+			productReference = FF0000000000000000000201 /* str8Widget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -221,6 +297,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					A116F6222FE51E57005A6590 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					FF0000000000000000000230 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -240,6 +319,7 @@
 			projectRoot = "";
 			targets = (
 				A116F6222FE51E57005A6590 /* str(8) ToDo */,
+				FF0000000000000000000230 /* str8Widget */,
 			);
 		};
 /* End PBXProject section */
@@ -250,6 +330,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				FF000000000000000000012A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF0000000000000000000222 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,10 +393,30 @@
 				FF0000000000000000000124 /* WeekView.swift in Sources */,
 				FF0000000000000000000126 /* YearView.swift in Sources */,
 				FF0000000000000000000128 /* str_8__ToDoApp.swift in Sources */,
+				FF0000000000000000000204 /* WidgetShared.swift in Sources */,
+				FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF0000000000000000000220 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF0000000000000000000210 /* WidgetShared.swift in Sources */,
+				FF0000000000000000000211 /* Color+Hex.swift in Sources */,
+				FF0000000000000000000208 /* str8Widget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FF0000000000000000000235 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FF0000000000000000000230 /* str8Widget */;
+			targetProxy = FF0000000000000000000236 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A116F62C2FE51E58005A6590 /* Debug */ = {
@@ -448,6 +555,66 @@
 			};
 			name = Release;
 		};
+		FF0000000000000000000232 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "str8Widget/str8Widget.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AT32Z655YX;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "str8Widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "str(8) ToDo";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FF0000000000000000000233 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "str8Widget/str8Widget.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AT32Z655YX;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "str8Widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "str(8) ToDo";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -465,6 +632,15 @@
 			buildConfigurations = (
 				A116F62F2FE51E58005A6590 /* Debug */,
 				A116F6302FE51E58005A6590 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FF0000000000000000000231 /* Build configuration list for PBXNativeTarget "str8Widget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF0000000000000000000232 /* Debug */,
+				FF0000000000000000000233 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

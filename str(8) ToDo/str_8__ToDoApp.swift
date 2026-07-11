@@ -43,9 +43,36 @@ struct str_8__ToDoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .task { BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext) }
+            RootView(modelContainer: modelContainer)
         }
         .modelContainer(modelContainer)
+    }
+}
+
+// MARK: - Root View with ScenePhase Monitoring
+
+private struct RootView: View {
+    let modelContainer: ModelContainer
+    @Environment(\.scenePhase) var scenePhase
+
+    var body: some View {
+        ContentView()
+            .task {
+                BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext)
+                // seed 後の初回 refresh
+                await WidgetSnapshotService.refresh(modelContainer.mainContext)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .active, .background:
+                    Task {
+                        await WidgetSnapshotService.refresh(modelContainer.mainContext)
+                    }
+                case .inactive:
+                    break
+                @unknown default:
+                    break
+                }
+            }
     }
 }
