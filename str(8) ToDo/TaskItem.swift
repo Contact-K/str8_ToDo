@@ -279,6 +279,7 @@ extension TaskItem {
     }
 
     /// 浮遊タスクを指定時刻・所要でカレンダーへ昇格（採用）。仕分けの持ち越し状態はクリア。status は変えない（勝手に確定しない）。
+    @MainActor
     func scheduleAt(start: Date, duration: TimeInterval, context: ModelContext) {
         startDate = start
         self.duration = duration

@@ -407,6 +407,7 @@
 				FF000000000000000000013D /* TodoListView.swift in Sources */,
 				FF0000000000000000000122 /* WeatherProvider.swift in Sources */,
 				FF0000000000000000000135 /* WeekLayout.swift in Sources */,
+				FF0000000000000000000164 /* WeekMath.swift in Sources */,
 				FF0000000000000000000238 /* WeekReview.swift in Sources */,
 				FF0000000000000000000239 /* WeekReviewView.swift in Sources */,
 				FF0000000000000000000124 /* WeekView.swift in Sources */,

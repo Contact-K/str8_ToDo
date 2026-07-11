@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import os.log
 
 struct WeekReviewView: View {
     // MARK: - Inits and State
@@ -19,6 +20,10 @@ struct WeekReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShareSheetPresented = false
     @State private var shareImage: UIImage? = nil
+    @State private var isSaving = false
+    @State private var fetchError = false
+    @State private var saveFailed = false
+    @State private var saveErrorMessage = ""
 
     private var range: Range<Date> { WeekMath.weekRange(of: referenceDate) }
     private var nextRange: Range<Date> {
@@ -46,6 +51,7 @@ struct WeekReviewView: View {
                     Button(action: commitAndClose) {
                         Label("締める", systemImage: "checkmark.circle.fill")
                     }
+                    .disabled(isSaving || fetchError)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: exportImage) {
@@ -57,6 +63,17 @@ struct WeekReviewView: View {
                 if let img = shareImage {
                     ShareSheet(items: [img])
                 }
+            }
+            .alert("エラー", isPresented: $fetchError) {
+                Button("OK") { fetchError = false }
+            } message: {
+                Text("データ取得に失敗しました。もう一度お試しください。")
+            }
+            .alert("エラー", isPresented: $saveFailed) {
+                Button("リトライ") { saveFailed = false; commitAndClose() }
+                Button("閉じる") { saveFailed = false; dismiss(); onClose?() }
+            } message: {
+                Text("保存に失敗しました：\(saveErrorMessage)")
             }
         }
     }
@@ -122,14 +139,44 @@ struct WeekReviewView: View {
 
     // MARK: 締め（chop or ボタン）
     private func commitAndClose() {
+        guard !isSaving else { return }
+        isSaving = true
+
+        // fetch 失敗時の保護（修正3）
+        do {
+            _ = try context.fetch(FetchDescriptor<TaskItem>())
+        } catch {
+            fetchError = true
+            isSaving = false
+            return
+        }
+
         let focus = WeekReportSource.focusTotalSec(in: range, context: context)
         let money = WeekReportSource.moneyTotal(in: range, context: context)
         let done = WeekReportSource.doneCount(in: range, context: context)
-        let review = WeekReview(weekStart: range.lowerBound, closedAt: .now, focusTotalSec: focus, moneyTotal: money, doneCount: done)
-        context.insert(review)
-        do { try context.save() } catch { assertionFailure("WeekReview save failed: \(error)") }
-        dismiss()
-        onClose?()
+
+        // upsert パターン：既存の同 weekStart レコードを fetch し、あれば値を上書き、無ければ insert（修正1b）
+        let descriptor = FetchDescriptor<WeekReview>(predicate: #Predicate { $0.weekStart == range.lowerBound })
+        do {
+            if let existing = try context.fetch(descriptor).first {
+                existing.closedAt = .now
+                existing.focusTotalSec = focus
+                existing.moneyTotal = money
+                existing.doneCount = done
+            } else {
+                let review = WeekReview(weekStart: range.lowerBound, closedAt: .now, focusTotalSec: focus, moneyTotal: money, doneCount: done)
+                context.insert(review)
+            }
+            try context.save()
+            isSaving = false
+            dismiss()
+            onClose?()
+        } catch {
+            os_log("WeekReview save failed: %@", log: .default, type: .error, error.localizedDescription)
+            saveErrorMessage = error.localizedDescription
+            saveFailed = true
+            isSaving = false
+        }
     }
 
     // MARK: 静止画エクスポート

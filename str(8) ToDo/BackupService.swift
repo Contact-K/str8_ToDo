@@ -106,6 +106,15 @@ enum BackupService {
         var subjectID: UUID?
     }
 
+    struct WeekReviewDTO: Codable {
+        var id: UUID
+        var weekStart: Date
+        var closedAt: Date
+        var focusTotalSec: TimeInterval
+        var moneyTotal: Decimal
+        var doneCount: Int
+    }
+
     /// 後方互換の規約：
     /// - 後続のモデル/フィールドは必ず Optional（または default 付き init(from:)）で加算すること。
     ///   非 Optional で足すと旧バージョンの .str8 が keyNotFound → corruptData になり読めなくなる。
@@ -124,6 +133,8 @@ enum BackupService {
         var focusSessions: [FocusSessionDTO]
         /// P10 加算。規約どおり optional：旧 .str8（subjects キー無し）でも keyNotFound にならず nil で読める。
         var subjects: [SubjectDTO]?
+        /// P13 加算。規約どおり optional：旧 .str8（weekReviews キー無し）でも keyNotFound にならず nil で読める。
+        var weekReviews: [WeekReviewDTO]?
     }
 
     // MARK: - エラー型
@@ -278,6 +289,7 @@ enum BackupService {
         try deleteAll(PlaceTag.self, context: context)
         // Subject は一次データ（科目名/色/目標/ポモ）。subjectID のダングリング防止に必ず含める。
         try deleteAll(Subject.self, context: context)
+        try deleteAll(WeekReview.self, context: context)
     }
 
     // MARK: - export / restore
@@ -295,6 +307,7 @@ enum BackupService {
         let bandAssignments = try context.fetch(FetchDescriptor<BandAssignment>())
         let focusSessions = try context.fetch(FetchDescriptor<FocusSession>())
         let subjects = try context.fetch(FetchDescriptor<Subject>())
+        let weekReviews = try context.fetch(FetchDescriptor<WeekReview>())
 
         // DTO に変換
         let taskDTOs = tasks.map { task in
@@ -367,6 +380,11 @@ enum BackupService {
                        pomodoroMinutes: subject.pomodoroMinutes)
         }
 
+        let weekReviewDTOs = weekReviews.map { wr in
+            WeekReviewDTO(id: wr.id, weekStart: wr.weekStart, closedAt: wr.closedAt,
+                         focusTotalSec: wr.focusTotalSec, moneyTotal: wr.moneyTotal, doneCount: wr.doneCount)
+        }
+
         let payload = BackupPayload(
             formatVersion: formatVersion,
             exportedAt: .now,
@@ -378,7 +396,8 @@ enum BackupService {
             bands: bandDTOs,
             bandAssignments: bandAssignmentDTOs,
             focusSessions: focusSessionDTOs,
-            subjects: subjectDTOs
+            subjects: subjectDTOs,
+            weekReviews: weekReviewDTOs
         )
 
         // ペイロード暗号化
@@ -547,6 +566,13 @@ enum BackupService {
         for sessionDTO in payload.focusSessions {
             let session = FocusSession(id: sessionDTO.id, start: sessionDTO.start, end: sessionDTO.end, taskID: sessionDTO.taskID, subjectID: sessionDTO.subjectID)
             context.insert(session)
+        }
+
+        // WeekReview 挿入
+        for wrDTO in payload.weekReviews ?? [] {
+            let wr = WeekReview(id: wrDTO.id, weekStart: wrDTO.weekStart, closedAt: wrDTO.closedAt,
+                               focusTotalSec: wrDTO.focusTotalSec, moneyTotal: wrDTO.moneyTotal, doneCount: wrDTO.doneCount)
+            context.insert(wr)
         }
 
         do {

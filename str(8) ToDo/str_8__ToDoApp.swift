@@ -74,6 +74,8 @@ private struct RootView: View {
                 BandTemplate.seedDefaultIfNeeded(modelContainer.mainContext)
                 // seed 後の初回 refresh
                 await WidgetSnapshotService.refresh(modelContainer.mainContext)
+                // 起動時に通知権限を要求
+                await NotificationService.requestAuthorization()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {

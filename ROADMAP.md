@@ -222,9 +222,30 @@ Round 2 で合意した High/Medium/Low の未対応項目。Critical 3件（gap
 
 ## Phase 13 — 週次締めの儀式(W3) 〔実機〕
 
-日曜夜(設定可)に通知→確定キュー一掃→週報(DayStat / FocusSession / MonthMoneyStat から読むだけ、新規集計なし)→来週プレビュー。締めの確定は ChopDetector 流用。小さな `WeekReview` 記録。共有は静止画エクスポートのみ。
+日曜夜(設定可)に通知→確定キュー一掃→週報(DayStat / FocusSession / MonthMoneyStat から読むだけ、新規集計なし)→来週プレビュー。**締めの確定は明示ボタン**（ChopDetector 流用から変更。理由は下記残タスク参照）。小さな `WeekReview` 記録。共有は静止画エクスポートのみ。
 
 **受け入れ基準**: 週報が一通り流れ、数字が各画面の値と一致する。
+
+### P13 残タスク（debate-review 検出、別フェーズ回し）
+
+Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（WeekReview 重複挿入防止 / 通知権限＆トグル連動 / BackupService への WeekReview 組み込み / fetch 失敗の可視化＋save 失敗時 dismiss 抑止）と既知 3件（save 失敗時 dismiss、scheduleWeeklyReview の os_log 統一、TaskItem.scheduleAt の @MainActor 対応）は Phase 13 内で修正済み。
+
+- [High] **`WeekMath` と `WeekView` の週境界二重定義**: `WeekMath` は firstWeekday=2（月曜起点）、`WeekView.swift:37` は firstWeekday=1（日曜起点）で両者ハードコード。アプリ内で「今週」の定義が2種類。`AppSettings.weekShowSevenDays` と連動する共通 helper に統合、`WeekMath` は破棄検討。
+- [High] **`doneCount` の基準を `approved` にする**: 現状は `completedAt` 基準で、承認漏れがあっても締められる／「一掃してから」の儀式指示が数字に反映されない。`approvedCount` 別フィールド追加 or 判定条件変更。
+- [High] **「今週を締める」ボタンが `doneTasks` 空時に消える**: `ApprovalQueueView` の `if !doneTasks.isEmpty` 分岐外にも配置。空でも押せる。
+- [High] **通知タップ→WeekReviewView 自動遷移**: `UNUserNotificationCenterDelegate` を実装、`identifier == weeklyReviewIdentifier` で `showWeekReview` を立てる。もしくは本項を Phase 13 スコープ外として明記。
+- [High] **fetch 重複を `@State` キャッシュ**: `reportSection` / `commitAndClose` / `exportImage` が同じ3関数を独立実行。`@State` で 1 回に。
+- [High] **`#Index` 不在**: FocusSession.end / TaskItem.completedAt / startDate で `#Index` 宣言ゼロ、年単位で線形劣化。SwiftData の Index 検討（キャッシュだけでは解消しない）。
+- [High] **`referenceDate` を `@State` 化**: 現状 View のデフォルト引数 `= .now` で、sheet を開いたまま日付境界を跨ぐ再レンダリングで静かに週が切り替わる。sheet 表示時に固定。
+- [High] **`exportImage` nil 時のフィードバック**: 無反応で終わっている。alert かトースト。
+- [Medium/要判断] **`moneyTotal` を新規集計にするか `MonthMoneyStat` 参照にするか**: 現行実装は `task.occurs(on:)` で日単位走査（`MoneyStats.forEachOccurrence` と同スタイル）。ROADMAP 明記「MonthMoneyStat から読むだけ、新規集計なし」に厳密には反する。`MonthMoneyStat` は月キャッシュのため週単位で切り出すと按分ロジックが必要。**着手前にオーナー判断が必要**。
+- [Medium/要判断] **`WeekReview` の履歴閲覧画面 or モデル廃止**: 現状は書き込み専用（読み出し画面もその計画もない）。過去週閲覧画面を追加するか、`WeekReview` モデル自体を廃止して `WeekReviewView` を都度計算のみにするか、構造的選択が要る。
+- [Low] `ShareSheet` ラッパを `ShareLink` に置換（数行削減）
+- [Low] `UserDefaults.register(defaults:)` で AppSettings の `??` フォールバックを削除
+- [Low] `WeekReviewView.nextRange` の inline 計算を `WeekMath.weekRange` 再利用に
+- [Low] 両 `ToolbarItem` が `.primaryAction` になっている問題、エクスポート側を `.secondaryAction` に
+- [Low] 命名揺れ `doneCount` vs `completedCount` を統一
+- [参考] ROADMAP の Phase 13 spec を実装に合わせて更新（本節冒頭で「明示ボタン」に反映済み。今後の実装変更に応じて更新継続）
 
 ## Phase 14 — ローカルP2P集中ルーム(W4) 〔実機2台+〕
 

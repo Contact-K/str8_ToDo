@@ -83,6 +83,7 @@ enum NotificationService {
         let request = UNNotificationRequest(identifier: weeklyReviewIdentifier, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
+                os_log("Failed to schedule weekly review notification: %@", log: .default, type: .error, error.localizedDescription)
                 assertionFailure("weekly review scheduling failed: \(error)")
             }
         }

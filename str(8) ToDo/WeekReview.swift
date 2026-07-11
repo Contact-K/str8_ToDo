@@ -13,7 +13,7 @@ import SwiftData
 final class WeekReview {
     @Attribute(.unique) var id: UUID
     /// 対象週の開始（月曜 00:00）
-    var weekStart: Date
+    @Attribute(.unique) var weekStart: Date
     /// 締めボタンを押した瞬間
     var closedAt: Date
     /// 対象週の集中セッション合計（秒）

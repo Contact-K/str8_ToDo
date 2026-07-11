@@ -142,9 +142,16 @@ struct CalendarSettingsView: View {
                 // 通知
                 Toggle("通知", isOn: $enableNotifications)
                     .onChange(of: enableNotifications) { oldValue, newValue in
-                        if newValue {
-                            Task {
+                        Task {
+                            if newValue {
                                 await NotificationService.requestAuthorization()
+                                // 週次締めリマインダーをスケジュール
+                                let d = UserDefaults.standard
+                                let w = (d.object(forKey: AppSettingsKey.weekReviewWeekday) as? Int) ?? AppSettingsKey.weekReviewWeekdayDefault
+                                let h = (d.object(forKey: AppSettingsKey.weekReviewHour) as? Int) ?? AppSettingsKey.weekReviewHourDefault
+                                NotificationService.scheduleWeeklyReview(weekday: w, hour: h)
+                            } else {
+                                NotificationService.cancelWeeklyReview()
                             }
                         }
                     }
