@@ -115,7 +115,6 @@ struct EventComposerView: View {
     @State private var nlDebounceTask: Task<Void, Never>? = nil
     @State private var recognizedChips: [(WHCategory, String)] = []
     @FocusState private var nlFieldFocused: Bool
-    @FocusState private var titleFieldFocused: Bool
 
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
     /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
@@ -165,90 +164,72 @@ struct EventComposerView: View {
     private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // 自然文パース入力（新規作成のみ表示。編集時は不要）
-                if existingTask == nil {
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("自然文で入力（例: 明日 14:00 大学でレポート）", text: $nlInput, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .lineLimit(1...2)
-                            .focused($nlFieldFocused)
-                            .padding(10)
-                            .background(c.surface)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: S8Radius.md)
-                                    .stroke(nlFieldFocused ? c.accent : c.lineStrong, lineWidth: nlFieldFocused ? 1.5 : 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                            .onChange(of: nlInput) { _, newValue in
-                                scheduleParse(newValue)
-                            }
-                        if !recognizedChips.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
-                                        Text("\(chip.0.label): \(chip.1)")
-                                            .font(S8Font.mono(11)).tracking(1.5)
-                                            .foregroundStyle(c.fg2)
-                                            .padding(.horizontal, 11)
-                                            .padding(.vertical, 6)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: S8Radius.md)
-                                                    .stroke(c.lineStrong, lineWidth: 1)
-                                            )
-                                    }
+        VStack(spacing: 0) {
+            S8TopBar(existingTask == nil ? "タスク追加" : "タスク編集", sub: existingTask == nil ? "new · what/when/where" : "edit · what/when/where") {
+                HStack(spacing: 6) {
+                    S8IconButton(icon: "x", action: { dismiss() })
+                        .accessibilityLabel("キャンセル")
+                    S8IconButton(icon: "check", accent: !isSaveDisabled, action: save)
+                        .disabled(isSaveDisabled)
+                        .accessibilityLabel(existingTask == nil ? "追加" : "保存")
+                }
+            }
+
+            // 自然文パース入力（新規作成のみ表示。編集時は不要）
+            if existingTask == nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("自然文で入力（例: 明日 14:00 大学でレポート）", text: $nlInput, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...2)
+                        .focused($nlFieldFocused)
+                        .padding(10)
+                        .background(c.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: S8Radius.md)
+                                .stroke(nlFieldFocused ? c.accent : c.lineStrong, lineWidth: nlFieldFocused ? 1.5 : 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                        .onChange(of: nlInput) { _, newValue in
+                            scheduleParse(newValue)
+                        }
+                    if !recognizedChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
+                                    Text("\(chip.0.label): \(chip.1)")
+                                        .font(S8Font.mono(11)).tracking(1.5)
+                                        .foregroundStyle(c.fg2)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 6)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: S8Radius.md)
+                                                .stroke(c.lineStrong, lineWidth: 1)
+                                        )
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    Divider().padding(.top, 8)
                 }
-
-                TextField("タスク名", text: $draft.title)
-                    .font(.title3)
-                    .focused($titleFieldFocused)
-                    .padding()
-                    .background(c.surface)
-                    .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .fill(titleFieldFocused ? c.accent : c.lineStrong)
-                            .frame(height: titleFieldFocused ? 1.5 : 1)
-                    }
-
-                Divider()
-
-                ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 12) {
-                        ForEach(Self.tileCategories) { category in
-                            tileButton(for: category)
-                        }
-                    }
-                    .padding()
-                }
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
             }
-            .navigationTitle(existingTask == nil ? "タスク追加" : "タスク編集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                        .font(S8Font.jp(15, .medium))
-                        .foregroundStyle(c.fg2)
+
+            S8Field(placeholder: "タスク名", text: $draft.title)
+                .padding(.horizontal, 24).padding(.bottom, 8)
+
+            S8Rule()
+
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
+                    ForEach(Self.tileCategories) { category in
+                        tileButton(for: category)
+                    }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(existingTask == nil ? "追加" : "保存") { save() }
-                        .disabled(isSaveDisabled)
-                        .font(S8Font.jp(15, .semibold))
-                        .foregroundStyle(isSaveDisabled ? c.fg3 : c.onAccent)
-                        .padding(.vertical, S8Space.s3 + 2)
-                        .padding(.horizontal, S8Space.s4 + 4)
-                        .background(isSaveDisabled ? c.surface2 : c.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                }
+                .padding(24)
             }
         }
+        .background(c.paper.ignoresSafeArea())
         .sheet(item: $focusedCategory) { category in
             ComposerFocusView(category: category, draft: draft) { focusedCategory = $0 }
         }

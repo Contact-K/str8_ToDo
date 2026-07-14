@@ -38,6 +38,10 @@ final class ProximityGate: NSObject {
         #endif
     }
 
+    /// Handoff 04b: 直近の測定距離（m）。UI ゲージ用の観測プロパティ。
+    /// NI 経由のみで更新（BLE フォールバック時は nil）。
+    private(set) var lastDistance: Double?
+
     /// シミュレータでの UI テスト用。true で isNear=true 固定。
     var simulatorBypass = false
 
@@ -200,6 +204,7 @@ extension ProximityGate: NISessionDelegate {
 
         Task { @MainActor in
             self.isNear = shouldBeNear
+            self.lastDistance = Double(distance)
         }
     }
 
@@ -331,8 +336,11 @@ final class ProximityGate: NSObject {
     private(set) var isNear = false
     var isSupported: Bool { false }
     var simulatorBypass = false
+    var unavailableReason: String? = "このプラットフォームでは近接非対応"
+    var lastDistance: Double? { nil }
 
     func start(withPeerToken peerTokenData: Data) {}
+    func startFallback() {}
     func stop() {}
     var localTokenData: Data? { nil }
 }

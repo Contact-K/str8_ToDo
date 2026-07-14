@@ -18,6 +18,7 @@ struct DayAgendaView: View {
     var onTapGap: ((Date, TimeInterval) -> Void)? = nil
 
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
     @Query private var allTasks: [TaskItem]
     @State private var expandedIDs: Set<UUID> = []
     @State private var travelData: [UUID: TimeInterval] = [:]
@@ -307,42 +308,104 @@ struct DayAgendaView: View {
         .cornerRadius(8)
     }
 
+    /// Handoff 01c: NOW パネル。1.5px accent 縁 + [今] バッジ + 現在時刻 + NEXT/DEPART 分割リードアウト。
+    /// 「NEXT」は次予定までの残分、「DEPART」は次の移動逆算タスクの出発時刻。
     private func nowSeparatorRow(now: Date) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(height: 1)
-
+        let scheme = self.scheme
+        let c = S8Palette.of(scheme)
+        let next = nextFutureTask(now: now)
+        let travel = findNextTravelTask(now: now)
+        let nowFormatter: DateFormatter = {
+            let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+        }()
+        return VStack(spacing: 0) {
+            // Header row: [今] + current time + hairline + NOW cap
+            HStack(spacing: 10) {
                 Text("今")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.accentColor)
-
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(height: 1)
+                    .font(S8Font.jp(11.5, .bold))
+                    .foregroundColor(c.onAccent)
+                    .frame(width: 28, height: 28)
+                    .background(c.accent)
+                    .clipShape(Circle())
+                Text(nowFormatter.string(from: now))
+                    .font(S8Font.mono(12, .bold))
+                    .foregroundColor(c.accentInk)
+                Rectangle().fill(c.accent).frame(height: 1)
+                Text("NOW").font(S8Font.mono(8.5)).tracking(1.6).foregroundColor(c.fg3)
             }
+            .padding(.horizontal, 14).padding(.top, 11)
+            .padding(.bottom, 11)
 
-            if let nextTask = nextFutureTask(now: now) {
-                let mins = Int((nextTask.startDate ?? date).timeIntervalSince(now) / 60)
-                if mins > 0 {
-                    Text("次の予定まであと\(mins)分")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            Rectangle().fill(c.accent).frame(height: 1)
+
+            // Split row: NEXT | DEPART
+            HStack(spacing: 1) {
+                nowSubPanel(
+                    cap: "NEXT",
+                    big: nextMinutesText(next: next, now: now),
+                    unit: nextMinutesUnit(next: next, now: now),
+                    hint: nextHintText(next: next),
+                    bigColor: c.accentInk,
+                    c: c
+                )
+                Rectangle().fill(c.line).frame(width: 1)
+                nowSubPanel(
+                    cap: "DEPART",
+                    big: travel.map { formatTime($0.departure) } ?? "—",
+                    unit: nil,
+                    hint: travelHintText(travel: travel),
+                    bigColor: travel != nil ? c.fg1 : c.fg3,
+                    c: c
+                )
+            }
+            .background(c.line)
+        }
+        .background(c.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: S8Radius.lg)
+                .stroke(c.accent, lineWidth: 1.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("今 \(nowFormatter.string(from: now)) 次: \(nextHintText(next: next))")
+    }
+
+    private func nowSubPanel(cap: String, big: String, unit: String?, hint: String, bigColor: Color, c: S8Palette) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(cap).font(S8Font.mono(8.5)).tracking(1.6).foregroundColor(c.fg3)
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(big).font(S8Font.mono(26, .bold)).foregroundColor(bigColor)
+                if let unit {
+                    Text(unit).font(S8Font.mono(12)).foregroundColor(c.fg3)
                 }
             }
-
-            // 次の出発逆算タスクがあれば表示
-            if let nextTravel = findNextTravelTask(now: now) {
-                Text("出発は\(formatTime(nextTravel.departure))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            Text(hint).font(S8Font.jp(11)).foregroundColor(c.fg2)
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("今")
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(c.surface)
+    }
+
+    private func nextMinutesText(next: TaskItem?, now: Date) -> String {
+        guard let n = next, let start = n.startDate else { return "—" }
+        let mins = Int((start.timeIntervalSince(now) / 60).rounded())
+        return String(mins > 0 ? "−\(mins)" : "\(mins)")
+    }
+
+    private func nextMinutesUnit(next: TaskItem?, now: Date) -> String? {
+        guard next?.startDate != nil else { return nil }
+        return "分"
+    }
+
+    private func nextHintText(next: TaskItem?) -> String {
+        guard let n = next, let start = n.startDate else { return "次予定なし" }
+        return "\(n.title) \(formatTime(start))"
+    }
+
+    private func travelHintText(travel: (task: TaskItem, departure: Date, eta: TimeInterval)?) -> String {
+        guard let t = travel else { return "移動予定なし" }
+        let mins = Int((t.eta / 60).rounded())
+        return "\(t.task.title)へ · 移動\(mins)分"
     }
 
     private func sunRow(isSunrise: Bool, time: Date) -> some View {

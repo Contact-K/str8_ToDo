@@ -24,55 +24,48 @@ struct TaskDetailView: View {
     @State private var showFullEditor = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // MARK: - ヘッダ
-                headerSection
-
-                // MARK: - 時間セクション
-                if task.startDate != nil || task.rrule != nil || task.timeZoneIdentifier != nil {
-                    timeSection
+        VStack(spacing: 0) {
+            S8TopBar("詳細", sub: task.status.label) {
+                HStack(spacing: 6) {
+                    S8IconButton(icon: "star", accent: task.isImportant, action: toggleImportant)
+                        .accessibilityLabel(task.isImportant ? "重要を解除" : "重要に設定")
+                    S8IconButton(icon: "trash", action: { showDeleteConfirmation = true })
+                        .accessibilityLabel("削除")
                 }
-
-                // MARK: - カテゴリ・場所・参加者・金額
-                if task.category != nil || task.profile != nil || task.place != nil
-                    || !task.participantNames.isEmpty || task.amount != nil {
-                    metadataSection
-                }
-
-                // MARK: - 通知
-                notificationSection
-
-                // MARK: - メモ
-                if !task.notes.isEmpty {
-                    notesSection
-                }
-
-                // MARK: - 承認フロー & アクション
-                approvalSection
-
-                Spacer()
             }
-            .padding()
-        }
-        .background(c.paper)
-        .navigationTitle("詳細")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: toggleImportant) {
-                    Image(systemName: task.isImportant ? "star.fill" : "star")
-                        .foregroundColor(task.isImportant ? c.accent : c.fg3)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // MARK: - ヘッダ
+                    headerSection
+
+                    // MARK: - 時間セクション
+                    if task.startDate != nil || task.rrule != nil || task.timeZoneIdentifier != nil {
+                        timeSection
+                    }
+
+                    // MARK: - カテゴリ・場所・参加者・金額
+                    if task.category != nil || task.profile != nil || task.place != nil
+                        || !task.participantNames.isEmpty || task.amount != nil {
+                        metadataSection
+                    }
+
+                    // MARK: - 通知
+                    notificationSection
+
+                    // MARK: - メモ
+                    if !task.notes.isEmpty {
+                        notesSection
+                    }
+
+                    // MARK: - 承認フロー & アクション
+                    approvalSection
+
+                    Spacer()
                 }
-                .accessibilityLabel(task.isImportant ? "重要を解除" : "重要に設定")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(role: .destructive, action: { showDeleteConfirmation = true }) {
-                    Image(systemName: "trash")
-                        .foregroundColor(c.danger)
-                }
-                .accessibilityLabel("削除")
+                .padding(.horizontal, 24).padding(.vertical, 16)
             }
         }
+        .background(c.paper.ignoresSafeArea())
         .confirmationDialog(
             "削除確認",
             isPresented: $showDeleteConfirmation,
@@ -125,27 +118,93 @@ struct TaskDetailView: View {
         }
     }
 
+    /// Handoff: 各ステータスに対応する pill バッジ。
+    /// active=accent-wash / done=ok-wash / approved=accent-wash（強調）。
     private var statusBadge: some View {
-        HStack(spacing: 6) {
-            Image(systemName: task.status.systemImage)
-            Text(task.status.label)
+        let (fg, bg, icon, tag): (Color, Color, String, String) = {
+            switch task.status {
+            case .active:   return (c.accentInk, c.accentWash, "circle-dot", "active · 進行中")
+            case .done:     return (c.ok, c.okWash, "check-circle", "done · 完了")
+            case .approved: return (c.accentInk, c.accentWash, "check", "approved · 確定")
+            }
+        }()
+        return HStack(spacing: 5) {
+            S8Icon(name: icon, size: 11, color: fg)
+            Text(tag).font(S8Font.jp(11, .medium)).foregroundColor(fg)
         }
-        .font(.caption)
+        .padding(.horizontal, 11).padding(.vertical, 4)
+        .background(bg)
+        .clipShape(Capsule())
+    }
+
+    /// Handoff 07a: 承認フロー3ステップ丸表示（active → done → approved）。
+    /// 現ステップは accent 実塗り、通過済みは実線、未来は破線＋lock。
+    private func approvalStepRing(_ status: TaskStatus) -> some View {
+        let steps: [(TaskStatus, String, String)] = [
+            (.active, "check", "ACTIVE"),
+            (.done, "check", "DONE"),
+            (.approved, "lock", "APPROVED")
+        ]
+        return HStack(spacing: 0) {
+            ForEach(0..<steps.count, id: \.self) { i in
+                let (s, icon, tag) = steps[i]
+                let state = stepState(current: status, step: s)
+                stepNode(icon: icon, tag: tag, state: state)
+                if i < steps.count - 1 {
+                    let nextReached = Self.rank(steps[i + 1].0) <= Self.rank(status)
+                    Rectangle()
+                        .fill(nextReached ? c.accent : c.lineStrong)
+                        .frame(height: 1)
+                        .padding(.horizontal, 6)
+                        .padding(.bottom, 16)
+                }
+            }
+        }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(task.status.tint.opacity(0.2))
-        .foregroundColor(task.status.tint)
-        .cornerRadius(6)
+    }
+
+    private enum StepState { case past, current, future }
+
+    /// active=0, done=1, approved=2 の順序ランク。
+    private static func rank(_ s: TaskStatus) -> Int {
+        switch s {
+        case .active:   return 0
+        case .done:     return 1
+        case .approved: return 2
+        }
+    }
+
+    private func stepState(current: TaskStatus, step: TaskStatus) -> StepState {
+        let cr = Self.rank(current), sr = Self.rank(step)
+        if sr < cr { return .past }
+        if sr == cr { return .current }
+        return .future
+    }
+
+    private func stepNode(icon: String, tag: String, state: StepState) -> some View {
+        let borderColor: Color = state == .current ? c.accent : c.lineStrong
+        let bgColor: Color = state == .current ? c.accent : c.surface
+        let iconColor: Color = state == .current ? c.onAccent : c.fg3
+        let dashed = state == .future
+        return VStack(spacing: 5) {
+            ZStack {
+                Circle().fill(bgColor)
+                Circle().strokeBorder(borderColor, style: StrokeStyle(lineWidth: 1.5, dash: dashed ? [3, 3] : []))
+                S8Icon(name: icon, size: 14, color: iconColor)
+            }
+            .frame(width: 34, height: 34)
+            Text(tag)
+                .font(S8Font.mono(8, state == .current ? .bold : .regular))
+                .tracking(1.0)
+                .foregroundColor(state == .current ? c.accentInk : c.fg3)
+        }
+        .frame(width: 60)
     }
 
     // MARK: - Time Section
     private var timeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                sectionHeading("SCHEDULE", jp: "スケジュール")
-                Spacer()
-                editPencil { focusedTopic = .when }
-            }
+            sectionHeaderRow(tag: "SCHEDULE", jp: "スケジュール", pencilTopic: .when)
 
             VStack(alignment: .leading, spacing: 6) {
                 if task.isAllDay {
@@ -274,11 +333,7 @@ struct TaskDetailView: View {
     // MARK: - Notification Section
     private var notificationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                sectionHeading("NOTIFY", jp: "通知")
-                Spacer()
-                editPencil { focusedTopic = .when }
-            }
+            sectionHeaderRow(tag: "NOTIFY", jp: "通知", pencilTopic: .when)
 
             if task.notificationOffsets.isEmpty {
                 HStack {
@@ -306,11 +361,7 @@ struct TaskDetailView: View {
     // MARK: - Notes Section
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                sectionHeading("NOTES", jp: "メモ")
-                Spacer()
-                editPencil { focusedTopic = .other }
-            }
+            sectionHeaderRow(tag: "NOTES", jp: "メモ", pencilTopic: .other)
 
             Text(task.notes)
                 .font(.subheadline)
@@ -323,90 +374,70 @@ struct TaskDetailView: View {
     }
 
     // MARK: - Approval Section
+    /// Handoff 07a: APPROVAL セクション。3ステップリング＋状態別アクション。
     private var approvalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading("ACTIONS", jp: "操作")
+            sectionHeading("APPROVAL", jp: "承認フロー")
 
-            if task.isAwaitingFutureSelf {
-                HStack {
-                    Image(systemName: "hourglass.end")
-                        .foregroundColor(c.warn)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("未来の自分待ち")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        if let unlockDate = task.unlockDate {
-                            Text(formatDate(unlockDate) + " に承認可能")
-                                .font(.caption)
-                                .foregroundColor(c.fg3)
-                        }
+            approvalStepRing(task.status)
+                .padding(.vertical, 4)
+
+            switch task.status {
+            case .active:
+                S8Button("完了にする", icon: "check", variant: .primary, action: markDone)
+            case .done:
+                Text("翌日 0:00 に解除 ── 未来の自分が承認するとstatsに確定")
+                    .font(S8Font.jp(11.5))
+                    .foregroundColor(c.fg3)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 2)
+                if task.isAwaitingFutureSelf {
+                    // ロック中: 解除時刻を明示
+                    HStack(spacing: 8) {
+                        S8Icon(name: "lock", size: 13, color: c.fg3)
+                        Text(task.unlockDate.map { "解除 \(formatDate($0))" } ?? "解除待ち")
+                            .font(S8Font.mono(12)).foregroundColor(c.fg3)
+                        Spacer()
                     }
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .background(c.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                } else {
+                    S8Button("承認して確定する", icon: "check-circle", variant: .primary, action: approve)
+                }
+            case .approved:
+                HStack(spacing: 8) {
+                    S8Icon(name: "check", size: 14, color: c.ok)
+                    Text("確定済み").font(S8Font.jp(13.5, .bold)).foregroundColor(c.ok)
                     Spacer()
                 }
-                .padding()
-                .background(c.warn.opacity(0.12))
+                .padding(.horizontal, 12).padding(.vertical, 12)
+                .background(c.okWash)
                 .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-            } else {
-                VStack(spacing: 10) {
-                    switch task.status {
-                    case .active:
-                        Button(action: markDone) {
-                            HStack {
-                                Image(systemName: "checkmark.circle")
-                                Text("完了にする")
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .font(S8Font.jp(15, .semibold))
-                        .foregroundStyle(c.onAccent)
-                        .padding(.vertical, S8Space.s3 + 2)
-                        .padding(.horizontal, S8Space.s4 + 4)
-                        .background(c.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-
-                    case .done:
-                        Button(action: approve) {
-                            HStack {
-                                Image(systemName: "checkmark.seal")
-                                Text("承認して確定する")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(c.ok)
-                            .foregroundColor(c.paper)
-                            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                        }
-
-                    case .approved:
-                        HStack {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(c.ok)
-                            Text("確定済み ✓")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Spacer()
-                        }
-                        .padding()
-                        .background(c.okWash)
-                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                    }
-                }
             }
         }
     }
 
     // MARK: - Section Heading
-    /// mono UPPERCASE caption（英語タグ）+ JP ラベルの2段見出し。
-    private func sectionHeading(_ tag: String, jp: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(tag)
-                .font(S8Font.mono(11)).tracking(1.5)
-                .textCase(.uppercase)
-                .foregroundStyle(c.fg3)
-            Text(jp)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(c.fg1)
+    /// Handoff: [MONO tag][JP label][hairline][pencil?] の1行見出し。
+    /// pencilTopic を渡すと右端にペンボタン。
+    private func sectionHeaderRow(tag: String, jp: String, pencilTopic: WHCategory? = nil) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+            if let topic = pencilTopic {
+                S8Icon(name: "settings", size: 13, color: c.fg3)
+                    .padding(.leading, 4)
+                    .onTapGesture { focusedTopic = topic }
+                    .accessibilityLabel("編集")
+            }
         }
+    }
+
+    /// 互換用エイリアス（pencil なし）。
+    private func sectionHeading(_ tag: String, jp: String) -> some View {
+        sectionHeaderRow(tag: tag, jp: jp, pencilTopic: nil)
     }
 
     // MARK: - Edit Pencil

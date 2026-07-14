@@ -64,7 +64,29 @@ struct CalendarRootView: View {
     private let morphAnimation: Animation = .spring(response: 0.45, dampingFraction: 0.82)
 
     var body: some View {
-        NavigationStack {
+        let c = self.c
+        VStack(spacing: 0) {
+            S8TopBar(titleText, sub: "calendar · \(scale.label)ビュー") {
+                HStack(spacing: 4) {
+                    categoryFilterButton
+                    S8IconButton(icon: "bar-chart", action: { showYear = true })
+                        .accessibilityLabel("年ビュー")
+                    S8IconButton(icon: "circle-dot", action: {
+                        withAnimation(morphAnimation) { selectedDate = cal.startOfDay(for: .now) }
+                    })
+                    .accessibilityLabel("今日")
+                    S8IconButton(icon: "settings", action: { showSettings = true })
+                        .accessibilityLabel("設定")
+                }
+            }
+
+            HStack(spacing: 8) {
+                ForEach(CalendarScale.allCases) { s in
+                    S8Chip(s.label, selected: scale == s, action: { zoom(to: s) })
+                }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 8)
+
             ZStack {
                 switch scale {
                 case .month:
@@ -93,34 +115,30 @@ struct CalendarRootView: View {
                         .transition(.opacity)
                 }
             }
-            .navigationTitle(titleText)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
-            .sheet(item: $selectedTask) { task in
-                NavigationStack {
-                    TaskDetailView(task: task)
-                }
+        }
+        .background(c.paper.ignoresSafeArea())
+        .sheet(item: $selectedTask) { task in
+            TaskDetailView(task: task)
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                CalendarSettingsView()
             }
-            .sheet(isPresented: $showSettings) {
-                NavigationStack {
-                    CalendarSettingsView()
-                }
+        }
+        .sheet(isPresented: $showYear) {
+            NavigationStack {
+                YearView()
             }
-            .sheet(isPresented: $showYear) {
-                NavigationStack {
-                    YearView()
-                }
+        }
+        .sheet(isPresented: $showMoneyBreakdown) {
+            NavigationStack {
+                MoneyBreakdownView(month: selectedDate)
             }
-            .sheet(isPresented: $showMoneyBreakdown) {
-                NavigationStack {
-                    MoneyBreakdownView(month: selectedDate)
-                }
-            }
-            .task {
-                if eventKit.authState == .authorized {
-                    eventKit.sync(into: context)
-                    eventKit.observeChanges(into: context)
-                }
+        }
+        .task {
+            if eventKit.authState == .authorized {
+                eventKit.sync(into: context)
+                eventKit.observeChanges(into: context)
             }
         }
     }
@@ -130,94 +148,59 @@ struct CalendarRootView: View {
         withAnimation(morphAnimation) { scale = target }
     }
 
-    // MARK: トリガー: ピル＋ツールバー（＋セル/ヘッダの直接タップ）
+    // MARK: トリガー: セレクターチップ（＋セル/ヘッダの直接タップ）
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Picker("表示", selection: pillBinding) {
-                ForEach(CalendarScale.allCases) { s in
-                    Text(s.label).tag(s)
-                }
+    /// カテゴリフィルタ。Menu の label を S8IconButton と同じ見た目で描く（バッジ付き）。
+    private var categoryFilterButton: some View {
+        Menu {
+            Button("すべて表示") {
+                categoryFilter = nil
             }
-            .pickerStyle(.segmented)
-            .frame(width: 150)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 12) {
-                Menu {
-                    Button("すべて表示") {
-                        categoryFilter = nil
-                    }
-                    if !categories.isEmpty {
-                        Divider()
-                    }
-                    ForEach(categories) { cat in
-                        Button(action: {
-                            if categoryFilter == nil {
-                                categoryFilter = Set([cat.id])
-                            } else {
-                                if categoryFilter!.contains(cat.id) {
-                                    categoryFilter!.remove(cat.id)
-                                    if categoryFilter!.isEmpty {
-                                        categoryFilter = nil
-                                    }
-                                } else {
-                                    categoryFilter!.insert(cat.id)
-                                }
+            if !categories.isEmpty {
+                Divider()
+            }
+            ForEach(categories) { cat in
+                Button(action: {
+                    if categoryFilter == nil {
+                        categoryFilter = Set([cat.id])
+                    } else {
+                        if categoryFilter!.contains(cat.id) {
+                            categoryFilter!.remove(cat.id)
+                            if categoryFilter!.isEmpty {
+                                categoryFilter = nil
                             }
-                        }) {
-                            HStack {
-                                Circle()
-                                    .fill(Color(hex: cat.colorHex))
-                                    .frame(width: 12, height: 12)
-                                Text(cat.name)
-                                Spacer()
-                                if let filter = categoryFilter, filter.contains(cat.id) {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
+                        } else {
+                            categoryFilter!.insert(cat.id)
                         }
                     }
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: categoryFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                        if let filter = categoryFilter, !filter.isEmpty {
-                            Text("\(filter.count)")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(c.accent))
-                                .offset(x: 6, y: -6)
+                }) {
+                    HStack {
+                        Circle()
+                            .fill(Color(hex: cat.colorHex))
+                            .frame(width: 12, height: 12)
+                        Text(cat.name)
+                        Spacer()
+                        if let filter = categoryFilter, filter.contains(cat.id) {
+                            Image(systemName: "checkmark")
                         }
                     }
                 }
-                .accessibilityLabel("カテゴリフィルター")
-                Button {
-                    showYear = true
-                } label: {
-                    Image(systemName: "chart.bar.xaxis")
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                S8Icon(name: "filter", size: 22, color: categoryFilter == nil ? c.fg2 : c.accent)
+                    .frame(width: 38, height: 38)
+                if let filter = categoryFilter, !filter.isEmpty {
+                    Text("\(filter.count)")
+                        .font(S8Font.mono(9, .bold))
+                        .foregroundColor(c.onAccent)
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(c.accent))
+                        .offset(x: 2, y: -2)
                 }
-                .accessibilityLabel("年ビュー")
-                Button("今日") {
-                    withAnimation(morphAnimation) {
-                        selectedDate = cal.startOfDay(for: .now)
-                    }
-                }
-                .accessibilityLabel("今日")
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("設定")
             }
         }
-    }
-
-    private var pillBinding: Binding<CalendarScale> {
-        Binding(get: { scale }, set: { zoom(to: $0) })
+        .accessibilityLabel("カテゴリフィルター")
     }
 
     // MARK: タイトル

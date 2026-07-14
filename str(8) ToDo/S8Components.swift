@@ -78,6 +78,10 @@ func s8Symbol(_ name: String) -> String {
     case "copy": return "doc.on.doc"
     case "share": return "square.and.arrow.up"
     case "file": return "doc"
+    case "text-cursor": return "character.cursor.ibeam"
+    case "shuffle": return "shuffle"
+    case "bug": return "ladybug"
+    case "bar-chart": return "chart.bar.xaxis"
     default: return "circle"
     }
 }

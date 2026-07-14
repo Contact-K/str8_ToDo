@@ -108,70 +108,150 @@ enum MoneyStats {
     }
 }
 
-/// 月別支出の内訳ビュー（カテゴリ別・支払方法別）。
+/// Handoff donut のセグメント Path。start/end は 0..1 で 12 時から時計回り。
+private struct DonutArc: Shape {
+    let start: Double
+    let end: Double
+    let ring: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let radius = min(rect.width, rect.height) / 2 - ring / 2
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let startAngle = Angle.radians(start * 2 * .pi - .pi / 2)
+        let endAngle = Angle.radians(end * 2 * .pi - .pi / 2)
+        p.addArc(center: center, radius: radius,
+                 startAngle: startAngle, endAngle: endAngle, clockwise: false)
+        return p
+    }
+}
+
+/// Handoff 07d: 月別支出の内訳（ドーナツ + カテゴリ別 + 支払方法別）。
 struct MoneyBreakdownView: View {
     let month: Date
     @Environment(\.modelContext) var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var tasks: [TaskItem]
 
+    private static let donutPalette: [Color] = [
+        Color(s8: 0x2E4A6B),   // info
+        Color(s8: 0x3D5A47),   // ok
+        Color(s8: 0xDC8B28),   // accent
+        Color(s8: 0xB24A33),   // danger
+    ]
+
     var body: some View {
-        NavigationStack {
-            Form {
-                // カテゴリ別内訳
-                Section("カテゴリ別") {
-                    let byCategory = categoryBreakdown()
-                    let totalByCategory = byCategory.values.reduce(0, +)
+        let byCategory = categoryBreakdown()
+        let byPayment = paymentBreakdown()
+        let totalCat = byCategory.values.reduce(0, +)
+        let totalPay = byPayment.values.reduce(0, +)
 
-                    ForEach(byCategory.sorted(by: { $0.value > $1.value }), id: \.key) { name, amount in
-                        HStack {
-                            Text(name.isEmpty ? "未分類" : name)
-                            Spacer()
-                            Text(currencyText(amount))
-                                .fontWeight(.semibold)
-                        }
+        VStack(spacing: 0) {
+            // カスタムヘッダ（Handoff: [閉じる][タイトル][spacer]）
+            HStack {
+                Button("閉じる") { dismiss() }
+                    .font(S8Font.jp(14))
+                    .foregroundColor(c.fg2)
+                Spacer()
+                Text(monthTitle).font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+                Color.clear.frame(width: 44, height: 1)
+            }
+            .padding(.horizontal, 24).padding(.top, 10).padding(.bottom, 14)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    // ドーナツ
+                    donut(byCategory: byCategory.sorted(by: { $0.value > $1.value }), total: totalCat)
+                        .padding(.vertical, 6)
+
+                    sectionCap("BY CATEGORY", jp: "カテゴリ別")
+                        .padding(.top, 14)
+
+                    ForEach(Array(byCategory.sorted(by: { $0.value > $1.value }).enumerated()), id: \.element.key) { i, entry in
+                        breakdownRow(dot: Self.donutPalette[i % Self.donutPalette.count],
+                                     name: entry.key.isEmpty ? "未分類" : entry.key,
+                                     amount: entry.value)
                     }
+                    totalRow(label: "合計", amount: totalCat)
 
-                    Divider()
-                    HStack {
-                        Text("合計")
-                            .fontWeight(.bold)
-                        Spacer()
-                        Text(currencyText(totalByCategory))
-                            .fontWeight(.bold)
-                            .foregroundColor(.accentColor)
-                    }
-                }
-
-                // 支払方法別内訳
-                Section("支払方法別") {
-                    let byPayment = paymentBreakdown()
-                    let totalByPayment = byPayment.values.reduce(0, +)
+                    sectionCap("BY PAYMENT", jp: "支払方法別")
+                        .padding(.top, 20)
 
                     ForEach(byPayment.sorted(by: { $0.value > $1.value }), id: \.key) { method, amount in
-                        HStack {
-                            Text(method.isEmpty ? "未設定" : method)
-                            Spacer()
-                            Text(currencyText(amount))
-                                .fontWeight(.semibold)
-                        }
+                        breakdownRow(dot: nil, name: method.isEmpty ? "未設定" : method, amount: amount,
+                                     nameColor: method.isEmpty ? c.fg3 : c.fg1)
                     }
+                    totalRow(label: "合計", amount: totalPay)
 
-                    Divider()
-                    HStack {
-                        Text("合計")
-                            .fontWeight(.bold)
-                        Spacer()
-                        Text(currencyText(totalByPayment))
-                            .fontWeight(.bold)
-                            .foregroundColor(.accentColor)
-                    }
+                    Color.clear.frame(height: 24)
                 }
+                .padding(.horizontal, 24)
             }
-            .navigationTitle(monthTitle)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
         }
+        .background(c.paper.ignoresSafeArea())
+    }
+
+    /// Handoff donut: セグメントを Path で描き、中央に MMM TOTAL テキスト。
+    private func donut(byCategory: [(key: String, value: Decimal)], total: Decimal) -> some View {
+        let size: CGFloat = 150
+        let ring: CGFloat = 13
+        let doubleTotal = NSDecimalNumber(decimal: total).doubleValue
+        // 累積フラクションと分数の配列（上位4件、その他はまとめない）
+        let entries = Array(byCategory.prefix(4))
+        var cumulative: [Double] = [0]
+        for e in entries {
+            let fraction = doubleTotal > 0 ? NSDecimalNumber(decimal: e.value).doubleValue / doubleTotal : 0
+            cumulative.append((cumulative.last ?? 0) + fraction)
+        }
+        return ZStack {
+            ForEach(Array(entries.enumerated()), id: \.element.key) { i, _ in
+                let start = cumulative[i]
+                let end = cumulative[i + 1]
+                DonutArc(start: start, end: end, ring: ring)
+                    .stroke(Self.donutPalette[i % Self.donutPalette.count],
+                            style: StrokeStyle(lineWidth: ring, lineCap: .butt))
+                    .frame(width: size, height: size)
+            }
+            VStack(spacing: 2) {
+                Text("\(monthShort()) TOTAL")
+                    .font(S8Font.mono(8.5)).tracking(1.6).foregroundColor(c.fg3)
+                Text(currencyText(total)).font(S8Font.mono(18, .bold)).foregroundColor(c.fg1)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func sectionCap(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func breakdownRow(dot: Color?, name: String, amount: Decimal, nameColor: Color? = nil) -> some View {
+        HStack(spacing: 10) {
+            if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
+            Text(name).font(S8Font.jp(13.5)).foregroundColor(nameColor ?? c.fg1)
+            Spacer()
+            Text(currencyText(amount)).font(S8Font.mono(13, .bold)).foregroundColor(c.fg1)
+        }
+        .padding(.vertical, 11)
+        .overlay(alignment: .top) { S8Rule() }
+    }
+
+    private func totalRow(label: String, amount: Decimal) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(S8Font.jp(13.5, .bold)).foregroundColor(c.fg1)
+            Spacer()
+            Text(currencyText(amount)).font(S8Font.mono(13.5, .bold)).foregroundColor(c.accentInk)
+        }
+        .padding(.vertical, 11)
+        .overlay(alignment: .top) { S8Rule(strong: true) }
     }
 
     private var monthTitle: String {
@@ -179,6 +259,13 @@ struct MoneyBreakdownView: View {
         f.locale = Locale(identifier: "ja_JP")
         f.dateFormat = "M月の内訳"
         return f.string(from: month)
+    }
+
+    private func monthShort() -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMM"
+        return f.string(from: month).uppercased()
     }
 
     private func categoryBreakdown() -> [String: Decimal] {

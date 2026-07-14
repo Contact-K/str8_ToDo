@@ -95,54 +95,86 @@ struct WeekReviewView: View {
         }
     }
 
-    // MARK: 確定キュー
+    // MARK: 確定キュー（Handoff 06a: QUEUE 未確定件数バナー）
     private var approvalSection: some View {
-        // ApprovalQueueView を丸ごと埋め込むと NavigationStack が二重になるので、
-        // ApprovalQueueView の本体（.approvalPending の一覧＋chop での確定ロジック）は既に承認タブで機能している。
-        // ここではリンクだけ提供（ユーザーは既存タブで一掃する）。ponytail: 統合 UI は将来
-        VStack(alignment: .leading, spacing: 8) {
-            Text("確定キュー一掃").font(.headline)
-            Text("未確定タスクは『承認』タブで一掃してから戻ってください。").font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            sectionCap("QUEUE", jp: "確定キュー一掃")
+            let pending = WeekReportSource.pendingApprovalCount(in: range, context: context)
+            HStack(spacing: 12) {
+                Text("\(pending)件")
+                    .font(S8Font.mono(15, .bold)).foregroundColor(c.accentInk)
+                Text(pending > 0 ? "未確定のタスクが残っています" : "未確定なし。清々しい")
+                    .font(S8Font.jp(13)).foregroundColor(c.fg2)
+                Spacer()
+                if pending > 0 {
+                    Text("承認タブへ →")
+                        .font(S8Font.jp(12.5, .bold)).foregroundColor(c.accentInk)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 13)
+            .background(c.surface)
+            .overlay(RoundedRectangle(cornerRadius: 0).stroke(c.lineStrong, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: 週報
+    // MARK: 週報（Handoff 06a: REPORT 3タイル）
     private var reportSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("週報").font(.headline)
+            sectionCap("REPORT · \(rangeCaptionText())", jp: "週報")
             if let report = cachedReport {
-                HStack {
+                HStack(spacing: 10) {
                     statTile(label: "集中", value: formatDuration(report.focusTotalSec))
                     statTile(label: "完了", value: "\(report.approvedCount)")
                     statTile(label: "収支", value: formatMoney(report.moneyTotal))
                 }
             } else {
-                // .task(id: referenceDate) が読み込むまでの初回描画用（M3）
                 ProgressView("読み込み中…")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: 来週プレビュー
+    // MARK: 来週プレビュー（Handoff 06a: NEXT WEEK 予定リスト）
     private var nextWeekPreviewSection: some View {
         let tasks = WeekReportSource.timedTasks(in: nextRange, context: context)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("来週の予定 (\(tasks.count))").font(.headline)
+            sectionCap("NEXT WEEK · \(tasks.count)", jp: "来週の予定")
             if tasks.isEmpty {
-                Text("時刻付きの予定はありません").font(.callout).foregroundStyle(.secondary)
+                Text("時刻付きの予定はありません").font(S8Font.jp(12.5)).foregroundColor(c.fg3)
             } else {
-                ForEach(tasks) { task in
-                    HStack {
-                        Text(formatDate(task.startDate ?? .now)).font(.caption).foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
-                        Text(task.title).font(.callout)
-                        Spacer()
+                VStack(spacing: 0) {
+                    ForEach(tasks) { task in
+                        HStack(spacing: 12) {
+                            Text(formatDate(task.startDate ?? .now))
+                                .font(S8Font.mono(11)).foregroundColor(c.fg3)
+                                .frame(width: 90, alignment: .leading)
+                            Text(task.title).font(S8Font.jp(13.5)).foregroundColor(c.fg1).lineLimit(1)
+                            Spacer()
+                        }
+                        .padding(.vertical, 11)
+                        .overlay(alignment: .top) { S8Rule() }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Handoff 見出し行: [MONO tag][JP label][hairline]。
+    private func sectionCap(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+    }
+
+    private func rangeCaptionText() -> String {
+        let f = DateFormatter(); f.dateFormat = "M/d"
+        let start = range.lowerBound
+        let end = Calendar.current.date(byAdding: .day, value: -1, to: range.upperBound) ?? range.upperBound
+        return "\(f.string(from: start)) – \(f.string(from: end))"
     }
 
     private func statTile(label: String, value: String) -> some View {

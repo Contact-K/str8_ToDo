@@ -48,6 +48,17 @@ enum WeekReportSource {
         return total
     }
 
+    /// 対象週の未承認（done で approvedAt なし）タスク件数。Handoff 06a の「確定キュー一掃」バナー用。
+    static func pendingApprovalCount(in range: Range<Date>, context: ModelContext) -> Int {
+        // range 内に完了したがまだ承認されていないタスク
+        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+            task.completedAt != nil
+                && task.completedAt! >= range.lowerBound && task.completedAt! < range.upperBound
+                && task.approvedAt == nil
+        })
+        return (try? context.fetch(descriptor).count) ?? 0
+    }
+
     /// 対象週の時刻付きタスクを昇順で返す（来週プレビュー用）。
     static func timedTasks(in range: Range<Date>, context: ModelContext) -> [TaskItem] {
         let descriptor = FetchDescriptor<TaskItem>(

@@ -3,7 +3,7 @@
 //  str8ToDo
 //
 //  リストタブ本体。浮遊タスク（startDate なし・active）を 今日/いつか の2セクションで表示。
-//  クイック追加・スワイプ完了・日時確定でカレンダーへ昇格（一方向）・ドラッグ並べ替え。
+//  クイック追加・完了・日時確定でカレンダーへ昇格（一方向）。
 //
 
 import SwiftUI
@@ -43,163 +43,147 @@ struct TodoListView: View {
             .sorted { ($0.sortIndex, $0.id.uuidString) < ($1.sortIndex, $1.id.uuidString) }
     }
 
+    private var deckIsEmpty: Bool { SortDeckEngine.deckTasks(from: allTasks).isEmpty }
+
     var body: some View {
-        NavigationStack {
-            List {
-                // クイック追加
-                Section {
-                    HStack(spacing: 8) {
-                        TextField("タスクを追加", text: $quickTitle)
-                            .onSubmit(quickAdd)
-                        Button(action: quickAdd) {
-                            Image(systemName: "plus.circle.fill")
-                        }
-                        .disabled(quickTitle.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityLabel("タスクを追加")
-                    }
-                    Button(action: { showComposer = true }) {
-                        Label("詳細を追加", systemImage: "square.and.pencil")
-                    }
-                    .font(S8Font.jp(15, .medium))
-                    .foregroundStyle(c.fg2)
-                    // P16: 自然文1行入力（日時/場所/カテゴリ/所要時間を自動認識）
-                    Button(action: { showQuickAddParser = true }) {
-                        Label("自然文で追加", systemImage: "text.badge.plus")
-                    }
-                    .font(S8Font.jp(15, .medium))
-                    .foregroundStyle(c.fg2)
-                }
-                .listRowBackground(c.paper)
-
-                taskSection(title: "今日", tasks: todayTasks)
-                taskSection(title: "いつか", tasks: somedayTasks)
+        let c = self.c
+        VStack(spacing: 0) {
+            S8TopBar("リスト", sub: "list · floating tasks") {
+                S8IconButton(icon: "plus", accent: true, action: { showComposer = true })
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(c.paper)
-            .navigationTitle("リスト")
-            .toolbar {
-                ToolbarItem(placement: .secondaryAction) {
+
+            // クイック追加バー
+            HStack(spacing: 8) {
+                S8Field(placeholder: "タスクを追加", text: $quickTitle)
+                S8IconButton(icon: "arrow-right", action: quickAdd)
+            }
+            .onSubmit(quickAdd)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+
+            // アクションチップ列
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    S8Chip("自然文で追加", icon: "text-cursor", action: { showQuickAddParser = true })
+                    S8Chip("仕分けを始める", icon: "shuffle", selected: !deckIsEmpty, action: { showDeck = true })
+                        .disabled(deckIsEmpty)
                     if !subjects.isEmpty {
-                        Menu {
-                            Button(action: { selectedSubjectFilter = nil }) {
-                                HStack {
-                                    Text("すべて")
-                                    if selectedSubjectFilter == nil {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                            Divider()
-                            ForEach(subjects) { subject in
-                                Button(action: { selectedSubjectFilter = subject.id }) {
-                                    HStack {
-                                        Label(subject.name, systemImage: "circle.fill")
-                                            .foregroundColor(Color(hex: subject.colorHex))
-                                        if selectedSubjectFilter == subject.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "funnel")
-                        }
+                        subjectFilterChip
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("仕分けを始める") { showDeck = true }
-                        .disabled(SortDeckEngine.deckTasks(from: allTasks).isEmpty)
-                        .font(S8Font.jp(15, .semibold))
-                        .foregroundStyle(c.fg1)
-                        .padding(.vertical, S8Space.s3 + 2)
-                        .padding(.horizontal, S8Space.s4 + 4)
-                        .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
-                }
+                .padding(.horizontal, 24)
             }
-            .sheet(item: $selectedTask) { task in
-                NavigationStack {
-                    TaskDetailView(task: task)
-                }
-            }
-            .sheet(item: $schedulingTask) { task in
-                SchedulePromoteSheet(task: task)
-                    .presentationDetents([.medium])
-            }
-            .sheet(isPresented: $showDeck) {
-                SortDeckView(tasks: allTasks)
-            }
-            .sheet(isPresented: $showComposer) {
-                EventComposerView()
-            }
-            .sheet(isPresented: $showQuickAddParser) {
-                QuickAddParserView()
-            }
-        }
-    }
+            .padding(.bottom, 8)
 
-    /// PLAIN: セクション見出しを mono UPPERCASE caption + JP ラベルの2段で表示。
-    private static let sectionTag: [String: String] = ["今日": "TODAY", "いつか": "SOMEDAY"]
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text("\(Self.sectionTag[title] ?? title) / \(title)")
-            .font(S8Font.mono(11)).tracking(1.5)
-            .textCase(.uppercase)
-            .foregroundStyle(c.fg3)
-    }
-
-    @ViewBuilder
-    private func taskSection(title: String, tasks: [TaskItem]) -> some View {
-        if !tasks.isEmpty {
-            Section(header: sectionHeader(title)) {
-                ForEach(tasks, id: \.id) { task in
-                    // ponytail: S8Components に相当ロウがないので RuledListRow をここへ inline 移植。
-                    HStack(spacing: 0) {
-                        Rectangle()
-                            .fill(selectedTask?.id == task.id ? c.accent : Color.clear)
-                            .frame(width: 5)
-                        VStack(alignment: .trailing, spacing: 2) {
-                            TaskCardView(task: task, chromeless: true)
-                            if let snooze = task.snoozeUntil, snooze > .now {
-                                Text("\(Self.snoozeFormatter.string(from: snooze)) まで先送り中")
-                                    .font(S8Font.mono(13.5))
-                                    .foregroundStyle(c.fg3)
-                            }
-                        }
-                        .padding(.vertical, 19)
-                        .padding(.horizontal, 26)
+            // リスト本体
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if !todayTasks.isEmpty {
+                        sectionHeader("TODAY", jp: "今日")
+                        ForEach(todayTasks, id: \.id) { task in taskRow(task) }
                     }
-                    .background(alignment: .top) { c.line.frame(height: 1) }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(c.paper)
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedTask = task }
-                        .listRowSeparator(.hidden)
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                withAnimation {
-                                    task.markDone()
-                                    try? context.save()
-                                }
-                            } label: {
-                                Label("完了", systemImage: "checkmark.circle")
-                            }
-                            .tint(.green)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button {
-                                schedulingTask = task
-                            } label: {
-                                Label("日時を決める", systemImage: "calendar.badge.plus")
-                            }
-                            .tint(.blue)
-                        }
-                }
-                .onMove { source, destination in
-                    move(tasks, from: source, to: destination)
+                    if !somedayTasks.isEmpty {
+                        sectionHeader("SOMEDAY", jp: "いつか")
+                        ForEach(somedayTasks, id: \.id) { task in taskRow(task) }
+                    }
+                    Color.clear.frame(height: 24)
                 }
             }
         }
+        .background(c.paper.ignoresSafeArea())
+        .sheet(item: $selectedTask) { task in
+            TaskDetailView(task: task)
+        }
+        .sheet(item: $schedulingTask) { task in
+            SchedulePromoteSheet(task: task)
+                .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showDeck) {
+            SortDeckView(tasks: allTasks)
+        }
+        .sheet(isPresented: $showComposer) {
+            EventComposerView()
+        }
+        .sheet(isPresented: $showQuickAddParser) {
+            QuickAddParserView()
+        }
+    }
+
+    /// 科目フィルタ。S8Chip は Button そのものなので Menu の label には使わず、
+    /// 同じ見た目を Menu ラベルとして描き直す（Menu > Button 入れ子の当たり判定問題を避ける）。
+    private var subjectFilterChip: some View {
+        let active = selectedSubjectFilter != nil
+        return Menu {
+            Button(action: { selectedSubjectFilter = nil }) {
+                HStack {
+                    Text("すべて")
+                    if selectedSubjectFilter == nil { Image(systemName: "checkmark") }
+                }
+            }
+            Divider()
+            ForEach(subjects) { subject in
+                Button(action: { selectedSubjectFilter = subject.id }) {
+                    HStack {
+                        Text(subject.name)
+                        if selectedSubjectFilter == subject.id { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                S8Icon(name: "filter", size: 14, color: active ? c.onAccent : c.fg2)
+                Text(active ? (subjects.first { $0.id == selectedSubjectFilter }?.name ?? "科目絞込中") : "すべての科目")
+                    .font(S8Font.jp(13, .medium))
+                    .foregroundColor(active ? c.onAccent : c.fg2)
+            }
+            .padding(.horizontal, 11).padding(.vertical, 7)
+            .background(active ? c.accent : .clear)
+            .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(active ? c.accent : c.lineStrong, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+        }
+    }
+
+    /// mono UPPERCASE caption + JP ラベルの2段セクション見出し。
+    private func sectionHeader(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+        .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 8)
+    }
+
+    /// 行タップで詳細シート、右端の2アイコンで完了/日時確定（旧 swipeActions の置換）。
+    private func taskRow(_ task: TaskItem) -> some View {
+        HStack(spacing: 12) {
+            Circle().fill(task.effectiveColor).frame(width: 6, height: 6)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title).font(S8Font.jp(15, .bold)).foregroundColor(c.fg1).lineLimit(1)
+                if let snooze = task.snoozeUntil, snooze > .now {
+                    Text("\(Self.snoozeFormatter.string(from: snooze)) まで先送り中")
+                        .font(S8Font.jp(12)).foregroundColor(c.fg3)
+                } else if task.isImportant {
+                    S8Tag("STAR", icon: "star", color: c.accent)
+                }
+            }
+            Spacer()
+            HStack(spacing: 2) {
+                S8IconButton(icon: "check", action: {
+                    withAnimation {
+                        task.markDone()
+                        try? context.save()
+                    }
+                })
+                .accessibilityLabel("完了")
+                S8IconButton(icon: "calendar-days", action: { schedulingTask = task })
+                    .accessibilityLabel("日時を決める")
+            }
+        }
+        .padding(.horizontal, 24).padding(.vertical, 14)
+        .background(c.paper)
+        .overlay(alignment: .top) { S8Rule() }
+        .contentShape(Rectangle())
+        .onTapGesture { selectedTask = task }
     }
 
     // MARK: - 操作
@@ -221,18 +205,9 @@ struct TodoListView: View {
         quickTitle = ""
     }
 
-    /// ドラッグ並べ替え → 並べ替え後の「今日 → いつか」連結順で sortIndex を通しで振り直す
-    /// （セクション間の重複・交差をなくす）。
-    private func move(_ tasks: [TaskItem], from source: IndexSet, to destination: Int) {
-        var reordered = tasks
-        reordered.move(fromOffsets: source, toOffset: destination)
-        let isTodaySection = tasks.first.map { $0.phase == .now || $0.phase == .today } ?? true
-        let combined = isTodaySection ? reordered + somedayTasks : todayTasks + reordered
-        for (index, task) in combined.enumerated() {
-            task.sortIndex = index
-        }
-        try? context.save()
-    }
+    // ponytail: List → ScrollView+LazyVStack 化で標準の .onMove ドラッグ並べ替えは使えなくなった。
+    // 並べ替え自体は仕分けデッキ（SortDeckEngine/SortDeckView）が担うので実用上の穴は小さい。
+    // 復活させるなら DragGesture + LazyVStack の手動 index 入替が必要。
 }
 
 // MARK: - 日時確定シート（カレンダーへの一方向昇格）

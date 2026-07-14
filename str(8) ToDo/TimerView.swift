@@ -14,6 +14,8 @@ import Combine
 
 struct TimerView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var allTasks: [TaskItem]
     @Query private var subjects: [Subject]
 
@@ -59,88 +61,93 @@ struct TimerView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                hourglass
-
-                Text(timeText(remaining))
-                    .font(.system(size: 56, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-
-                if !isSessionActive {
-                    presets
-                }
-
-                taskPicker
-
-                subjectPicker
-
-                controls
-
-                if isAlarmAuthDenied {
-                    Label("アラーム権限が未許可のため、ロック中は音が鳴りません", systemImage: "bell.slash")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-
-                if motion.isAvailable && !isSessionActive {
-                    if motion.phase == .armed {
-                        Label("待機中 — 上下反転で開始", systemImage: "bell.ring")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    } else if motion.phase == .setting {
-                        Label("画面を上にして置くと待機", systemImage: "iphone.landscape")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-            }
-            .padding(.top, 24)
-            .navigationTitle("タイマー")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showHUD = true }) {
-                        Image(systemName: "ladybug")
-                    }
+        let c = self.c
+        VStack(spacing: 0) {
+            S8TopBar("タイマー", sub: "hourglass · flip 180°") {
+                S8IconButton(icon: "bug", action: { showHUD = true })
                     .accessibilityLabel("モーション HUD を開く")
-                }
             }
-            .sheet(isPresented: $showHUD) {
-                NavigationStack {
-                    MotionHUDView(service: motion)
-                }
-            }
-            .onReceive(timer) { date in
-                now = date
-                if isRunning && remaining <= 0 {
-                    finish()
-                }
-            }
-            .onAppear {
-                motion.start()
-                isAlarmAuthDenied = AlarmService.isAuthorizationDenied
-                restoreSnapshot()
-            }
-            .onDisappear { motion.stop() }
-            .onChange(of: motion.phase) { _, _ in
-                guard !showRoom else { return }
-                syncWithMotion()
-            }
-            .onChange(of: linkedTaskID) {
-                if isSessionActive {
-                    saveSnapshot()
-                }
-            }
-            .onChange(of: linkedSubjectID) {
-                if isSessionActive {
-                    saveSnapshot()
-                } else if let linkedSubjectID {
-                    if let subject = subjects.first(where: { $0.id == linkedSubjectID }) {
-                        selectedMinutes = subject.pomodoroMinutes
+            ScrollView {
+                VStack(spacing: 24) {
+                    hourglass
+
+                    Text(timeText(remaining))
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+
+                    if !isSessionActive {
+                        presets
                     }
+
+                    taskPicker
+
+                    subjectPicker
+
+                    controls
+
+                    phaseTelemetry
+
+                    if isAlarmAuthDenied {
+                        Label("アラーム権限が未許可のため、ロック中は音が鳴りません", systemImage: "bell.slash")
+                            .font(.caption)
+                            .foregroundStyle(c.warn)
+                    }
+
+                    if motion.isAvailable && !isSessionActive {
+                        if motion.phase == .armed {
+                            Label("待機中 — 上下反転で開始", systemImage: "bell.ring")
+                                .font(.caption)
+                                .foregroundStyle(c.info)
+                        } else if motion.phase == .setting {
+                            Label("画面を上にして置くと待機", systemImage: "iphone.landscape")
+                                .font(.caption)
+                                .foregroundStyle(c.fg3)
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .background(c.paper.ignoresSafeArea())
+        .sheet(isPresented: $showHUD) {
+            NavigationStack {
+                MotionHUDView(service: motion)
+            }
+        }
+        .sheet(isPresented: $showRoom) {
+            FocusRoomView()
+        }
+        .onReceive(timer) { date in
+            now = date
+            if isRunning && remaining <= 0 {
+                finish()
+            }
+        }
+        .onAppear {
+            motion.start()
+            isAlarmAuthDenied = AlarmService.isAuthorizationDenied
+            restoreSnapshot()
+        }
+        .onDisappear { motion.stop() }
+        .onChange(of: motion.phase) { _, _ in
+            guard !showRoom else { return }
+            syncWithMotion()
+        }
+        .onChange(of: linkedTaskID) {
+            if isSessionActive {
+                saveSnapshot()
+            }
+        }
+        .onChange(of: linkedSubjectID) {
+            if isSessionActive {
+                saveSnapshot()
+            } else if let linkedSubjectID {
+                if let subject = subjects.first(where: { $0.id == linkedSubjectID }) {
+                    selectedMinutes = subject.pomodoroMinutes
                 }
             }
         }
@@ -148,28 +155,25 @@ struct TimerView: View {
 
     // MARK: - パーツ
 
-    /// 砂時計ビジュアル: 上の砂が減り、下の砂が増える。長押しでキャンセル。
+    /// Handoff 02a/02b: 計器フェイスプレート内に砂時計。外周ティック + 残分アーク + 中央ドラッグ増減。
+    /// 長押しでセッションキャンセル。
     private var hourglass: some View {
         let progress = totalDuration > 0 ? min(1, elapsed / totalDuration) : 0
-        return VStack(spacing: 2) {
-            ZStack(alignment: .bottom) {
-                TriangleDown().stroke(Color.secondary, lineWidth: 2)
-                TriangleDown()
-                    .fill(Color.accentColor.opacity(0.6))
-                    .scaleEffect(CGFloat(1 - progress), anchor: .top)
+        let remainFraction = 1 - progress
+        return ZStack {
+            faceplate(remainFraction: remainFraction)
+            hourglassShape(progress: progress)
+            VStack {
+                Spacer()
+                Text(isSessionActive
+                     ? "REMAIN \(timeText(remaining)) / \(String(format: "%02d:00", selectedMinutes))"
+                     : "SET \(selectedMinutes) MIN · DRAG ±1")
+                    .font(S8Font.mono(8)).tracking(1.6).foregroundColor(c.fg3)
+                    .padding(.bottom, 22)
             }
-            .frame(width: 100, height: 70)
-
-            ZStack(alignment: .bottom) {
-                TriangleUp().stroke(Color.secondary, lineWidth: 2)
-                TriangleUp()
-                    .fill(Color.accentColor.opacity(0.6))
-                    .frame(height: 70 * CGFloat(progress))
-                    .clipped()
-            }
-            .frame(width: 100, height: 70)
         }
-        .contentShape(Rectangle())
+        .frame(width: 264, height: 264)
+        .contentShape(Circle())
         .gesture(dragToAdjust)
         .onLongPressGesture(minimumDuration: 0.8) {
             if isSessionActive { cancelSession() }
@@ -177,6 +181,81 @@ struct TimerView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("砂時計 残り\(timeText(remaining))")
         .sensoryFeedback(.increase, trigger: selectedMinutes)
+    }
+
+    /// 円形フェイスプレート（外周円 + 内側 12 ティック + 残分 arc）。
+    private func faceplate(remainFraction: Double) -> some View {
+        ZStack {
+            Circle().fill(c.surface).overlay(Circle().stroke(c.lineStrong, lineWidth: 1.5))
+            Circle().inset(by: 17).stroke(c.line, lineWidth: 1)
+            // マイナーティック
+            ForEach([30, 60, 120, 150, 210, 240, 300, 330], id: \.self) { deg in
+                Rectangle().fill(c.line).frame(width: 1, height: 8)
+                    .offset(y: -128)
+                    .rotationEffect(.degrees(Double(deg)))
+            }
+            // メジャーティック
+            ForEach([0, 90, 180, 270], id: \.self) { deg in
+                Rectangle().fill(c.lineStrong).frame(width: 1.5, height: 11)
+                    .offset(y: -126)
+                    .rotationEffect(.degrees(Double(deg)))
+            }
+            // 残分 arc （accent）
+            Circle()
+                .trim(from: 0, to: max(0, min(1, remainFraction)))
+                .stroke(c.accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .padding(4)
+                .animation(.easeInOut(duration: 0.4), value: remainFraction)
+            // 進行インジケータ（上部の点）
+            Circle().fill(c.accent).frame(width: 8, height: 8).offset(y: -121)
+        }
+    }
+
+    /// フェイスプレート内に置く砂時計本体（上下三角）。
+    private func hourglassShape(progress: Double) -> some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .bottom) {
+                TriangleDown().stroke(c.lineStrong, lineWidth: 2)
+                TriangleDown()
+                    .fill(c.accent.opacity(0.55))
+                    .scaleEffect(CGFloat(1 - progress), anchor: .top)
+            }
+            .frame(width: 100, height: 72)
+
+            ZStack(alignment: .bottom) {
+                TriangleUp().stroke(c.lineStrong, lineWidth: 2)
+                TriangleUp()
+                    .fill(c.accent.opacity(0.55))
+                    .frame(height: 72 * CGFloat(progress))
+                    .clipped()
+            }
+            .frame(width: 100, height: 72)
+        }
+    }
+
+    /// Handoff 02: フェイズテレメトリ（PHASE — SETTING/RUNNING/PAUSED · face state）。
+    /// 計器の下に置く mono キャプション。
+    private var phaseTelemetry: some View {
+        let phaseLabel: String
+        let phaseColor: Color
+        if !isSessionActive {
+            phaseLabel = "PHASE — SETTING · GRAVITY.Z −0.02"
+            phaseColor = c.fg3
+        } else if !isRunning {
+            phaseLabel = "PHASE — PAUSED · FACE UP"
+            phaseColor = c.warn
+        } else {
+            phaseLabel = "PHASE — RUNNING · FACE DOWN · ALARM SET"
+            phaseColor = c.ok
+        }
+        return HStack(spacing: 10) {
+            Circle().fill(phaseColor).frame(width: 6, height: 6)
+            Text(phaseLabel).font(S8Font.mono(9)).tracking(1.4).foregroundColor(c.fg3)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(c.surface)
+        .overlay(RoundedRectangle(cornerRadius: 2).stroke(c.line, lineWidth: 1))
     }
 
     /// 縦ドラッグで1分刻み増減（セッション中は無効）。
@@ -192,11 +271,9 @@ struct TimerView: View {
     }
 
     private var presets: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             ForEach([25, 5, 15], id: \.self) { minutes in
-                Button("\(minutes)分") { selectedMinutes = minutes }
-                    .buttonStyle(.bordered)
-                    .fontWeight(selectedMinutes == minutes ? .bold : .regular)
+                S8Chip("\(minutes)分", selected: selectedMinutes == minutes, action: { selectedMinutes = minutes })
             }
         }
     }
@@ -209,6 +286,7 @@ struct TimerView: View {
             }
         }
         .pickerStyle(.menu)
+        .tint(c.fg2)
     }
 
     private var subjectPicker: some View {
@@ -219,49 +297,32 @@ struct TimerView: View {
             }
         }
         .pickerStyle(.menu)
+        .tint(c.fg2)
     }
 
     @ViewBuilder
     private var controls: some View {
         // シミュレータ（センサーなし）では手動ボタン、実機でも代替操作として常設
-        VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                if !isSessionActive {
-                    Button("開始") { startRun() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .accessibilityLabel("タイマーを開始")
-                        .sensoryFeedback(.impact(flexibility: .soft), trigger: isSessionActive)
-                } else {
-                    Button(isRunning ? "一時停止" : "再開") {
-                        isRunning ? pauseRun() : resumeRun()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .sensoryFeedback(.impact(flexibility: .soft), trigger: isRunning)
+        VStack(spacing: 12) {
+            if !isSessionActive {
+                S8Button("開始", icon: "hourglass", variant: .primary, action: startRun)
+                    .accessibilityLabel("タイマーを開始")
+                    .sensoryFeedback(.impact(flexibility: .soft), trigger: isSessionActive)
+            } else {
+                HStack(spacing: 10) {
+                    S8Button(isRunning ? "一時停止" : "再開", icon: isRunning ? "clock" : "hourglass",
+                             variant: .secondary, action: { isRunning ? pauseRun() : resumeRun() })
+                        .sensoryFeedback(.impact(flexibility: .soft), trigger: isRunning)
 
-                    Button("終了") { finish() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+                    S8Button("終了", icon: "check", variant: .primary, action: { finish() })
                         .accessibilityLabel("タイマーを終了して記録")
                         .sensoryFeedback(.success, trigger: isSessionActive)
-
-                    Button("キャンセル") { cancelSession() }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(.red)
-                        .accessibilityLabel("記録せずにキャンセル")
                 }
+                S8Button("キャンセル", icon: "x", variant: .ghost, action: cancelSession)
+                    .accessibilityLabel("記録せずにキャンセル")
             }
             if !isSessionActive {
-                Button(action: { showRoom = true }) {
-                    Label("ルームで集中", systemImage: "person.3.fill")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .sheet(isPresented: $showRoom) {
-                    FocusRoomView()
-                }
+                S8Button("ルームで集中", icon: "users", variant: .ghost, action: { showRoom = true })
             }
         }
     }
