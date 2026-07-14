@@ -9,6 +9,11 @@
 import SwiftUI
 import SwiftData
 
+extension Notification.Name {
+    /// ホイール中心タップ → タスク作成シートを開く。
+    static let s8ListAddTask = Notification.Name("s8.list.addTask")
+}
+
 struct TodoListView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
@@ -48,10 +53,7 @@ struct TodoListView: View {
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            S8TopBar("リスト", sub: "list · floating tasks") {
-                S8IconButton(icon: "plus", accent: true, action: { showComposer = true })
-            }
-
+            // ponytail: ヘッダは撤去、作成はホイール中心タップから発火。
             // クイック追加バー
             HStack(spacing: 8) {
                 S8Field(placeholder: "タスクを追加", text: $quickTitle)
@@ -59,6 +61,7 @@ struct TodoListView: View {
             }
             .onSubmit(quickAdd)
             .padding(.horizontal, 24)
+            .padding(.top, 12)
             .padding(.bottom, 12)
 
             // アクションチップ列
@@ -106,6 +109,10 @@ struct TodoListView: View {
         }
         .sheet(isPresented: $showQuickAddParser) {
             QuickAddParserView()
+        }
+        // ホイール中心タップ → タスク作成
+        .onReceive(NotificationCenter.default.publisher(for: .s8ListAddTask)) { _ in
+            showComposer = true
         }
     }
 
@@ -156,7 +163,7 @@ struct TodoListView: View {
     /// 行タップで詳細シート、右端の2アイコンで完了/日時確定（旧 swipeActions の置換）。
     private func taskRow(_ task: TaskItem) -> some View {
         HStack(spacing: 12) {
-            Circle().fill(task.effectiveColor).frame(width: 6, height: 6)
+            Circle().fill(task.effectiveColor ?? c.accent).frame(width: 6, height: 6)
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).font(S8Font.jp(15, .bold)).foregroundColor(c.fg1).lineLimit(1)
                 if let snooze = task.snoozeUntil, snooze > .now {
@@ -244,12 +251,12 @@ private struct SchedulePromoteSheet: View {
             VStack(spacing: 0) {
                 sectionCap("WHEN", jp: "開始")
                     .padding(.top, 8)
-                DatePicker("", selection: $startDate,
-                           displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden()
-                    .datePickerStyle(.graphical)
-                    .padding(.vertical, 8)
-                    .overlay(alignment: .top) { S8Rule() }
+                HStack {
+                    S8DatePicker(date: $startDate, showTime: true, minuteStep: 5)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .overlay(alignment: .top) { S8Rule() }
 
                 sectionCap("DURATION", jp: "所要時間")
                     .padding(.top, 16)
@@ -257,7 +264,16 @@ private struct SchedulePromoteSheet: View {
                     Text(durationText(duration))
                         .font(S8Font.mono(15, .bold)).foregroundColor(c.fg1)
                     Spacer()
-                    Stepper("", value: $duration, in: 300...(24 * 3600), step: 300).labelsHidden()
+                    S8Stepper(
+                        value: Binding(
+                            get: { Int(duration / 60) },
+                            set: { duration = TimeInterval($0) * 60 }
+                        ),
+                        range: 5...(24 * 60),
+                        step: 5,
+                        unit: "分",
+                        width: 132
+                    )
                 }
                 .padding(.vertical, 12)
                 .overlay(alignment: .top) { S8Rule() }

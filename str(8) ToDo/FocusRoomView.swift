@@ -15,6 +15,8 @@ struct FocusRoomView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @State private var peer = PeerRoomSession()
     @State private var motion = HourglassMotionService()
     @State private var lastMotionPhase = HourglassStateMachine.Phase.setting
@@ -28,122 +30,118 @@ struct FocusRoomView: View {
     @State private var now: Date = .now
     @State private var timer: Timer? = nil
     @State private var saveErrorMessage: String? = nil
+    @State private var showSaveError: Bool = false   // B7: alert Binding を @State に。
     @State private var hasFinished = false
-    /// 10 秒以上続く .inactive（電話着信等の一時的な離脱は許容）を監視して退出させるタスク。
+    /// B4 fix: background も 10 秒バッファに合流。短時間の離脱ではセッションを消さない。
     @State private var inactiveWatchTask: Task<Void, Never>? = nil
 
-    /// ApprovalQueueView への直行動線（Notification 経由。最少 diff）。ContentView が受けて承認タブへ切替。
+    /// ApprovalQueueView への直行動線（Notification 経由）。ContentView が受けて承認タブへ切替。
     static let proceedToApprovalNotification = Notification.Name("focusRoomProceedToApproval")
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Group {
+        let c = self.c
+        VStack(spacing: 0) {
+            S8TopBar("集中ルーム", sub: "focus · sync room") {
+                S8IconButton(icon: "x") {
+                    peer.broadcast(.leave(participantID: peer.myID))
+                    cleanup()
+                    dismiss()
+                }
+                .accessibilityLabel("退出")
+            }
+            S8Rule()
+            ScrollView {
+                VStack(spacing: 0) {
                     if hasFinished {
                         endedSection
                     } else {
                         switch peer.state {
                         case .waiting:
                             waitingSection
-                        case .readyToStart, .running, .ended:
+                        case .readyToStart:
+                            readyToStartSection
+                        case .running, .ended:
                             runningSection
                         case .aborted:
                             abortedSection
                         }
                     }
-                }
-                .padding()
-                Spacer()
-            }
-            .navigationTitle("集中ルーム")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("退出") {
-                        peer.broadcast(.leave(participantID: peer.myID))
-                        cleanup()
-                        dismiss()
-                    }
+                    Color.clear.frame(height: 24)
                 }
             }
-            .onAppear {
-                // コールバック登録（分離不要、onAppear inline）
-                peer.onStartScheduled = { localStart in
-                    self.localStartAt = localStart
-                    // 1 秒粒度でカウントダウン。満了判定はホストのみが行い、broadcast(.end) 経由で
-                    // 全端末（ホスト含む）が onEnded → finishAndSave する（1Hz 自己申告から脱却）。
-                    self.timer?.invalidate()
-                    self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-                        Task { @MainActor in
-                            self.now = .now
-                            let elapsed = self.now.timeIntervalSince1970 - localStart
-                            if elapsed >= Double(self.selectedMinutes * 60), self.peer.isHost {
-                                self.peer.end()
-                            }
+        }
+        .background(c.paper.ignoresSafeArea())
+        .onAppear {
+            peer.onStartScheduled = { localStart in
+                self.localStartAt = localStart
+                // 1 秒粒度でカウントダウン。満了判定はホストのみが行い、broadcast(.end) 経由で
+                // 全端末（ホスト含む）が onEnded → finishAndSave する。
+                self.timer?.invalidate()
+                self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                    Task { @MainActor in
+                        self.now = .now
+                        let elapsed = self.now.timeIntervalSince1970 - localStart
+                        if elapsed >= Double(self.selectedMinutes * 60), self.peer.isHost {
+                            self.peer.end()
                         }
                     }
                 }
-                peer.onEnded = {
-                    self.finishAndSave()
-                }
-                motion.start()
-                lastMotionPhase = motion.phase
-                // ルーム参加時に既に端末が伏せられている場合、共有 FSM は faceUp 経由の
-                // .setting → .armed → .running を要求するため、モーション初期化後に
-                // 現在の姿勢を確認して faceDown なら明示的に伝える。
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    if motion.isDeviceFaceDown {
-                        peer.setFaceDown(true)
-                    }
+            }
+            peer.onEnded = {
+                self.finishAndSave()
+            }
+            motion.start()
+            lastMotionPhase = motion.phase
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if motion.isDeviceFaceDown {
+                    peer.setFaceDown(true)
                 }
             }
-            .onDisappear {
+        }
+        .onDisappear {
+            cleanup()
+        }
+        .onChange(of: motion.phase) { _, newPhase in
+            if newPhase == .running && lastMotionPhase != .running {
+                peer.setFaceDown(true)
+            } else if newPhase == .paused && lastMotionPhase != .paused {
+                peer.setFaceDown(false)
+            }
+            lastMotionPhase = newPhase
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background, .inactive:
+                // B4 fix: background も inactive と同じ 10s バッファに合流。
+                inactiveWatchTask?.cancel()
+                inactiveWatchTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 10_000_000_000)
+                    guard !Task.isCancelled else { return }
+                    cleanup()
+                    dismiss()
+                }
+            default:
+                inactiveWatchTask?.cancel()
+                inactiveWatchTask = nil
+            }
+        }
+        .onChange(of: peer.state) { _, newState in
+            if newState == .aborted {
                 cleanup()
             }
-            .onChange(of: motion.phase) { _, newPhase in
-                // running に遷移したら faceDown、paused に遷移したら faceUp
-                if newPhase == .running && lastMotionPhase != .running {
-                    peer.setFaceDown(true)
-                } else if newPhase == .paused && lastMotionPhase != .paused {
-                    peer.setFaceDown(false)
-                }
-                lastMotionPhase = newPhase
+        }
+        // B7 fix: .constant(...) Binding を @State に。OK は alert のみ閉じ、シートは残す。
+        .onChange(of: saveErrorMessage) { _, new in
+            showSaveError = (new != nil)
+        }
+        .alert("保存に失敗しました", isPresented: $showSaveError) {
+            Button("OK") {
+                showSaveError = false
+                saveErrorMessage = nil
             }
-            .onChange(of: scenePhase) { _, newPhase in
-                switch newPhase {
-                case .background:
-                    // フォアグラウンド限定：background 遷移で退出
-                    cleanup()
-                    dismiss()
-                case .inactive:
-                    // 電話着信等の一時的な .inactive は許容。10 秒以上続いたら退出。
-                    inactiveWatchTask?.cancel()
-                    inactiveWatchTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 10_000_000_000)
-                        guard !Task.isCancelled else { return }
-                        cleanup()
-                        dismiss()
-                    }
-                default:
-                    // .active 復帰：inactive 監視を解除
-                    inactiveWatchTask?.cancel()
-                    inactiveWatchTask = nil
-                }
-            }
-            .onChange(of: peer.state) { _, newState in
-                if newState == .aborted {
-                    cleanup()
-                }
-            }
-            .alert("保存に失敗しました", isPresented: .constant(saveErrorMessage != nil)) {
-                Button("OK") {
-                    saveErrorMessage = nil
-                    // hasFinished は既に true で ended 状態から抜けられないため、alert 経由で明示的に閉じる
-                    dismiss()
-                }
-            } message: {
-                Text(saveErrorMessage ?? "")
-            }
+        } message: {
+            Text(saveErrorMessage ?? "")
         }
     }
 
@@ -162,67 +160,107 @@ struct FocusRoomView: View {
         peer.stop()
     }
 
-    // MARK: - Waiting セクション（ホストは設定＋開始ボタン、ゲストはホスト選択）
+    // MARK: - Waiting セクション（ホスト設定 or ゲストのホスト選択）
     private var waitingSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             if !isHost && peer.discoveredHosts.isEmpty {
-                // どちらでもない：モード選択
-                Button("ルームを開く（ホスト）") {
-                    isHost = true
-                    peer.startHosting()
+                S8SectionLabel(text: "ルームを開始")
+                VStack(spacing: 10) {
+                    S8Button("ルームを開く（ホスト）", icon: "plus", variant: .primary) {
+                        isHost = true
+                        peer.startHosting()
+                    }
+                    S8Button("ルームに参加", icon: "search", variant: .secondary) {
+                        peer.startBrowsing()
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                Button("ルームに参加") {
-                    peer.startBrowsing()
-                }
-                .buttonStyle(.bordered)
+                .padding(.horizontal, 24).padding(.vertical, 12)
             }
 
             if isHost {
-                Stepper("時間: \(selectedMinutes) 分", value: $selectedMinutes, in: 5 ... 120, step: 5)
-                Text("参加者: \(peer.participants.count) / 7")
-                    .foregroundStyle(.secondary)
-                ForEach(peer.participants) { p in
-                    HStack {
-                        Circle().fill(p.isFaceDown ? .green : .gray).frame(width: 8, height: 8)
-                        Text(p.id + (p.isHost ? " (ホスト)" : ""))
-                        Spacer()
-                    }
+                S8SectionLabel(text: "時間設定")
+                S8SetRow(icon: "hourglass", label: "集中時間") {
+                    S8Stepper(value: $selectedMinutes, range: 5...120, step: 5, unit: "分", width: 132)
                 }
-                Text("全員が端末を上下反転すると開始します").font(.caption).foregroundStyle(.secondary)
+                S8Rule()
+                participantList
+                HStack {
+                    S8Icon(name: "info", size: 12, color: c.fg3)
+                    Text("全員が端末を上下反転すると開始します")
+                        .font(S8Font.mono(11)).tracking(1.0).foregroundColor(c.fg3)
+                }
+                .padding(.horizontal, 24).padding(.top, 8)
             }
 
             if !isHost && !peer.discoveredHosts.isEmpty {
-                Text("見つかったホスト").font(.caption)
-                ForEach(peer.discoveredHosts, id: \.self) { host in
-                    Button(host.displayName) {
+                S8SectionLabel(text: "見つかったホスト")
+                ForEach(Array(peer.discoveredHosts.enumerated()), id: \.offset) { i, host in
+                    S8SetRow(icon: "wifi", label: host.displayName, trailing: {
+                        S8Icon(name: "chevron-right", size: 14, color: c.fg3)
+                    }, onTap: {
                         peer.requestJoin(host: host)
-                    }
-                    .buttonStyle(.bordered)
+                    })
+                    if i < peer.discoveredHosts.count - 1 { S8Rule() }
                 }
+            } else if !isHost && peer.discoveredHosts.isEmpty && !peer.participants.isEmpty {
+                // ゲストがブラウズ中（B1 fix によって participants に自分だけ入っている）
+                S8SectionLabel(text: "ホスト探索中")
+                HStack {
+                    S8Icon(name: "search", size: 14, color: c.fg3)
+                    Text("近くのホストを探しています…")
+                        .font(S8Font.jp(13)).foregroundColor(c.fg3)
+                    Spacer()
+                }
+                .padding(.horizontal, 24).padding(.vertical, 15)
             }
         }
     }
 
-    // MARK: - Running セクション（同期タイマー、参加者リスト）
+    // MARK: - ReadyToStart セクション（B3 fix: 500ms の準備状態を可視化）
+    private var readyToStartSection: some View {
+        VStack(spacing: 8) {
+            Text("まもなく開始")
+                .font(S8Font.jp(28, .bold))
+                .foregroundColor(c.accent)
+                .padding(.top, 32)
+            Text("端末を伏せたまま待機")
+                .font(S8Font.mono(11)).tracking(1.2).foregroundColor(c.fg3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Running セクション（同期タイマー・参加者リスト）
     private var runningSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             if let localStart = localStartAt {
                 let elapsed = now.timeIntervalSince1970 - localStart
                 let remain = TimeInterval(selectedMinutes * 60) - elapsed
                 Text(countdownText(remain))
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .font(S8Font.mono(72, .bold))
+                    .foregroundColor(c.fg1)
+                    .padding(.top, 24)
                 if elapsed < 0 {
-                    Text("まもなく開始…").font(.caption).foregroundStyle(.secondary)
+                    Text("まもなく開始…")
+                        .font(S8Font.mono(11)).tracking(1.2).foregroundColor(c.fg3)
                 }
             }
-            Text("参加中: \(peer.participants.count) 人").font(.caption)
-            ForEach(peer.participants) { p in
-                HStack {
-                    Circle().fill(p.isFaceDown ? .green : .orange).frame(width: 8, height: 8)
-                    Text(p.id + (p.isHost ? " (ホスト)" : ""))
-                    Spacer()
+            Text("参加中: \(peer.participants.count) 人")
+                .font(S8Font.mono(11)).tracking(1.2).foregroundColor(c.fg3)
+                .padding(.top, 8)
+            participantList
+        }
+    }
+
+    // MARK: - 参加者リスト（共通）
+    private var participantList: some View {
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "参加者 \(peer.participants.count) / 7")
+            ForEach(Array(peer.participants.enumerated()), id: \.element.id) { i, p in
+                S8SetRow(icon: p.isFaceDown ? "check-circle" : "user", label: p.id + (p.isHost ? " (ホスト)" : "")) {
+                    S8Tag(p.isFaceDown ? "READY" : "WAIT", color: p.isFaceDown ? c.ok : c.warn)
                 }
+                if i < peer.participants.count - 1 { S8Rule() }
             }
         }
     }
@@ -230,22 +268,24 @@ struct FocusRoomView: View {
     // MARK: - 終了・中断
     private var endedSection: some View {
         VStack(spacing: 12) {
-            Text("集中セッション終了").font(.title2)
-            Text("お疲れさまでした").font(.caption).foregroundStyle(.secondary)
-            Button("承認へ進む") {
+            Text("集中セッション終了").font(S8Font.jp(21, .bold)).foregroundColor(c.fg1).padding(.top, 32)
+            Text("お疲れさまでした").font(S8Font.mono(11)).tracking(1.2).foregroundColor(c.fg3)
+            S8Button("承認へ進む", icon: "check-circle", variant: .primary) {
                 NotificationCenter.default.post(name: Self.proceedToApprovalNotification, object: nil)
                 dismiss()
             }
-            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 24).padding(.top, 16)
         }
     }
 
     private var abortedSection: some View {
         VStack(spacing: 12) {
-            Text("ホストが離脱したためルームが中断されました").font(.title3)
-            Text("このルームは再開できません").font(.caption).foregroundStyle(.secondary)
-            Button("閉じる") { dismiss() }
-                .buttonStyle(.bordered)
+            Text("ホストが離脱しました")
+                .font(S8Font.jp(21, .bold)).foregroundColor(c.fg1).padding(.top, 32)
+            Text("このルームは再開できません")
+                .font(S8Font.mono(11)).tracking(1.2).foregroundColor(c.fg3)
+            S8Button("閉じる", variant: .secondary) { dismiss() }
+                .padding(.horizontal, 24).padding(.top, 16)
         }
     }
 

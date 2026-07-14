@@ -46,6 +46,9 @@ struct S8CenterCoreConfig {
     let onSelect: (Int) -> Void                // モード確定時のコールバック
     /// 非 nil のとき、タップでモードホイールを開かず直接発火する（勉強タブの「科目追加」等）。
     var directAction: (() -> Void)? = nil
+    /// 非 nil のとき、中心コアを長押しした際に発火する。Timer タブの Crown ホイール展開に使用。
+    /// 全タブ共通の長押しは廃止済（旧 P2P 廃止 2026-07-11）なので、タブ固有機能への割当のみ。
+    var longPressAction: (() -> Void)? = nil
 }
 
 struct S8ClickWheel: View {
@@ -72,8 +75,6 @@ struct S8ClickWheel: View {
     @State private var dragging = false
     @State private var lastAngle: Double? = nil
     @State private var didRotate = false
-    @State private var pressProgress: CGFloat = 0   // 中心ボタン長押しの進捗リング
-    @State private var pressing = false
     /// ノードごとの SF Symbol バウンス用カウンタ。選択された瞬間だけ増やす＝移動先のみ弾む。
     @State private var bump = [Int](repeating: 0, count: s8Tabs.count)
 
@@ -252,18 +253,11 @@ struct S8ClickWheel: View {
         return best
     }
 
-    /// 中心コア：長押しで P2P トグル（全タブ共通）、タップで centerCore.onTap（あれば）。
-    /// centerCore == nil のとき、Handoff 04a と同じ P2P LINK ビジュアルを維持。
+    /// 中心コア：タップで cfg.directAction / モードホイール展開 / P2P トグル（承認タブなど centerCore==nil のとき）。
+    /// 長押し P2P は廃止。承認タブは centerCore==nil を返して、その中心タップで P2P を切替える。
     private func centerCore(_ c: S8Palette) -> some View {
-        let ringColor: Color = connected ? c.danger : c.ok   // 長押しで OFF/ON を色で示唆
-        return ZStack {
+        ZStack {
             Circle().fill(c.surface2)
-            // 長押し進捗リング（0→1 充填で確定）
-            Circle()
-                .trim(from: 0, to: pressProgress)
-                .stroke(ringColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(3)
             Circle().stroke(c.lineStrong, lineWidth: 1)
             // Handoff 00c: 上端に MODE/PRESET/VIEW のミニインジケータ（centerCore あるとき）
             if centerCore != nil {
@@ -278,33 +272,29 @@ struct S8ClickWheel: View {
         }
         .frame(width: 84, height: 84)
         .clipShape(Circle())
-        .scaleEffect(pressing ? 0.94 : 1)
-        .animation(.spring(response: 0.2), value: pressing)
         .contentShape(Circle())
         .onTapGesture {
-            guard let cfg = centerCore else { return }
             S8WheelHaptic.tap()
+            guard let cfg = centerCore else {
+                // 承認タブ等：中心タップ = P2P トグル
+                let wasConnected = connected
+                onToggleConn()
+                UINotificationFeedbackGenerator().notificationOccurred(wasConnected ? .warning : .success)
+                return
+            }
             if let direct = cfg.directAction {
-                direct()   // 直接発火（勉強タブの「科目追加」等）
+                direct()   // 直接発火（勉強・カレンダー・リストの「作成」等）
             } else if !cfg.options.isEmpty {
                 onOpenModeWheel()   // モードホイールを開く
             }
         }
-        .onLongPressGesture(minimumDuration: 0.6, pressing: { isPressing in
-            pressing = isPressing
-            if isPressing {
-                S8WheelHaptic.tap()
-                withAnimation(.linear(duration: 0.6)) { pressProgress = 1 }
-            } else {
-                withAnimation(.easeOut(duration: 0.2)) { pressProgress = 0 }
-            }
-        }, perform: {
-            let wasConnected = connected
-            onToggleConn()
-            UINotificationFeedbackGenerator().notificationOccurred(wasConnected ? .warning : .success)
-            pressing = false
-            withAnimation(.easeOut(duration: 0.2)) { pressProgress = 0 }
-        })
+        // Timer タブの Crown 展開など、タブ固有の長押しアクション（cfg.longPressAction）だけ発火。
+        // 全タブ共通の長押し（旧 P2P トグル）は 2026-07-11 廃止。
+        .onLongPressGesture(minimumDuration: 0.55) {
+            guard let cfg = centerCore, let action = cfg.longPressAction else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        }
     }
 
     /// P2P LINK ビジュアル（Approve タブや centerCore == nil のフォールバック）。
@@ -465,7 +455,8 @@ struct S8FilterWheel: View {
                         .frame(width: D, height: hitH, alignment: .top)
                         .clipped()
 
-                    // 中心 = 現在の選択 + 閉じる
+                    // 中心 = 現在の選択 + 閉じる。下端見切れ防止のため、hitH 制約と .clipped() を外して
+                    // 外側 D×D 枠内に自然配置する（円自体は 84×84、y=D/2 中心なので必ず枠内に収まる）。
                     Button(action: { S8WheelHaptic.tap(); onClose() }) {
                         ZStack {
                             Circle().fill(c.accentWash)
@@ -483,8 +474,6 @@ struct S8FilterWheel: View {
                     }
                     .buttonStyle(.plain)
                     .position(x: D / 2, y: D / 2)
-                    .frame(width: D, height: hitH, alignment: .top)
-                    .clipped()
                 }
                 .frame(width: D, height: D, alignment: .top)
             }
@@ -657,5 +646,197 @@ struct S8TabBar: View {
         .onChange(of: tabIndex) { _, new in
             if bump.indices.contains(new) { bump[new] += 1 }   // 移動先のみバウンス
         }
+    }
+}
+
+// MARK: - S8WheelOverlayPresenter（Talk 流儀のホイール直接差替オーバレイの共有提示器）
+//
+// ホイール中央領域を S8FilterWheel に差替える汎用パス。ContentView が @State で observe し、
+// MorphCalendar のカテゴリフィルタなど任意の子ビューが `shared` から present する。
+// シートではなくホイール位置そのものを差し替えるため、背景グレーアウトは Content 側で実装。
+
+enum S8WheelOverlayMode: Equatable {
+    case filter                              // 従来の S8FilterWheel（アイコン + ラベル）
+    case crown(range: ClosedRange<Int>, unit: String)   // Crown ホイール（1周60ドット等の連続値）
+}
+
+@Observable
+@MainActor
+final class S8WheelOverlayPresenter {
+    static let shared = S8WheelOverlayPresenter()
+
+    var isPresented: Bool = false
+    var mode: S8WheelOverlayMode = .filter
+    /// filter 用：アイコン+ラベル項目。crown モードでは未使用。
+    var items: [S8WheelFilterItem] = []
+    /// filter 用 index / crown 用の現在値の両方に流用。
+    var selectedIndex: Int = 0
+    private var _onSelect: (Int) -> Void = { _ in }
+
+    private init() {}
+
+    func present(items: [S8WheelFilterItem], selectedIndex: Int, onSelect: @escaping (Int) -> Void) {
+        self.mode = .filter
+        self.items = items
+        self.selectedIndex = max(0, min(items.count - 1, selectedIndex))
+        self._onSelect = onSelect
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            self.isPresented = true
+        }
+    }
+
+    /// Crown モード提示（Timer タブの時間設定用）。range 内の初期値と分単位確定コールバックを渡す。
+    func presentCrown(range: ClosedRange<Int>, currentValue: Int, unit: String = "分", onSelect: @escaping (Int) -> Void) {
+        self.mode = .crown(range: range, unit: unit)
+        self.items = []
+        self.selectedIndex = max(range.lowerBound, min(range.upperBound, currentValue))
+        self._onSelect = onSelect
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            self.isPresented = true
+        }
+    }
+
+    func commitAndDismiss() {
+        let cb = _onSelect
+        let idx = selectedIndex
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            self.isPresented = false
+        }
+        cb(idx)
+    }
+
+    func dismissWithoutCommit() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            self.isPresented = false
+        }
+    }
+}
+
+// MARK: - S8CrownWheel（60 ドット環の連続値ホイール。時間設定など）
+//
+// ハンドオフ準拠：ドラッグで回転、6°/分のスナップ、5分ごとに数字ラベル。
+// 巻いた分だけ accent、未セット分は line で描く。中心＝現在値の mono 表示 + 「とじる」。
+
+struct S8CrownWheel: View {
+    /// 対象範囲（例: 1...180 分）。範囲を超えるドラッグはクランプ。
+    let range: ClosedRange<Int>
+    @Binding var value: Int
+    var unit: String = "分"
+    let onClose: () -> Void
+    var bottomSafe: CGFloat = 0
+
+    /// ドット環のサイズ・半径。S8FilterWheel と同寸で置き換え可能に。
+    private let D: CGFloat = 280
+    private let R: CGFloat = 118
+    /// 1 周 60 ドット固定（分単位の刻み）。
+    private let dotCount: Int = 60
+    /// 1 分あたりの角度（＝6°）。ハンドオフ準拠。
+    private var stepDeg: Double { 360.0 / Double(dotCount) }
+    private var domeH: CGFloat { D * 0.72 }
+
+    @State private var accumulatedDeg: Double = 0
+    @State private var dragging = false
+    @State private var lastAngle: Double? = nil
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        return Color.clear
+            .frame(width: D, height: domeH)
+            .overlay(alignment: .top) {
+                ZStack(alignment: .top) {
+                    // rim
+                    Circle().fill(c.surface).overlay(Circle().stroke(c.lineStrong, lineWidth: 1))
+                    Circle().inset(by: 18).stroke(c.line, lineWidth: 1)
+
+                    // ドット環
+                    ForEach(0..<dotCount, id: \.self) { i in
+                        let a = (Double(i) * stepDeg - 90) * .pi / 180
+                        let x = D / 2 + R * cos(a)
+                        let y = D / 2 + R * sin(a)
+                        let lit = i < value
+                        let isMajor = (i % 5 == 0)
+                        Circle()
+                            .fill(lit ? c.accent : c.lineStrong)
+                            .frame(width: isMajor ? 6 : 4, height: isMajor ? 6 : 4)
+                            .position(x: x, y: y)
+                        if isMajor {
+                            Text("\(i)")
+                                .font(S8Font.mono(9, .bold))
+                                .foregroundColor(lit ? c.accent : c.fg3)
+                                .position(x: D / 2 + (R - 22) * cos(a), y: D / 2 + (R - 22) * sin(a))
+                        }
+                    }
+
+                    // ドラッグ面
+                    Color.clear
+                        .frame(width: D, height: D)
+                        .contentShape(Circle())
+                        .gesture(crownDrag)
+                        .clipped()
+
+                    // 中心 = 現在値 + 「とじる」
+                    Button(action: {
+                        S8WheelHaptic.tap()
+                        onClose()
+                    }) {
+                        ZStack {
+                            Circle().fill(c.accentWash)
+                            Circle().stroke(c.accent, lineWidth: 1)
+                            VStack(spacing: 2) {
+                                Text("\(value)").font(S8Font.mono(28, .bold)).foregroundColor(c.fg1)
+                                Text(unit.uppercased()).font(S8Font.mono(9)).tracking(1.5).foregroundColor(c.fg3)
+                                Text("とじる").font(S8Font.mono(8)).tracking(1.2).foregroundColor(c.fg3)
+                                    .padding(.top, 2)
+                            }
+                        }
+                        .frame(width: 108, height: 108)
+                        .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: D / 2, y: D / 2)
+                }
+                .frame(width: D, height: D)
+            }
+            .clipped()
+    }
+
+    private var crownDrag: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { g in
+                let dx = Double(g.location.x) - Double(D) / 2
+                let dy = Double(g.location.y) - Double(D) / 2
+                let r = (dx * dx + dy * dy).squareRoot()
+                let cur = atan2(dy, dx) * 180 / .pi
+                let moved = (Double(g.translation.width) * Double(g.translation.width)
+                           + Double(g.translation.height) * Double(g.translation.height)).squareRoot()
+                if !dragging && moved > 6 {
+                    dragging = true
+                    lastAngle = cur
+                }
+                if dragging, let prev = lastAngle, r > 32 {   // 中心ボタンは無視
+                    var d = cur - prev
+                    if d > 180 { d -= 360 } else if d < -180 { d += 360 }
+                    accumulatedDeg += d
+                    lastAngle = cur
+                    // 6° 溜まるごとに ±1 分
+                    while accumulatedDeg >= stepDeg {
+                        accumulatedDeg -= stepDeg
+                        let next = min(range.upperBound, value + 1)
+                        if next != value { value = next; S8WheelHaptic.tick() }
+                    }
+                    while accumulatedDeg <= -stepDeg {
+                        accumulatedDeg += stepDeg
+                        let next = max(range.lowerBound, value - 1)
+                        if next != value { value = next; S8WheelHaptic.tick() }
+                    }
+                }
+            }
+            .onEnded { _ in
+                dragging = false
+                lastAngle = nil
+                accumulatedDeg = 0
+            }
     }
 }

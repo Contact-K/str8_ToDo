@@ -46,6 +46,10 @@ final class PeerRoomSession: NSObject {
     /// 受信レート制限用の直近タイムスタンプ（.hello / .leave）。peer.displayName ごとに独立させ、1 peer の連投が他 peer を巻き込まないようにする。
     private var helloTimestamps: [String: [TimeInterval]] = [:]
     private var leaveTimestamps: [String: [TimeInterval]] = [:]
+    /// B6: hello 未着で先に faceDown が来た場合の保留バッファ。hello 受信時にリプレイ。
+    private var pendingFaceDown: [String: Bool] = [:]
+    /// B2: clock sync 未完了時に .start を受け取った場合の保留。sync 完了時にリプレイ。
+    private var pendingStart: (hostStartAt: TimeInterval, roomID: UUID)?
 
     /// FocusSession.approverID に詰める識別子。ホストなら自分の ID、ゲストなら
     /// requestJoin で確定したホストの ID（TaskItem.approverID パターン踏襲）。
@@ -93,8 +97,11 @@ final class PeerRoomSession: NSObject {
     }
 
     /// ゲストとしてブラウズ開始（近くのホストを探す）。
+    /// B1 fix: ゲストも自分を participants に登録（従来漏れており、faceDown / 参加人数表示 / ready 判定が全部壊れていた）。
     func startBrowsing() {
         isHost = false
+        participants = [Participant(id: myID, isFaceDown: false, isHost: false)]
+        state = .waiting
         browser.startBrowsingForPeers()
     }
 
@@ -129,10 +136,12 @@ final class PeerRoomSession: NSObject {
     }
 
     /// ホストのみ：全員 faceDown なら hostStartAt を計算して broadcast。
-    /// `state != .running` ガードで、開始後に faceDown が再送されても二重 announce しない
+    /// `state == .waiting` ガードで、開始後に faceDown が再送されても二重 announce しない
     /// （onStartScheduled の二重発火防止）。
+    /// B3 fix: 一度 .readyToStart に遷移してから 500ms 後に .running へ。ゲスト側の局所処理と
+    /// タイミングを揃える猶予を持たせ、FocusRoomView の switch も dead state ではなくなる。
     func announceStartIfReady() {
-        guard isHost, state != .running, FocusRoom.isReadyToStart(participants: participants) else { return }
+        guard isHost, state == .waiting, FocusRoom.isReadyToStart(participants: participants) else { return }
 
         let hostNow = Date().timeIntervalSince1970
         let hostStartAt = FocusRoom.recommendedHostStartAt(hostNow: hostNow)
@@ -140,9 +149,15 @@ final class PeerRoomSession: NSObject {
 
         // ホスト側も自分の localStartTime を計算
         let localStart = FocusRoom.localStartTime(hostStartAt: hostStartAt, offset: 0)
-        state = .running
+        state = .readyToStart
         onStateChanged?(state)
-        onStartScheduled?(localStart)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let self = self, self.state == .readyToStart else { return }
+            self.state = .running
+            self.onStateChanged?(self.state)
+            self.onStartScheduled?(localStart)
+        }
     }
 
     /// 終了通知。ホストの Timer 満了から呼ばれる想定（1Hz 自己申告からの脱却）。
@@ -175,6 +190,8 @@ final class PeerRoomSession: NSObject {
         hasClockSynced = false
         helloTimestamps = [:]
         leaveTimestamps = [:]
+        pendingFaceDown = [:]
+        pendingStart = nil
     }
 
     /// clock ping-pong を投げる（ゲスト側から起動）。
@@ -198,6 +215,12 @@ final class PeerRoomSession: NSObject {
             // 自分がゲストなら requestJoin で確定した hostPeerID と一致するかで判定。
             let helloIsHost = isHost ? false : (peerID == hostPeerID)
             participants.append(Participant(id: participantID, isFaceDown: false, isHost: helloIsHost))
+            // B6 fix: hello より先に faceDown が届いていた場合の保留リプレイ。
+            if let bufferedFD = pendingFaceDown.removeValue(forKey: participantID),
+               let idx = participants.firstIndex(where: { $0.id == participantID }) {
+                participants[idx].isFaceDown = bufferedFD
+                if isHost { announceStartIfReady() }
+            }
             onParticipantsChanged?()
 
         case .faceDown(let participantID, let isFaceDown):
@@ -208,6 +231,9 @@ final class PeerRoomSession: NSObject {
             }
             if let idx = participants.firstIndex(where: { $0.id == participantID }) {
                 participants[idx].isFaceDown = isFaceDown
+            } else {
+                // B6 fix: hello 未着のまま先に faceDown が来た場合はバッファ。hello 受信でリプレイ。
+                pendingFaceDown[participantID] = isFaceDown
             }
             onParticipantsChanged?()
             // ホストなら ready check
@@ -237,25 +263,46 @@ final class PeerRoomSession: NSObject {
             let pongReceivedAt = Date().timeIntervalSince1970
             clockOffsetToHost = FocusRoom.clockOffset(pingSentAt: pingSentAt, pongReceivedAt: pongReceivedAt, hostReplyTime: hostReplyTime)
             self.hasClockSynced = true
+            // B2 fix: sync 未完了時に受信して保留していた .start があればここで処理を続行。
+            if let ps = pendingStart {
+                pendingStart = nil
+                self.roomID = ps.roomID
+                let localStart = FocusRoom.localStartTime(hostStartAt: ps.hostStartAt, offset: clockOffsetToHost)
+                state = .readyToStart
+                onStateChanged?(state)
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    guard let self = self, self.state == .readyToStart else { return }
+                    self.state = .running
+                    self.onStateChanged?(self.state)
+                    self.onStartScheduled?(localStart)
+                }
+            }
 
         case .start(let hostStartAt, let receivedRoomID):
             // ゲスト側のみ受信、かつホストからのみ
             guard !isHost, peerID == hostPeerID else { return }
-            // 二重発火防止：既に running なら再announceを無視
-            guard state != .running else { return }
-            // クロック同期未完了で start を受け付けると過去/未来にジャンプしうる。安全側に aborted。
+            // 二重発火防止：既に running/readyToStart なら再 announce を無視
+            guard state == .waiting else { return }
+            // B2 fix: クロック同期未完了なら abort ではなく保留。pong 到着で再開。
             guard hasClockSynced else {
-                self.state = .aborted
-                self.onStateChanged?(self.state)
+                pendingStart = (hostStartAt: hostStartAt, roomID: receivedRoomID)
                 return
             }
             // ゲスト側でホストの roomID を上書き
             self.roomID = receivedRoomID
             // localStartTime を計算
             let localStart = FocusRoom.localStartTime(hostStartAt: hostStartAt, offset: clockOffsetToHost)
-            state = .running
+            // B3 fix: 一度 .readyToStart → 500ms 猶予 → .running
+            state = .readyToStart
             onStateChanged?(state)
-            onStartScheduled?(localStart)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard let self = self, self.state == .readyToStart else { return }
+                self.state = .running
+                self.onStateChanged?(self.state)
+                self.onStartScheduled?(localStart)
+            }
 
         case .end:
             // ゲスト側のみ受信、かつホストからのみ

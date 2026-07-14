@@ -295,11 +295,11 @@ private struct NewAliasSheet: View {
                     Text(word)
                 }
                 Section("分類") {
-                    Picker("分類", selection: $category) {
-                        ForEach(WHCategory.allCases) { cat in
-                            Text(cat.label).tag(cat)
-                        }
-                    }
+                    S8Picker(
+                        selection: $category,
+                        options: WHCategory.allCases.map { ($0, $0.label) },
+                        style: .chips
+                    )
                 }
                 Section("変換後の値") {
                     TextField("例: 大学図書館", text: $replacement)

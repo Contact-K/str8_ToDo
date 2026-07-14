@@ -25,6 +25,18 @@ enum AppSettingsKey {
     static let enableDictionarySuggestions = "enableDictionarySuggestions"
     static let enableDictionarySuggestionsDefault = true
 
+    /// タイマープリセット分数（設定画面から編集）。SettingsRootView/CalendarSettingsView が参照。
+    static let timerPreset1 = "timerPreset1"
+    static let timerPreset1Default = 25
+    static let timerPreset2 = "timerPreset2"
+    static let timerPreset2Default = 45
+    static let timerPreset3 = "timerPreset3"
+    static let timerPreset3Default = 90
+
+    /// タブナビ方式（true=ホイール / false=タブバー）。Talk 移植。
+    static let navWheel = "s8_nav_wheel"
+    static let navWheelDefault = true
+
     /// 最終バックアップエクスポート日時（TimeInterval）。
     static let lastBackupExportDate = "lastBackupExportDate"
 
@@ -42,7 +54,11 @@ enum AppSettingsKey {
             weekShowSevenDays: weekShowSevenDaysDefault,
             weekReviewWeekday: weekReviewWeekdayDefault,
             weekReviewHour: weekReviewHourDefault,
-            enableDictionarySuggestions: enableDictionarySuggestionsDefault
+            enableDictionarySuggestions: enableDictionarySuggestionsDefault,
+            timerPreset1: timerPreset1Default,
+            timerPreset2: timerPreset2Default,
+            timerPreset3: timerPreset3Default,
+            navWheel: navWheelDefault
         ])
     }
 }

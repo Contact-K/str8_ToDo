@@ -14,7 +14,12 @@ import Foundation
 
 // MARK: - ステートマシン（純粋ロジック）
 
-/// setting →(faceUp)→ armed →(faceDown+意図フリップ)→ running →(faceUp)→ paused →(faceDown)→ running。
+/// 仕様反転 2026-07-14: 上部（カメラ側）を床につけた状態 = armed（待機）／ 下部（充電口側）を床につけた状態＝ running（開始）。
+/// 旧仕様（下部=armed, 上部=running）を反転。armed 中は画面に「ひっくり返して開始」を 180° 回転描画し、
+/// ユーザーが端末を通常方向に戻す（≒ 意図フリップ）と running へ遷移する。
+///
+/// setting →(faceDown＝上部が下)→ armed →(faceUp＝下部が下＋意図フリップ)→ running
+/// running →(faceDown)→ paused →(faceUp)→ running（再開は gyroPeak 不要）。
 /// 姿勢はヒステリシス付き、全遷移に 0.3 秒デバウンス。キャンセルは UI 側の長押し（reset()）。
 ///
 /// ponytail: 物理的な検出は「充電口を床につけて端末を垂直に立てた状態＝ faceUp（gravity.y ≈ -1）」を 0°、
@@ -90,15 +95,19 @@ struct HourglassStateMachine {
     }
 
     private mutating func transition(at time: TimeInterval) {
+        // 仕様反転 2026-07-14: 上部（カメラ側）を床に向けた state を armed（待機）、
+        // 下部（充電口側）を床に向けた state を running（開始）に。
         switch (phase, posture) {
-        case (.setting, .faceUp):
+        case (.setting, .faceDown):
+            // 上部を下 = ジェスチャ待機状態
             phase = .armed
-        case (.armed, .faceDown) where time - lastGyroPeakAt <= Tuning.gyroPeakWindow:
-            // 意図的フリップ（gyro ピーク直後の faceDown）のみ開始。置き直しでは開始しない
+        case (.armed, .faceUp) where time - lastGyroPeakAt <= Tuning.gyroPeakWindow:
+            // 意図的フリップ（gyro ピーク直後の faceUp＝下部を下）で開始。置き直しでは開始しない
             phase = .running
-        case (.running, .faceUp):
-            phase = .paused          // 決定#7: 起こしたら一時停止
-        case (.paused, .faceDown):
+        case (.running, .faceDown):
+            // 再び上部を下にしたら一時停止（旧仕様: 起こしたら一時停止 の反転）
+            phase = .paused
+        case (.paused, .faceUp):
             phase = .running         // 再開に gyroPeak は不要
         default:
             break

@@ -435,10 +435,7 @@ struct AddSubjectSheet: View {
         HStack {
             Text(label).font(S8Font.jp(13.5)).foregroundColor(c.fg2)
             Spacer()
-            Text("\(value.wrappedValue)\(unit)")
-                .font(S8Font.mono(14, .bold))
-                .foregroundColor(c.fg1)
-            Stepper("", value: value, in: range, step: step).labelsHidden()
+            S8Stepper(value: value, range: range, step: step, unit: unit, width: 132)
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) { S8Rule() }

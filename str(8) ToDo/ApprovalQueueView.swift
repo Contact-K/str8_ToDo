@@ -15,11 +15,13 @@ import CoreMotion
 
 struct ApprovalQueueView: View {
     @Binding var showWeekReview: Bool
+    /// P2P セッションは ContentView が所有し、ここへバインドで渡される。
+    /// 承認タブでも設定/中心コアでもトグル状態が共有されるようになる。
+    let peerSession: PeerSession
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var allTasks: [TaskItem]
-    @State private var peerSession = PeerSession()
     @State private var proximityGate = ProximityGate()
     @State private var showPeerPairing = false
 
@@ -247,7 +249,7 @@ struct ApprovalQueueView: View {
 }
 
 #Preview {
-    ApprovalQueueView(showWeekReview: .constant(false))
+    ApprovalQueueView(showWeekReview: .constant(false), peerSession: PeerSession())
         .modelContainer(PreviewData.container)
 }
 

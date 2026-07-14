@@ -35,7 +35,7 @@ struct TaskCardView: View {
         HStack(spacing: 12) {
             // 左側カラーバー
             Rectangle()
-                .fill(task.effectiveColor)
+                .fill(task.effectiveColor ?? c.accent)
                 .frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {

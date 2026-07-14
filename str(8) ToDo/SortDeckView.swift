@@ -201,7 +201,7 @@ struct SortDeckView: View {
         .background(c.surface)
         .overlay(RoundedRectangle(cornerRadius: S8Radius.lg).stroke(c.lineStrong, lineWidth: 1))
         .overlay(alignment: .leading) {
-            Rectangle().fill(task.effectiveColor).frame(width: 5)
+            Rectangle().fill(task.effectiveColor ?? c.accent).frame(width: 5)
         }
         .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
         .shadow(color: Color.black.opacity(0.09), radius: 18, x: 0, y: 8)

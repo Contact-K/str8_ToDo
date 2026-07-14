@@ -45,6 +45,8 @@ struct CapsuleColumnOverlay: View {
     /// ETA があるタスクの移動セグメントを描画するための [taskID: timeInterval]。
     var travelETAs: [UUID: TimeInterval] = [:]
 
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     private let cal = Calendar.current
 
     var body: some View {
@@ -64,7 +66,7 @@ struct CapsuleColumnOverlay: View {
                         path.move(to: CGPoint(x: columnMinX + columnWidth / 2, y: departureY))
                         path.addLine(to: CGPoint(x: columnMinX + columnWidth / 2, y: startY))
                     }
-                    .stroke(task.effectiveColor.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [3]))
+                    .stroke((task.effectiveColor ?? c.accent).opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [3]))
                 }
 
                 capsuleBody(task)
@@ -76,11 +78,12 @@ struct CapsuleColumnOverlay: View {
 
     @ViewBuilder
     private func capsuleBody(_ task: TaskItem) -> some View {
+        let color = task.effectiveColor ?? c.accent
         let base = RoundedRectangle(cornerRadius: 6)
-            .fill(task.effectiveColor.opacity(0.25))
+            .fill(color.opacity(0.25))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(task.effectiveColor, lineWidth: 1.5)
+                    .stroke(color, lineWidth: 1.5)
             )
             .overlay(alignment: .topLeading) {
                 Text(task.title)

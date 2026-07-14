@@ -301,8 +301,9 @@ struct WeekView: View {
     /// 完了は取り消し線、色は task.effectiveColor 14% 塗り。
     @ViewBuilder
     private func taskChip(_ task: TaskItem, day: Date) -> some View {
+        let taskColor = task.effectiveColor ?? c.accent
         let chip = HStack(spacing: 3) {
-            Circle().fill(task.effectiveColor).frame(width: 6, height: 6)
+            Circle().fill(taskColor).frame(width: 6, height: 6)
             Text(task.title)
                 .font(S8Font.jp(9))
                 .foregroundColor(c.fg1)
@@ -323,7 +324,7 @@ struct WeekView: View {
         }
         .padding(.horizontal, 3)
         .padding(.vertical, 1.5)
-        .background(task.effectiveColor.opacity(0.14))
+        .background(taskColor.opacity(0.14))
         .cornerRadius(3)
         .contentShape(Rectangle())
         .onTapGesture { onSelectTask?(task) }

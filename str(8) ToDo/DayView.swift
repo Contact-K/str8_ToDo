@@ -14,69 +14,45 @@ struct DayView: View {
     var onSelectTask: ((TaskItem) -> Void)? = nil
 
     @Environment(\.modelContext) private var context
-    @State private var showComposer = false
     @State private var gapPrefill: GapPrefill?
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // Navigation header
-                HStack {
-                    Button(action: { date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date }) {
-                        Image(systemName: "chevron.left")
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                    }
-
-                    Spacer()
-
-                    Text(dayHeaderText())
-                        .font(.headline)
-
-                    Spacer()
-
-                    Button(action: { date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date }) {
-                        Image(systemName: "chevron.right")
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                    }
+        VStack(spacing: 0) {
+            // Navigation header
+            HStack {
+                Button(action: { date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date }) {
+                    Image(systemName: "chevron.left")
+                        .font(.body)
+                        .foregroundStyle(.primary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(.systemGray6))
 
-                // Agenda view
-                DayAgendaView(
-                    date: date,
-                    morph: morph,
-                    categoryFilter: categoryFilter,
-                    onSelectTask: onSelectTask,
-                    onTapGap: { start, duration in
-                        gapPrefill = GapPrefill(start: start, duration: duration)
-                    }
-                )
-            }
-
-            // Floating + button
-            VStack {
                 Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: { showComposer = true }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 56, height: 56)
-                            .background(Color.blue)
-                            .clipShape(Circle())
-                            .shadow(radius: 4)
-                    }
-                    .padding(20)
+
+                Text(dayHeaderText())
+                    .font(.headline)
+
+                Spacer()
+
+                Button(action: { date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date }) {
+                    Image(systemName: "chevron.right")
+                        .font(.body)
+                        .foregroundStyle(.primary)
                 }
             }
-        }
-        .sheet(isPresented: $showComposer) {
-            EventComposerView(initialStart: date)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.systemGray6))
+
+            // Agenda view
+            DayAgendaView(
+                date: date,
+                morph: morph,
+                categoryFilter: categoryFilter,
+                onSelectTask: onSelectTask,
+                onTapGap: { start, duration in
+                    gapPrefill = GapPrefill(start: start, duration: duration)
+                }
+            )
         }
         .sheet(item: $gapPrefill) { prefill in
             EventComposerView(

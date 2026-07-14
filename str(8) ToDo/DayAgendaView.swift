@@ -288,7 +288,7 @@ struct DayAgendaView: View {
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
-                                .background(Color.accentColor.opacity(0.1))
+                                .background(S8Palette.of(scheme).accentWash)
                                 .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
@@ -409,19 +409,20 @@ struct DayAgendaView: View {
     }
 
     private func sunRow(isSunrise: Bool, time: Date) -> some View {
-        HStack(spacing: 8) {
+        let c = S8Palette.of(scheme)
+        return HStack(spacing: 8) {
             Image(systemName: isSunrise ? "sunrise.fill" : "sunset.fill")
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(c.warn)
 
             Text(isSunrise ? "日の出" : "日の入り")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(c.fg3)
 
             Text(formatTime(time))
                 .font(.caption2)
                 .fontWeight(.semibold)
-                .foregroundStyle(.orange.opacity(0.7))
+                .foregroundStyle(c.warn.opacity(0.7))
 
             Spacer()
         }

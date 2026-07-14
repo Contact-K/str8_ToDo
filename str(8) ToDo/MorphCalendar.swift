@@ -13,6 +13,11 @@
 import SwiftUI
 import SwiftData
 
+extension Notification.Name {
+    /// ホイール中心タップ → カレンダーのイベント作成シートを開く。
+    static let s8CalAddEvent = Notification.Name("s8.cal.addEvent")
+}
+
 // MARK: - スケール定義
 
 enum CalendarScale: Int, CaseIterable, Identifiable {
@@ -85,21 +90,35 @@ struct CalendarRootView: View {
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            S8TopBar(titleText, sub: "calendar · \(scale.label)ビュー") {
-                HStack(spacing: 4) {
-                    categoryFilterButton
-                    // Handoff 01: + イベント作成（accent）は復活。年月切替はホイール中心へ集約。
-                    S8IconButton(icon: "plus", accent: true, action: { showComposer = true })
-                        .accessibilityLabel("イベント作成")
-                }
-            }
-
             HStack(spacing: 8) {
                 ForEach(CalendarScale.allCases) { s in
                     S8Chip(s.label, selected: scale == s, action: { zoom(to: s) })
                 }
+                Spacer()
+                ZStack(alignment: .topTrailing) {
+                    S8IconButton(icon: "filter", accent: categoryFilter != nil) {
+                        // Talk 流儀：ホイールを差替えるオーバレイを提示（シートは使わない）。
+                        S8WheelOverlayPresenter.shared.present(
+                            items: filterItems,
+                            selectedIndex: currentFilterIndex,
+                            onSelect: { applyFilterSelection($0) }
+                        )
+                    }
+                    .accessibilityLabel("カテゴリフィルター")
+                    if let filter = categoryFilter, !filter.isEmpty {
+                        Text("\(filter.count)")
+                            .font(S8Font.mono(9, .bold))
+                            .foregroundColor(c.onAccent)
+                            .frame(width: 16, height: 16)
+                            .background(Circle().fill(c.accent))
+                            .offset(x: 2, y: -2)
+                    }
+                }
+                // 詳細設定（マイ時間割・曜日割当・特定日差替）は Calendar タブへ集約（2026-07-14）。
+                S8IconButton(icon: "settings") { showSettings = true }
+                    .accessibilityLabel("カレンダー詳細設定")
             }
-            .padding(.horizontal, 24).padding(.bottom, 8)
+            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
 
             ZStack {
                 switch scale {
@@ -162,7 +181,8 @@ struct CalendarRootView: View {
                 eventKit.observeChanges(into: context)
             }
         }
-        // Handoff 00c: ホイール MODE ダイヤルからのモード切替を購読。
+        // ホイール MODE ダイヤルからのモード切替を購読（現状は wheel が中心作成発火に切替済で MODE ホイールは開かないが、
+        // 将来復活時のために互換）。
         .onAppear {
             if let s = CalendarScale(rawValue: wheelCalMode) { scale = s }
         }
@@ -174,80 +194,40 @@ struct CalendarRootView: View {
         .onChange(of: scale) { _, new in
             if wheelCalMode != new.rawValue { wheelCalMode = new.rawValue }
         }
+        // 中心タップ → イベント作成
+        .onReceive(NotificationCenter.default.publisher(for: .s8CalAddEvent)) { _ in
+            showComposer = true
+        }
+    }
+
+    // MARK: - フィルタホイール（カテゴリ単一選択）
+
+    private var filterItems: [S8WheelFilterItem] {
+        var items = [S8WheelFilterItem(id: "all", icon: "filter", label: "すべて")]
+        for cat in categories {
+            items.append(S8WheelFilterItem(id: cat.id.uuidString, icon: "tag", label: cat.name))
+        }
+        return items
+    }
+
+    private var currentFilterIndex: Int {
+        guard let filter = categoryFilter, filter.count == 1, let id = filter.first else { return 0 }
+        if let i = categories.firstIndex(where: { $0.id == id }) { return i + 1 }
+        return 0
+    }
+
+    private func applyFilterSelection(_ index: Int) {
+        if index == 0 || index > categories.count {
+            categoryFilter = nil
+        } else {
+            let cat = categories[index - 1]
+            categoryFilter = Set([cat.id])
+        }
     }
 
     private func zoom(to target: CalendarScale) {
         guard target != scale else { return }
         withAnimation(morphAnimation) { scale = target }
-    }
-
-    // MARK: トリガー: セレクターチップ（＋セル/ヘッダの直接タップ）
-
-    /// カテゴリフィルタ。Menu の label を S8IconButton と同じ見た目で描く（バッジ付き）。
-    private var categoryFilterButton: some View {
-        Menu {
-            Button("すべて表示") {
-                categoryFilter = nil
-            }
-            if !categories.isEmpty {
-                Divider()
-            }
-            ForEach(categories) { cat in
-                Button(action: {
-                    if categoryFilter == nil {
-                        categoryFilter = Set([cat.id])
-                    } else {
-                        if categoryFilter!.contains(cat.id) {
-                            categoryFilter!.remove(cat.id)
-                            if categoryFilter!.isEmpty {
-                                categoryFilter = nil
-                            }
-                        } else {
-                            categoryFilter!.insert(cat.id)
-                        }
-                    }
-                }) {
-                    HStack {
-                        Circle()
-                            .fill(Color(hex: cat.colorHex))
-                            .frame(width: 12, height: 12)
-                        Text(cat.name)
-                        Spacer()
-                        if let filter = categoryFilter, filter.contains(cat.id) {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                S8Icon(name: "filter", size: 22, color: categoryFilter == nil ? c.fg2 : c.accent)
-                    .frame(width: 38, height: 38)
-                if let filter = categoryFilter, !filter.isEmpty {
-                    Text("\(filter.count)")
-                        .font(S8Font.mono(9, .bold))
-                        .foregroundColor(c.onAccent)
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(c.accent))
-                        .offset(x: 2, y: -2)
-                }
-            }
-        }
-        .accessibilityLabel("カテゴリフィルター")
-    }
-
-    // MARK: タイトル
-
-    private var titleText: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ja_JP")
-        switch scale {
-        case .month: f.dateFormat = "yyyy年 M月"
-        case .week:  f.dateFormat = "yyyy年 M月 '第'W週"
-        case .day:   f.dateFormat = "M月d日 (E)"
-        case .year:  f.dateFormat = "yyyy年"
-        }
-        return f.string(from: selectedDate)
     }
 }
 
@@ -329,7 +309,7 @@ struct DayBlock: View {
 // MARK: - データ補助
 
 /// 指定日のタスクのカテゴリ色（最大3）。フィルタを適用。
-func dotColors(for day: Date, in tasks: [TaskItem], categoryFilter: Set<UUID>? = nil, cal: Calendar = .current) -> [Color] {
+func dotColors(for day: Date, in tasks: [TaskItem], categoryFilter: Set<UUID>? = nil, cal: Calendar = .current, fallback: Color) -> [Color] {
     let dayTasks = tasks.filter {
         guard let s = $0.startDate else { return false }
         return cal.isDate(s, inSameDayAs: day)
@@ -343,7 +323,7 @@ func dotColors(for day: Date, in tasks: [TaskItem], categoryFilter: Set<UUID>? =
     } else {
         filtered = dayTasks
     }
-    return filtered.prefix(3).map { $0.category.map { Color(hex: $0.colorHex) } ?? .accentColor }
+    return filtered.prefix(3).map { $0.category.map { Color(hex: $0.colorHex) } ?? fallback }
 }
 
 // MARK: - 月グリッド
@@ -409,7 +389,7 @@ struct MonthGrid: View {
                         isSelected: cal.isDate(day, inSameDayAs: selectedDate),
                         isToday: cal.isDateInToday(day),
                         inFocusMonth: cal.isDate(day, equalTo: selectedDate, toGranularity: .month),
-                        dots: dotColors(for: day, in: tasks, categoryFilter: categoryFilter),
+                        dots: dotColors(for: day, in: tasks, categoryFilter: categoryFilter, fallback: c.accent),
                         morph: morph,
                         amountText: spendByDay[day].map { "¥\(NSDecimalNumber(decimal: $0).intValue)" }
                     )
@@ -464,9 +444,11 @@ struct DayPane: View {
     var onSelectTask: ((TaskItem) -> Void)? = nil
 
     @Query private var tasks: [TaskItem]
+    @Environment(\.colorScheme) private var scheme
     private let cal = Calendar.current
 
     var body: some View {
+        let c = S8Palette.of(scheme)
         VStack(spacing: 0) {
             DayBlock(
                 date: date,
@@ -474,7 +456,7 @@ struct DayPane: View {
                 isSelected: true,
                 isToday: cal.isDateInToday(date),
                 inFocusMonth: true,
-                dots: dotColors(for: date, in: tasks, categoryFilter: categoryFilter),
+                dots: dotColors(for: date, in: tasks, categoryFilter: categoryFilter, fallback: c.accent),
                 morph: morph
             )
             .frame(maxWidth: 120)

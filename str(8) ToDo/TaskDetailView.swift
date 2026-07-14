@@ -94,7 +94,7 @@ struct TaskDetailView: View {
             HStack(alignment: .top, spacing: 12) {
                 // ドットインジケーター
                 Circle()
-                    .fill(task.effectiveColor)
+                    .fill(task.effectiveColor ?? c.accent)
                     .frame(width: 12, height: 12)
                     .padding(.top, 2)
 

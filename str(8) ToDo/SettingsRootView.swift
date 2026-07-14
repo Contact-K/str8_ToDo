@@ -18,17 +18,21 @@ struct SettingsRootView: View {
     @AppStorage(AppSettingsKey.syncSystemCalendar) private var syncSystemCalendar = AppSettingsKey.syncSystemCalendarDefault
     @AppStorage(AppSettingsKey.enableNotifications) private var enableNotifications = AppSettingsKey.enableNotificationsDefault
     @AppStorage(AppSettingsKey.enableDictionarySuggestions) private var enableDictionarySuggestions = AppSettingsKey.enableDictionarySuggestionsDefault
-    @AppStorage(AppSettingsKey.timerPreset1) private var timerPreset1 = AppSettingsKey.timerPreset1Default
-    @AppStorage(AppSettingsKey.timerPreset2) private var timerPreset2 = AppSettingsKey.timerPreset2Default
-    @AppStorage(AppSettingsKey.timerPreset3) private var timerPreset3 = AppSettingsKey.timerPreset3Default
+    // タイマープリセットは Timer タブへ移設（2026-07-14）。
     @AppStorage("s8_accent") private var accentRaw = S8Accent.anzu.rawValue
     /// "system" / "light" / "dark"（アプリレベルのテーマ）
     @AppStorage("s8_theme") private var themeRaw: String = "system"
+    /// タブナビ方式（true=ホイール / false=タブバー）。Talk 移植。
+    @AppStorage(AppSettingsKey.navWheel) private var navWheel = AppSettingsKey.navWheelDefault
 
     @State private var eventKit = EventKitService()
-    @State private var showBandTemplates = false
     @State private var showDictionary = false
     @State private var showAdvancedSettings = false
+    // プロフィール編集シート。nil=非表示、"new"=新規追加、Profile=既存編集。
+    @State private var editingProfile: Profile? = nil
+    @State private var showNewProfile: Bool = false
+
+    @Query(sort: \Profile.name) private var profiles: [Profile]
 
     private var currentAccent: S8Accent { S8Accent(rawValue: accentRaw) ?? .anzu }
 
@@ -58,14 +62,13 @@ struct SettingsRootView: View {
                     themeRow
                     S8Rule()
                     accentRow
+                    S8Rule()
+                    S8SetRow(icon: "circle-dot", label: "ホイールナビ") {
+                        S8Toggle(on: navWheel) { navWheel.toggle() }
+                    }
 
-                    // MARK: - タイマー
-                    S8SectionLabel(text: "タイマープリセット")
-                    presetRow(index: 1, minutes: $timerPreset1)
-                    S8Rule()
-                    presetRow(index: 2, minutes: $timerPreset2)
-                    S8Rule()
-                    presetRow(index: 3, minutes: $timerPreset3)
+                    // タイマープリセットは Timer タブ内へ移設（2026-07-14）。
+                    // マイ時間割・曜日割当は Calendar タブ内 週ビューヘッダから開く CalendarSettingsView へ集約。
 
                     // MARK: - 入力
                     S8SectionLabel(text: "入力の設定")
@@ -77,15 +80,24 @@ struct SettingsRootView: View {
                         S8Icon(name: "chevron-right", size: 16, color: c.fg3)
                     }, onTap: { showDictionary = true })
 
-                    // MARK: - マイ時間割
-                    S8SectionLabel(text: "マイ時間割")
-                    S8SetRow(icon: "list", label: "枠テンプレートを編集", trailing: {
-                        S8Icon(name: "chevron-right", size: 16, color: c.fg3)
-                    }, onTap: { showBandTemplates = true })
+                    // MARK: - プロフィール
+                    S8SectionLabel(text: "プロフィール")
+                    ForEach(Array(profiles.enumerated()), id: \.element.id) { i, p in
+                        S8SetRow(icon: p.iconName, label: p.name, trailing: {
+                            S8Icon(name: "chevron-right", size: 16, color: c.fg3)
+                        }, onTap: { editingProfile = p })
+                        if i < profiles.count - 1 { S8Rule() }
+                    }
+                    if !profiles.isEmpty { S8Rule() }
+                    S8SetRow(icon: "plus", label: "プロフィールを追加", trailing: {
+                        EmptyView()
+                    }, onTap: { showNewProfile = true })
 
-                    // MARK: - 詳細
-                    S8SectionLabel(text: "詳細")
-                    S8SetRow(icon: "settings", label: "カレンダー詳細設定・バックアップ", trailing: {
+                    // MARK: - バックアップ
+                    // ponytail 2026-07-14: 詳細シートを「バックアップ」に集約。マイ時間割は Calendar タブへ移設済。
+                    // フル抽出は次サイクル（現状は同じ CalendarSettingsView を開いてバックアップ操作のみ想定）。
+                    S8SectionLabel(text: "バックアップ")
+                    S8SetRow(icon: "share", label: "エクスポート／インポート", trailing: {
                         S8Icon(name: "chevron-right", size: 16, color: c.fg3)
                     }, onTap: { showAdvancedSettings = true })
 
@@ -94,14 +106,17 @@ struct SettingsRootView: View {
             }
         }
         .background(c.paper.ignoresSafeArea())
-        .sheet(isPresented: $showBandTemplates) {
-            NavigationStack { CalendarSettingsView() }
-        }
         .sheet(isPresented: $showDictionary) {
             NavigationStack { DictionarySettingsView() }
         }
         .sheet(isPresented: $showAdvancedSettings) {
             NavigationStack { CalendarSettingsView() }
+        }
+        .sheet(item: $editingProfile) { profile in
+            ProfileEditSheet(profile: profile, isNew: false)
+        }
+        .sheet(isPresented: $showNewProfile) {
+            ProfileEditSheet(profile: nil, isNew: true)
         }
     }
 
@@ -158,16 +173,115 @@ struct SettingsRootView: View {
         .padding(.horizontal, 24).padding(.vertical, 15)
     }
 
-    private func presetRow(index: Int, minutes: Binding<Int>) -> some View {
-        HStack(spacing: 14) {
-            S8Icon(name: "hourglass", size: 20, color: c.fg2)
-            Text("プリセット\(index)").font(S8Font.jp(15)).foregroundColor(c.fg1)
-            Spacer()
-            Text("\(minutes.wrappedValue)分")
-                .font(S8Font.mono(14, .bold))
-                .foregroundColor(c.fg1)
-            Stepper("", value: minutes, in: 1...180, step: 1).labelsHidden()
+}
+
+// MARK: - プロフィール編集シート
+//
+// 新規追加 or 既存編集を 1 つのシートで扱う。フィールド=名前、アイコン=SFSymbol グリッド、
+// フッターに削除ボタン（既存編集時のみ）。削除時はデフォルト 2 件でも制限なし。
+
+private struct ProfileEditSheet: View {
+    let profile: Profile?
+    let isNew: Bool
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
+
+    @State private var name: String = ""
+    @State private var iconName: String = "person"
+    @State private var showDeleteConfirm: Bool = false
+
+    private let iconColumns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
+
+    var body: some View {
+        let c = self.c
+        VStack(spacing: 0) {
+            S8TopBar(isNew ? "プロフィール追加" : "プロフィール編集", sub: isNew ? "new profile" : "edit · \(profile?.name ?? "")") {
+                HStack(spacing: 6) {
+                    S8IconButton(icon: "x") { dismiss() }
+                    S8IconButton(icon: "check", accent: canSave, action: save)
+                        .disabled(!canSave)
+                }
+            }
+            S8Rule()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    S8SectionLabel(text: "名前")
+                    S8Field(placeholder: "例: 個人 / 仕事 / 副業", text: $name)
+                        .padding(.horizontal, 24)
+
+                    S8SectionLabel(text: "アイコン")
+                    LazyVGrid(columns: iconColumns, spacing: 10) {
+                        ForEach(S8IconPreset.symbols, id: \.self) { sym in
+                            let isSelected = iconName == sym
+                            Button(action: { iconName = sym }) {
+                                Image(systemName: sym)
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(isSelected ? c.onAccent : c.fg1)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: S8Radius.md)
+                                            .fill(isSelected ? c.accent : c.surface)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: S8Radius.md)
+                                            .stroke(isSelected ? c.accent : c.lineStrong, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+
+                    if !isNew {
+                        S8SectionLabel(text: "その他")
+                        S8Button("プロフィールを削除", icon: "trash", variant: .secondary) {
+                            showDeleteConfirm = true
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    Color.clear.frame(height: 32)
+                }
+            }
         }
-        .padding(.horizontal, 24).padding(.vertical, 15)
+        .background(c.paper.ignoresSafeArea())
+        .onAppear {
+            if let p = profile {
+                name = p.name
+                iconName = p.iconName
+            }
+        }
+        .alert("このプロフィールを削除しますか？", isPresented: $showDeleteConfirm) {
+            Button("削除", role: .destructive) { delete() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("紐付いているタスクはプロフィール未設定になります")
+        }
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private func save() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        if isNew {
+            let new = Profile(name: trimmed, iconName: iconName)
+            context.insert(new)
+        } else if let p = profile {
+            p.name = trimmed
+            p.iconName = iconName
+        }
+        try? context.save()
+        dismiss()
+    }
+
+    private func delete() {
+        guard let p = profile else { return }
+        context.delete(p)
+        try? context.save()
+        dismiss()
     }
 }

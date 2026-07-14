@@ -46,15 +46,17 @@ struct CalendarSettingsView: View {
     var body: some View {
         Form {
             // MARK: - 同期セクション
+            // ponytail: Form 骨組みは残しつつコントロールだけ s8 化。フル移植は次サイクル。
             Section(header: Text("同期")) {
-                // システムカレンダー同期
                 HStack {
-                    Toggle("システムカレンダー同期", isOn: $syncSystemCalendar)
-                        .onChange(of: syncSystemCalendar) { oldValue, newValue in
-                            if newValue {
-                                syncCalendarNow()
-                            }
+                    Text("システムカレンダー同期")
+                    Spacer()
+                    S8Toggle(on: syncSystemCalendar) {
+                        syncSystemCalendar.toggle()
+                        if syncSystemCalendar {
+                            syncCalendarNow()
                         }
+                    }
                 }
 
                 // システムカレンダー同期状態
@@ -84,13 +86,14 @@ struct CalendarSettingsView: View {
                 }
                 .buttonStyle(.bordered)
 
-                // 通知
-                Toggle("通知", isOn: $enableNotifications)
-                    .onChange(of: enableNotifications) { oldValue, newValue in
+                HStack {
+                    Text("通知")
+                    Spacer()
+                    S8Toggle(on: enableNotifications) {
+                        enableNotifications.toggle()
                         Task {
-                            if newValue {
+                            if enableNotifications {
                                 _ = await NotificationService.requestAuthorization()
-                                // 週次締めリマインダーをスケジュール
                                 let d = UserDefaults.standard
                                 let w = d.integer(forKey: AppSettingsKey.weekReviewWeekday)
                                 let h = d.integer(forKey: AppSettingsKey.weekReviewHour)
@@ -100,6 +103,7 @@ struct CalendarSettingsView: View {
                             }
                         }
                     }
+                }
             }
 
             // MARK: - 辞書セクション
@@ -109,12 +113,9 @@ struct CalendarSettingsView: View {
 
             // MARK: - タイマープリセット
             Section(header: Text("タイマープリセット")) {
-                Stepper("プリセット1: \(timerPreset1)分", value: $timerPreset1, in: 1...180, step: 1)
-                    .accessibilityLabel("タイマープリセット1")
-                Stepper("プリセット2: \(timerPreset2)分", value: $timerPreset2, in: 1...180, step: 1)
-                    .accessibilityLabel("タイマープリセット2")
-                Stepper("プリセット3: \(timerPreset3)分", value: $timerPreset3, in: 1...180, step: 1)
-                    .accessibilityLabel("タイマープリセット3")
+                s8PresetStepper(label: "プリセット1", value: $timerPreset1)
+                s8PresetStepper(label: "プリセット2", value: $timerPreset2)
+                s8PresetStepper(label: "プリセット3", value: $timerPreset3)
             }
 
             // MARK: - マイ時間割セクション
@@ -144,11 +145,15 @@ struct CalendarSettingsView: View {
             // MARK: - 曜日割当セクション
             Section(header: Text("曜日割当")) {
                 ForEach(1...7, id: \.self) { weekday in
-                    Picker(weekdayLabel(weekday), selection: weekdayTemplateBinding(weekday)) {
-                        Text("なし").tag(nil as UUID?)
-                        ForEach(templates) { template in
-                            Text(template.name).tag(template.id as UUID?)
-                        }
+                    HStack {
+                        Text(weekdayLabel(weekday))
+                        Spacer()
+                        S8Picker(
+                            selection: weekdayTemplateBinding(weekday),
+                            options: [(nil as UUID?, "なし")] + templates.map { ($0.id as UUID?, $0.name) },
+                            style: .sheet,
+                            placeholder: "テンプレート"
+                        )
                     }
                 }
             }
@@ -193,15 +198,22 @@ struct CalendarSettingsView: View {
                 NavigationStack {
                     Form {
                         Section("日付") {
-                            DatePicker("日付を選択", selection: $selectedDateForAssignment, displayedComponents: .date)
-                                .environment(\.locale, Locale(identifier: "ja_JP"))
+                            HStack {
+                                Text("日付を選択")
+                                Spacer()
+                                S8DatePicker(date: $selectedDateForAssignment, showTime: false)
+                            }
                         }
                         Section("テンプレート") {
-                            Picker("テンプレートを選択", selection: $selectedTemplateForDate) {
-                                Text("なし").tag(nil as UUID?)
-                                ForEach(templates) { template in
-                                    Text(template.name).tag(template.id as UUID?)
-                                }
+                            HStack {
+                                Text("テンプレートを選択")
+                                Spacer()
+                                S8Picker(
+                                    selection: $selectedTemplateForDate,
+                                    options: [(nil as UUID?, "なし")] + templates.map { ($0.id as UUID?, $0.name) },
+                                    style: .sheet,
+                                    placeholder: "選択"
+                                )
                             }
                         }
                     }
@@ -405,6 +417,17 @@ struct CalendarSettingsView: View {
         } message: {
             Text(errorMessage ?? "不明なエラーが発生しました")
         }
+    }
+
+    // MARK: - s8 プリセット行（Form 内でも s8 の Stepper を使うためのラッパ）
+
+    private func s8PresetStepper(label: String, value: Binding<Int>) -> some View {
+        HStack {
+            Text("\(label): \(value.wrappedValue)分")
+            Spacer()
+            S8Stepper(value: value, range: 1...180, step: 1, unit: "分", width: 132)
+        }
+        .accessibilityLabel(label)
     }
 
     // MARK: - ヘルパー
@@ -669,6 +692,8 @@ struct BandTemplateEditorView: View {
 
 /// 枠1行の編集（名前＋開始/終了時刻）。
 // ponytail: DatePicker は 24:00 を表現できないため終了 24:00 は 0:00 と表示される（保存値は維持）
+// ponytail: 時刻のみ編集用の S8TimePicker が未実装のため、ここだけ iOS DatePicker を維持。
+// バンドテンプレ編集は「マイ時間割」深い下層で露出が低く、後回しの許容範囲。専用コンポーネント作成時に置換。
 struct BandRowEditor: View {
     @Bindable var band: Band
 

@@ -596,3 +596,436 @@ extension View {
         modifier(S8BottomSheet(isPresented: isPresented, sheetContent: content))
     }
 }
+
+// MARK: - Haptics（S8Wheel 内 private の複製を避けるためモジュール共通で提供）
+
+enum S8HapticFB {
+    static func tick() { UISelectionFeedbackGenerator().selectionChanged() }
+    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+}
+
+// MARK: - S8Slider（連続値スライダー・iOS 標準 Slider 代替）
+
+struct S8Slider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double = 1
+    var height: CGFloat = 28
+    @Environment(\.colorScheme) private var scheme
+    @State private var dragging = false
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        GeometryReader { g in
+            let w = max(1, g.size.width)
+            let clamped = min(max(value, range.lowerBound), range.upperBound)
+            let span = max(0.0001, range.upperBound - range.lowerBound)
+            let frac = CGFloat((clamped - range.lowerBound) / span)
+            let x = w * frac
+            ZStack(alignment: .leading) {
+                Capsule().fill(c.lineStrong).frame(height: 4)
+                Capsule().fill(c.accent).frame(width: x, height: 4)
+                Circle().fill(c.accent)
+                    .overlay(Circle().stroke(c.paper, lineWidth: 2))
+                    .frame(width: 18, height: 18)
+                    .offset(x: x - 9)
+                    .scaleEffect(dragging ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.2), value: dragging)
+            }
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        dragging = true
+                        let ratio = Double(min(max(0, drag.location.x), w) / w)
+                        let raw = range.lowerBound + ratio * span
+                        let snapped = (raw / step).rounded() * step
+                        let v = min(max(range.lowerBound, snapped), range.upperBound)
+                        if v != value {
+                            value = v
+                            S8HapticFB.tick()
+                        }
+                    }
+                    .onEnded { _ in dragging = false }
+            )
+        }
+        .frame(height: height)
+    }
+}
+
+// MARK: - S8Stepper（整数増減・iOS 標準 Stepper 代替）
+
+struct S8Stepper: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var step: Int = 1
+    var unit: String = ""
+    var width: CGFloat = 128
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        let canDec = value - step >= range.lowerBound
+        let canInc = value + step <= range.upperBound
+        HStack(spacing: 6) {
+            stepBtn("−", enabled: canDec) {
+                let v = max(range.lowerBound, value - step)
+                if v != value { value = v; S8HapticFB.tick() }
+            }
+            Text("\(value)\(unit)")
+                .font(S8Font.mono(14, .bold))
+                .foregroundColor(c.fg1)
+                .frame(maxWidth: .infinity)
+            stepBtn("+", enabled: canInc) {
+                let v = min(range.upperBound, value + step)
+                if v != value { value = v; S8HapticFB.tick() }
+            }
+        }
+        .frame(width: width)
+    }
+
+    private func stepBtn(_ glyph: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        let c = S8Palette.of(scheme)
+        return Button(action: action) {
+            Text(glyph)
+                .font(S8Font.mono(16, .bold))
+                .foregroundColor(enabled ? c.fg1 : c.fg3)
+                .frame(width: 32, height: 32)
+                .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+}
+
+// MARK: - S8Picker（単一選択・iOS 標準 Picker 代替）
+
+enum S8PickerStyle { case chips, sheet }
+
+struct S8Picker<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [(T, String)]
+    var style: S8PickerStyle = .chips
+    var placeholder: String = "選択"
+    @State private var showSheet = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        Group {
+            switch style {
+            case .chips:
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(options.indices, id: \.self) { i in
+                            let opt = options[i]
+                            S8Chip(opt.1, selected: opt.0 == selection) {
+                                selection = opt.0
+                                S8HapticFB.tick()
+                            }
+                        }
+                    }
+                }
+            case .sheet:
+                Button(action: { showSheet = true }) {
+                    HStack(spacing: 6) {
+                        Text(currentLabel).font(S8Font.jp(15)).foregroundColor(c.fg1).lineLimit(1)
+                        S8Icon(name: "chevron-down", size: 14, color: c.fg3)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .sheet(isPresented: $showSheet) {
+            S8PickerSheetBody(options: options, selection: $selection, dismiss: { showSheet = false })
+                .presentationDetents([.medium, .large])
+                .presentationBackground(c.paper)
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var currentLabel: String {
+        options.first(where: { $0.0 == selection })?.1 ?? placeholder
+    }
+}
+
+private struct S8PickerSheetBody<T: Hashable>: View {
+    let options: [(T, String)]
+    @Binding var selection: T
+    let dismiss: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "選択")
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(options.indices, id: \.self) { i in
+                        let opt = options[i]
+                        Button(action: {
+                            selection = opt.0
+                            S8HapticFB.tap()
+                            dismiss()
+                        }) {
+                            HStack(spacing: 10) {
+                                Text(opt.1).font(S8Font.jp(15)).foregroundColor(c.fg1)
+                                Spacer()
+                                if opt.0 == selection {
+                                    S8Icon(name: "check", size: 16, color: c.accent)
+                                }
+                            }
+                            .padding(.horizontal, 24).padding(.vertical, 15)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if i < options.count - 1 { S8Rule() }
+                    }
+                }
+            }
+        }
+        .background(c.paper.ignoresSafeArea())
+    }
+}
+
+// MARK: - S8DatePicker（日付＋任意で時刻・iOS 標準 DatePicker 代替）
+
+struct S8DatePicker: View {
+    @Binding var date: Date
+    var showTime: Bool = true
+    var minuteStep: Int = 5
+    @State private var showSheet = false
+    @Environment(\.colorScheme) private var scheme
+
+    private var summaryText: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ja_JP")
+        fmt.dateFormat = showTime ? "M/d(EEE) HH:mm" : "M/d(EEE)"
+        return fmt.string(from: date)
+    }
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        Button(action: { showSheet = true }) {
+            HStack(spacing: 6) {
+                Text(summaryText).font(S8Font.mono(13)).foregroundColor(c.fg1)
+                S8Icon(name: "chevron-down", size: 14, color: c.fg3)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showSheet) {
+            S8DatePickerSheet(date: $date, showTime: showTime, minuteStep: minuteStep, dismiss: { showSheet = false })
+                .presentationDetents([.large])
+                .presentationBackground(c.paper)
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private struct S8DatePickerSheet: View {
+    @Binding var date: Date
+    let showTime: Bool
+    let minuteStep: Int
+    let dismiss: () -> Void
+    @State private var visibleMonth: Date
+    @Environment(\.colorScheme) private var scheme
+
+    private static var jaCalendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.locale = Locale(identifier: "ja_JP")
+        c.firstWeekday = 1
+        return c
+    }
+    private var cal: Calendar { Self.jaCalendar }
+
+    init(date: Binding<Date>, showTime: Bool, minuteStep: Int, dismiss: @escaping () -> Void) {
+        self._date = date
+        self.showTime = showTime
+        self.minuteStep = minuteStep
+        self.dismiss = dismiss
+        let comp = Self.jaCalendar.dateComponents([.year, .month], from: date.wrappedValue)
+        let first = Self.jaCalendar.date(from: comp) ?? date.wrappedValue
+        self._visibleMonth = State(initialValue: first)
+    }
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        VStack(spacing: 0) {
+            monthHeader
+            S8Rule()
+            weekdayRow
+            dayGrid
+                .padding(.horizontal, 24).padding(.top, 4)
+            if showTime {
+                S8SectionLabel(text: "時刻")
+                timeRow
+            }
+            Spacer(minLength: 8)
+            S8Button("決定") {
+                S8HapticFB.tap()
+                dismiss()
+            }
+            .padding(.horizontal, 24).padding(.bottom, 24)
+        }
+        .background(c.paper.ignoresSafeArea())
+    }
+
+    private var monthHeader: some View {
+        let c = S8Palette.of(scheme)
+        let title: String = {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "ja_JP")
+            f.dateFormat = "yyyy年 M月"
+            return f.string(from: visibleMonth)
+        }()
+        return HStack {
+            S8IconButton(icon: "chevron-left") {
+                if let m = cal.date(byAdding: .month, value: -1, to: visibleMonth) { visibleMonth = m }
+            }
+            Spacer()
+            Text(title).font(S8Font.jp(15, .bold)).foregroundColor(c.fg1)
+            Spacer()
+            S8IconButton(icon: "chevron-right") {
+                if let m = cal.date(byAdding: .month, value: 1, to: visibleMonth) { visibleMonth = m }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    private var weekdayRow: some View {
+        let c = S8Palette.of(scheme)
+        let labels = ["日","月","火","水","木","金","土"]
+        return HStack(spacing: 0) {
+            ForEach(0..<7, id: \.self) { i in
+                Text(labels[i])
+                    .font(S8Font.mono(10)).tracking(1.0)
+                    .foregroundColor(c.fg3)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 24).padding(.vertical, 8)
+    }
+
+    private var dayGrid: some View {
+        let c = S8Palette.of(scheme)
+        let cells = monthGridCells()
+        let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+        return LazyVGrid(columns: cols, spacing: 4) {
+            ForEach(cells.indices, id: \.self) { i in
+                let cell = cells[i]
+                let isSelected = cal.isDate(cell.date, inSameDayAs: date)
+                let isToday = cal.isDateInToday(cell.date)
+                Button(action: {
+                    S8HapticFB.tick()
+                    date = mergeDate(cell.date, keepingTimeFrom: date)
+                }) {
+                    Text("\(cal.component(.day, from: cell.date))")
+                        .font(S8Font.mono(14, isSelected ? .bold : .regular))
+                        .foregroundColor(isSelected ? c.onAccent : (cell.inMonth ? c.fg1 : c.fg3))
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(isSelected ? c.accent : Color.clear)
+                        )
+                        .overlay(
+                            Circle().stroke((isToday && !isSelected) ? c.lineStrong : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var timeRow: some View {
+        let hr = cal.component(.hour, from: date)
+        let mn = cal.component(.minute, from: date)
+        return VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(0..<24, id: \.self) { h in
+                        S8Chip(String(format: "%02d", h), selected: h == hr, jp: false) {
+                            date = setHour(h, minute: mn)
+                            S8HapticFB.tick()
+                        }
+                    }
+                }.padding(.horizontal, 24)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    let steps = Array(stride(from: 0, to: 60, by: minuteStep))
+                    ForEach(steps, id: \.self) { m in
+                        S8Chip(String(format: ":%02d", m), selected: m == mn, jp: false) {
+                            date = setHour(hr, minute: m)
+                            S8HapticFB.tick()
+                        }
+                    }
+                }.padding(.horizontal, 24)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private struct DayCell { let date: Date; let inMonth: Bool }
+
+    private func monthGridCells() -> [DayCell] {
+        let comps = cal.dateComponents([.year, .month], from: visibleMonth)
+        guard let first = cal.date(from: comps) else { return [] }
+        let range = cal.range(of: .day, in: .month, for: first) ?? 1..<2
+        let firstWeekday = cal.component(.weekday, from: first)
+        let leading = (firstWeekday - cal.firstWeekday + 7) % 7
+        let totalCells = ((leading + range.count + 6) / 7) * 7
+        guard let gridStart = cal.date(byAdding: .day, value: -leading, to: first) else { return [] }
+        var cells: [DayCell] = []
+        cells.reserveCapacity(totalCells)
+        for i in 0..<totalCells {
+            if let d = cal.date(byAdding: .day, value: i, to: gridStart) {
+                let inMonth = cal.component(.month, from: d) == cal.component(.month, from: first)
+                cells.append(DayCell(date: d, inMonth: inMonth))
+            }
+        }
+        return cells
+    }
+
+    private func mergeDate(_ newDay: Date, keepingTimeFrom old: Date) -> Date {
+        let dc = cal.dateComponents([.year, .month, .day], from: newDay)
+        let tc = cal.dateComponents([.hour, .minute, .second], from: old)
+        var comp = DateComponents()
+        comp.year = dc.year; comp.month = dc.month; comp.day = dc.day
+        comp.hour = tc.hour; comp.minute = tc.minute; comp.second = tc.second
+        return cal.date(from: comp) ?? old
+    }
+
+    private func setHour(_ h: Int, minute m: Int) -> Date {
+        var comp = cal.dateComponents([.year, .month, .day], from: date)
+        comp.hour = h; comp.minute = m; comp.second = 0
+        return cal.date(from: comp) ?? date
+    }
+}
+
+// MARK: - 自己チェック（primitives の丸め・月グリッド）
+#if DEBUG
+@discardableResult
+func s8ComponentsSelfCheck() -> Bool {
+    func snap(_ v: Double, in r: ClosedRange<Double>, step: Double) -> Double {
+        let snapped = (v / step).rounded() * step
+        return min(max(r.lowerBound, snapped), r.upperBound)
+    }
+    assert(snap(0.37, in: 0...1, step: 0.25) == 0.5)
+    assert(snap(1.6, in: 0...5, step: 1) == 2)
+    assert(snap(10, in: 0...5, step: 1) == 5)
+    assert(snap(-5, in: 0...5, step: 1) == 0)
+
+    var cal = Calendar(identifier: .gregorian)
+    cal.locale = Locale(identifier: "ja_JP")
+    cal.firstWeekday = 1
+    let comps = DateComponents(year: 2026, month: 8, day: 1)
+    if let d = cal.date(from: comps) {
+        assert(cal.component(.weekday, from: d) == 7)   // 2026-08-01 は土曜
+    }
+    return true
+}
+#endif

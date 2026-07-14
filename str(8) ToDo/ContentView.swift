@@ -32,7 +32,28 @@ struct ContentView: View {
     @State private var modeWheelOpen = false
     @State private var modeWheelSelection = 0
 
+    // アクセントカラー同期用：@AppStorage を購読して body 再実行を発火、`S8Palette.currentAccent` に書戻す。
+    // これでコールドスタート同期 + ライブ変更時の全タブ再描画を同時に解決（両問題の元手 1 行）。
+    @AppStorage("s8_accent") private var accentRaw = S8Accent.anzu.rawValue
+
+    // P2P セッション：承認タブ・設定タブ（中心 P2P コア）・ホイール中心の共有状態源。
+    // 以前は ApprovalQueueView の @State に閉じており、他タブから状態が見えなかった。
+    @State private var peerSession = PeerSession()
+
+    // ホイール差替オーバレイの共有提示器。MorphCalendar のフィルタなど子から present される。
+    @State private var wheelPresenter = S8WheelOverlayPresenter.shared
+
+    // タブ遷移方式（true=ホイール / false=タブバー）。設定タブから切替。Talk 移植。
+    @AppStorage(AppSettingsKey.navWheel) private var navWheel = AppSettingsKey.navWheelDefault
+
     var body: some View {
+        // 起動直後・アクセント変更直後の両方でグローバル状態を最新に。副作用を let に閉じ込めて
+        // ViewBuilder で void を返さないようにする（body の先頭に if 文を直書きすると型検査失敗）。
+        let _: Void = {
+            if let a = S8Accent(rawValue: accentRaw), S8Palette.currentAccent != a {
+                S8Palette.currentAccent = a
+            }
+        }()
         let c = S8Palette.of(scheme)
         GeometryReader { geo in
             let bottomSafe = geo.safeAreaInsets.bottom
@@ -44,7 +65,7 @@ struct ContentView: View {
                     case 0: CalendarRootView()
                     case 1: TimerView()
                     case 2: TodoListView()
-                    case 3: ApprovalQueueView(showWeekReview: $showWeekReview)
+                    case 3: ApprovalQueueView(showWeekReview: $showWeekReview, peerSession: peerSession)
                     case 4: StudyHubView()
                     default: SettingsRootView()   // 5: 設定
                     }
@@ -68,7 +89,40 @@ struct ContentView: View {
                         )
                 }
 
-                if modeWheelOpen, let cfg = makeCenterCore(), !cfg.options.isEmpty {
+                // navWheel=false ならタブバー、true ならホイール（Talk 移植の切替）。
+                if !navWheel {
+                    S8TabBar(tabIndex: $tabIndex)
+                        .padding(.bottom, bottomSafe)
+                } else if wheelPresenter.isPresented {
+                    // 背景グレーアウト（ScrollView / ヘッダを暗く）
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { wheelPresenter.dismissWithoutCommit() }
+                    switch wheelPresenter.mode {
+                    case .filter:
+                        S8FilterWheel(
+                            items: wheelPresenter.items,
+                            selectedIndex: Binding(
+                                get: { wheelPresenter.selectedIndex },
+                                set: { wheelPresenter.selectedIndex = $0 }
+                            ),
+                            onClose: { wheelPresenter.commitAndDismiss() },
+                            bottomSafe: bottomSafe
+                        )
+                    case .crown(let range, let unit):
+                        S8CrownWheel(
+                            range: range,
+                            value: Binding(
+                                get: { wheelPresenter.selectedIndex },
+                                set: { wheelPresenter.selectedIndex = $0 }
+                            ),
+                            unit: unit,
+                            onClose: { wheelPresenter.commitAndDismiss() },
+                            bottomSafe: bottomSafe
+                        )
+                    }
+                } else if modeWheelOpen, let cfg = makeCenterCore(), !cfg.options.isEmpty {
                     // Handoff 00c: モードホイール開閉時は S8FilterWheel を出す。
                     S8FilterWheel(
                         items: cfg.options,
@@ -83,12 +137,14 @@ struct ContentView: View {
                     )
                     .padding(.bottom, bottomSafe > 0 ? 0 : 0)
                 } else {
+                    // P2P 実値を接続（承認/設定タブ中心の p2pCoreContent 用）。
+                    let live = peerSession.isConnected && peerSession.connectedPeerName != nil
                     S8ClickWheel(
                         tabIndex: $tabIndex,
                         minimized: $minimized,
-                        peers: 0,
-                        connected: false,
-                        quality: 0,
+                        peers: live ? 1 : 0,
+                        connected: peerSession.isConnected,
+                        quality: peerSession.isConnected ? 3 : 0,
                         bottomSafe: bottomSafe,
                         centerCore: makeCenterCore(),
                         onOpenModeWheel: {
@@ -98,7 +154,13 @@ struct ContentView: View {
                                 modeWheelOpen = true
                             }
                         },
-                        onToggleConn: {}
+                        onToggleConn: {
+                            if peerSession.isConnected {
+                                peerSession.stop()
+                            } else {
+                                peerSession.start()
+                            }
+                        }
                     )
                     .padding(.bottom, minimized ? 8 + bottomSafe : 0)
                 }
@@ -135,46 +197,74 @@ struct ContentView: View {
         }
     }
 
-    /// Handoff 00c 改: タブに応じたセンターコア設定。
-    /// 長押しは全タブ共通で P2P トグル。タップで options を持つモードホイールを開く。
-    /// options 空 → タップ無効（承認/設定タブ）。
+    /// タブに応じたセンターコア設定。中心タップの挙動：
+    /// - directAction あり → 直接発火（Calendar/List/Study の作成）
+    /// - options 非空 → モードホイールを開く（Timer プリセット）
+    /// - nil → P2P LINK ビジュアル ＋ 中心タップで接続トグル（承認/設定）
     private func makeCenterCore() -> S8CenterCoreConfig? {
         switch tabIndex {
-        case 0: // Calendar → MODE（月/週/日/年）
-            let modes = ["月", "週", "日", "年"]
-            let icons = ["calendar", "list", "circle-dot", "bar-chart"]
-            let idx = max(0, min(modes.count - 1, calMode))
+        case 0: // Calendar → 中心タップで作成、MODE はチップ帯で切替
             return .init(
-                cap: "MODE",
-                main: modes[idx],
-                sub: nil,
-                pips: modes.indices.map { $0 == idx },
-                options: zip(modes, icons).enumerated().map { i, pair in
-                    S8WheelFilterItem(id: "mode-\(i)", icon: pair.1, label: pair.0)
-                },
-                selectedIndex: idx,
-                onSelect: { calMode = $0 }
+                cap: "ADD",
+                main: "＋作成",
+                sub: "イベント",
+                pips: [],
+                options: [],
+                selectedIndex: 0,
+                onSelect: { _ in },
+                directAction: {
+                    NotificationCenter.default.post(name: .s8CalAddEvent, object: nil)
+                }
             )
         case 1: // Timer → PRESET（ユーザーカスタマイズ可能）
-            let presets = [preset1, preset2, preset3].map { "\($0)′" }
+            let presets = [preset1, preset2, preset3]
+            let labels = presets.map { "\($0)′" }
             let idx = max(0, min(presets.count - 1, timerPreset))
+            // Handoff 2026-07-14: 中心タップ = プリセット循環（options + directAction 併用）、
+            // 中心長押し = Crown ホイールを展開して分数を自由設定。
             return .init(
                 cap: "PRESET",
-                main: presets[idx],
+                main: labels[idx],
                 sub: nil,
                 pips: presets.indices.map { $0 == idx },
-                options: presets.enumerated().map { i, s in
-                    S8WheelFilterItem(id: "pre-\(i)", icon: "hourglass", label: s)
+                options: presets.enumerated().map { i, m in
+                    S8WheelFilterItem(id: "pre-\(i)", icon: "hourglass", label: labels[i])
                 },
                 selectedIndex: idx,
-                onSelect: { timerPreset = $0 }
+                onSelect: { timerPreset = $0 },
+                directAction: {
+                    // タップで次のプリセットに循環。
+                    let next = (idx + 1) % presets.count
+                    timerPreset = next
+                },
+                longPressAction: { [presets] in
+                    // 長押しで Crown ホイールを展開。決定でプリセットに反映（現在選択の枠に上書き）。
+                    let current = presets[idx]
+                    S8WheelOverlayPresenter.shared.presentCrown(range: 1...180, currentValue: current) { picked in
+                        switch idx {
+                        case 0: preset1 = picked
+                        case 1: preset2 = picked
+                        default: preset3 = picked
+                        }
+                    }
+                }
             )
-        case 2: // List → FILTER（options 空でホイール未対応。フィルタは既存の TodoList 内 Menu）
-            return .init(cap: "FILTER", main: "すべて", sub: "科目", pips: [],
-                         options: [], selectedIndex: 0, onSelect: { _ in })
-        case 3: // Approve → P2P（nil で既存 P2P LINK 表示）
+        case 2: // List → 中心タップでタスク作成
+            return .init(
+                cap: "ADD",
+                main: "＋作成",
+                sub: "タスク",
+                pips: [],
+                options: [],
+                selectedIndex: 0,
+                onSelect: { _ in },
+                directAction: {
+                    NotificationCenter.default.post(name: .s8ListAddTask, object: nil)
+                }
+            )
+        case 3: // Approve → P2P（nil で既存 P2P LINK 表示・中心タップで接続トグル）
             return nil
-        case 4: // Study → 科目追加ボタン（直接アクション、モードホイール開閉なし）
+        case 4: // Study → 科目追加ボタン（直接アクション）
             return .init(
                 cap: "ADD",
                 main: "＋科目",

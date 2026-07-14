@@ -460,9 +460,10 @@ struct EventComposerView: View {
     }
 }
 
-// MARK: - フォーカス編集シート
+// MARK: - フォーカス編集シート（s8 化）
 
-/// トピック1つの内容を全画面表示するフォーカス編集画面。上部のジャンプバーで他タイルへ横移動できる。
+/// トピック1つの内容を全画面表示するフォーカス編集画面。上部ジャンプバーで他タイルへ横移動。
+/// SettingsRootView 流儀（S8SectionLabel + S8SetRow + s8 プリミティブ）で iOS 標準 Form/Toggle/Slider/Picker/DatePicker を排除。
 private struct ComposerFocusView: View {
     let category: WHCategory
     @Bindable var draft: ComposerDraft
@@ -474,7 +475,8 @@ private struct ComposerFocusView: View {
     @Query(sort: \Profile.name) private var profiles: [Profile]
 
     @State private var newParticipant: String = ""
-    @State private var customNotificationMinutes: Int = 0
+    @State private var customNotificationMinutes: Int = 5
+    @State private var showCategoryPicker: Bool = false
 
     private static let colorPresets: [String] = ["4F8DFD", "34C759", "FF9500", "FF2D55", "AF52DE", "8E8E93"]
     private static let timeFormatter: DateFormatter = {
@@ -483,8 +485,6 @@ private struct ComposerFocusView: View {
         return f
     }()
 
-    /// Handoff タイル→フォーカス編集の S8 化。デフォルト NavigationStack + toolbar は撤去、
-    /// カスタムヘッダ + ジャンプバー + Form 本体で構成する。
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -501,14 +501,15 @@ private struct ComposerFocusView: View {
             jumpBar
                 .padding(.top, 8)
             S8Rule()
-            NavigationStack {
-                content
-            }
+            contentContainer
         }
         .background(c.paper.ignoresSafeArea())
+        .sheet(isPresented: $showCategoryPicker) {
+            NavigationStack { CategoryPickerView(selection: $draft.category) }
+        }
     }
 
-    /// Handoff: 他タイルへの直接ジャンプアイコン列。S8 accent 色でアクティブ強調。
+    /// 他タイルへの直接ジャンプアイコン列。
     private var jumpBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
@@ -531,7 +532,6 @@ private struct ComposerFocusView: View {
         }
     }
 
-    /// WHCategory → S8Icon の Lucide 名マッピング。
     private func whCategoryToS8Icon(_ cat: WHCategory) -> String {
         switch cat {
         case .what:   return "text-cursor"
@@ -545,148 +545,167 @@ private struct ComposerFocusView: View {
     }
 
     @ViewBuilder
-    private var content: some View {
+    private var contentContainer: some View {
         switch category {
         case .what:
-            EmptyView() // 到達しない（タイトルは常時表示欄が担当。tileCategories が .what を除外）
+            EmptyView() // 到達しない
         case .when:
-            whenContent
+            ScrollView { whenContent; Color.clear.frame(height: 24) }
         case .where_:
-            LocationPickerView(place: $draft.place)
+            // LocationPickerView は自前ナビ・入力体系。NavigationStack で包んで直接。
+            NavigationStack { LocationPickerView(place: $draft.place) }
         case .which:
-            whichContent
+            ScrollView { whichContent; Color.clear.frame(height: 24) }
         case .who:
-            whoContent
+            ScrollView { whoContent; Color.clear.frame(height: 24) }
         case .how:
-            howContent
+            ScrollView { howContent; Color.clear.frame(height: 24) }
         case .other:
-            otherContent
+            ScrollView { otherContent; Color.clear.frame(height: 24) }
         }
     }
 
     // MARK: - when
 
+    @ViewBuilder
     private var whenContent: some View {
-        Form {
-            Section {
-                Toggle("時刻を指定", isOn: $draft.isTimeSpecified)
+        let notifPresets: [(Int, String)] = [(5, "5分前"), (15, "15分前"), (60, "1時間前"), (1440, "前日")]
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "時刻")
+            S8SetRow(icon: "clock", label: "時刻を指定") {
+                S8Toggle(on: draft.isTimeSpecified) { draft.isTimeSpecified.toggle() }
             }
-
             if draft.isTimeSpecified {
-                Section("開始") {
-                    DatePicker("開始", selection: $draft.startDate, displayedComponents: [.date, .hourAndMinute])
+                S8Rule()
+                S8SetRow(icon: "calendar", label: "開始") {
+                    S8DatePicker(date: $draft.startDate, showTime: true, minuteStep: 5)
                 }
-
-                Section("所要時間") {
-                    Stepper(value: $draft.duration, in: 0...(24 * 3600), step: 300) {
-                        Text(durationText(draft.duration))
-                    }
+                S8Rule()
+                S8SetRow(icon: "hourglass", label: "所要") {
+                    S8Stepper(
+                        value: Binding(
+                            get: { Int(draft.duration / 60) },
+                            set: { draft.duration = TimeInterval($0) * 60 }
+                        ),
+                        range: 0...(24 * 60),
+                        step: 5,
+                        unit: "分",
+                        width: 132
+                    )
+                }
+                S8Rule()
+                HStack(spacing: 14) {
+                    Spacer(minLength: 62)
                     Text("終了: \(Self.timeFormatter.string(from: draft.startDate.addingTimeInterval(draft.duration)))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(S8Font.mono(11)).tracking(1.0)
+                        .foregroundColor(c.fg3)
+                    Spacer()
+                }
+                .padding(.horizontal, 24).padding(.vertical, 6)
+                S8Rule()
+                S8SetRow(icon: "pin", label: "時刻厳守") {
+                    S8Toggle(on: draft.isTimePinned) { draft.isTimePinned.toggle() }
                 }
 
-                Section {
-                    Toggle("時刻厳守", isOn: $draft.isTimePinned)
+                S8SectionLabel(text: "繰り返し")
+                S8SetRow(icon: "repeat", label: "パターン") {
+                    S8Picker(
+                        selection: $draft.repeatPattern,
+                        options: EventComposerView.repeatOptions.map { ($0.0, $0.1) },
+                        style: .sheet
+                    )
                 }
 
-                Section("繰り返し") {
-                    Picker("繰り返し", selection: $draft.repeatPattern) {
-                        ForEach(EventComposerView.repeatOptions, id: \.0) { id, label, _ in
-                            Text(label).tag(id)
+                S8SectionLabel(text: "通知")
+                ForEach(notifPresets, id: \.0) { minutes, label in
+                    S8SetRow(icon: "bell", label: label) {
+                        S8Toggle(on: draft.notificationOffsets.contains(minutes)) {
+                            if draft.notificationOffsets.contains(minutes) {
+                                draft.notificationOffsets.removeAll { $0 == minutes }
+                            } else {
+                                draft.notificationOffsets.append(minutes)
+                                draft.notificationOffsets.sort()
+                            }
                         }
                     }
+                    S8Rule()
                 }
-
-                Section("通知") {
-                    let presets = [(5, "5分前"), (15, "15分前"), (60, "1時間前"), (1440, "前日")]
-                    ForEach(presets, id: \.0) { minutes, label in
-                        HStack {
-                            Image(systemName: draft.notificationOffsets.contains(minutes) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(draft.notificationOffsets.contains(minutes) ? .blue : .gray)
-                                .accessibilityLabel("通知 \(label)")
-                            Text(label)
-                            Spacer()
-                            Toggle("", isOn: Binding(
-                                get: { draft.notificationOffsets.contains(minutes) },
-                                set: { isOn in
-                                    if isOn {
-                                        draft.notificationOffsets.append(minutes)
-                                        draft.notificationOffsets.sort()
-                                    } else {
-                                        draft.notificationOffsets.removeAll { $0 == minutes }
-                                    }
-                                }
-                            ))
-                            .labelsHidden()
-                        }
-                    }
-
-                    HStack {
-                        Text("カスタム: \(customNotificationMinutes)分前")
-                        Spacer()
-                        Stepper("", value: $customNotificationMinutes, in: 1...10080, step: 1)
-                            .labelsHidden()
-                        Button(action: {
+                S8SetRow(icon: "plus", label: "カスタム") {
+                    HStack(spacing: 8) {
+                        S8Stepper(value: $customNotificationMinutes, range: 1...10080, step: 1, unit: "分前", width: 118)
+                        S8IconButton(icon: "plus", accent: true) {
                             if !draft.notificationOffsets.contains(customNotificationMinutes) {
                                 draft.notificationOffsets.append(customNotificationMinutes)
                                 draft.notificationOffsets.sort()
                             }
-                            customNotificationMinutes = 0
-                        }) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.blue)
                         }
-                        .buttonStyle(.borderless)
                         .accessibilityLabel("カスタム通知を追加")
                     }
+                }
+                if !draft.notificationOffsets.isEmpty {
+                    S8SectionLabel(text: "有効な通知")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(draft.notificationOffsets, id: \.self) { m in
+                                S8Chip(offsetLabel(m), icon: "bell") {
+                                    draft.notificationOffsets.removeAll { $0 == m }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
         }
     }
 
+    private func offsetLabel(_ minutes: Int) -> String {
+        if minutes >= 1440 { return "\(minutes/1440)日前" }
+        if minutes >= 60 { return "\(minutes/60)時間前" }
+        return "\(minutes)分前"
+    }
+
     // MARK: - which
 
+    @ViewBuilder
     private var whichContent: some View {
-        Form {
-            Section("カテゴリ") {
-                NavigationLink(destination: CategoryPickerView(selection: $draft.category)) {
-                    HStack {
-                        if let cat = draft.category {
-                            Circle().fill(Color(hex: cat.colorHex)).frame(width: 14, height: 14)
-                            Text(cat.name)
-                        } else {
-                            Text("未選択").foregroundStyle(.secondary)
-                        }
-                        Spacer()
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "カテゴリ")
+            S8SetRow(icon: "tag", label: "カテゴリ", trailing: {
+                HStack(spacing: 8) {
+                    if let cat = draft.category {
+                        Circle().fill(Color(hex: cat.colorHex)).frame(width: 12, height: 12)
+                        Text(cat.name).font(S8Font.jp(14)).foregroundColor(c.fg1)
+                    } else {
+                        Text("未選択").font(S8Font.jp(14)).foregroundColor(c.fg3)
                     }
+                    S8Icon(name: "chevron-right", size: 14, color: c.fg3)
                 }
-                if draft.category != nil {
-                    Button("カテゴリを外す", role: .destructive) { draft.category = nil }
-                }
+            }, onTap: { showCategoryPicker = true })
+            if draft.category != nil {
+                S8Rule()
+                S8SetRow(icon: "x", label: "カテゴリを外す", trailing: { EmptyView() }, onTap: { draft.category = nil })
             }
 
-            Section("プロフィール") {
-                if profiles.isEmpty {
-                    Text("プロフィールが未登録です")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            S8SectionLabel(text: "プロフィール")
+            if profiles.isEmpty {
+                HStack(spacing: 14) {
+                    S8Icon(name: "info", size: 16, color: c.fg3)
+                    Text("プロフィールが未登録です").font(S8Font.jp(13)).foregroundColor(c.fg3)
+                    Spacer()
                 }
-                ForEach(profiles) { profile in
-                    Button(action: {
-                        draft.profile = (draft.profile?.id == profile.id) ? nil : profile
-                    }) {
-                        HStack {
-                            Image(systemName: profile.iconName)
-                            Text(profile.name)
-                            Spacer()
-                            if draft.profile?.id == profile.id {
-                                Image(systemName: "checkmark").foregroundStyle(.blue)
-                            }
+                .padding(.horizontal, 24).padding(.vertical, 15)
+            } else {
+                ForEach(Array(profiles.enumerated()), id: \.element.id) { i, profile in
+                    S8SetRow(icon: profile.iconName, label: profile.name, trailing: {
+                        if draft.profile?.id == profile.id {
+                            S8Icon(name: "check", size: 16, color: c.accent)
                         }
-                        .foregroundStyle(.primary)
-                    }
-                    .buttonStyle(.borderless)
+                    }, onTap: {
+                        draft.profile = (draft.profile?.id == profile.id) ? nil : profile
+                    })
+                    if i < profiles.count - 1 { S8Rule() }
                 }
             }
         }
@@ -694,50 +713,49 @@ private struct ComposerFocusView: View {
 
     // MARK: - who
 
+    @ViewBuilder
     private var whoContent: some View {
-        Form {
-            Section("参加者を追加") {
-                HStack {
-                    TextField("名前", text: $newParticipant)
-                        .onSubmit(addParticipant)
-                    Button(action: addParticipant) {
-                        Image(systemName: "plus.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(newParticipant.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityLabel("参加者を追加")
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "参加者を追加")
+            HStack(spacing: 8) {
+                S8Field(placeholder: "名前", text: $newParticipant)
+                    .onSubmit(addParticipant)
+                S8IconButton(icon: "plus", accent: !newParticipant.trimmingCharacters(in: .whitespaces).isEmpty) {
+                    addParticipant()
                 }
+                .disabled(newParticipant.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityLabel("参加者を追加")
             }
+            .padding(.horizontal, 24).padding(.vertical, 10)
 
             if !draft.participantNames.isEmpty {
-                Section("参加者") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(draft.participantNames, id: \.self) { name in
-                                HStack(spacing: 4) {
-                                    Text(name)
-                                    Button(action: { removeParticipant(name) }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.gray)
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .accessibilityLabel("\(name) を削除")
+                S8SectionLabel(text: "参加者")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(draft.participantNames, id: \.self) { name in
+                            HStack(spacing: 6) {
+                                Text(name).font(S8Font.jp(13)).foregroundColor(c.fg1)
+                                Button(action: { removeParticipant(name) }) {
+                                    S8Icon(name: "x", size: 12, color: c.fg3)
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.12)))
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(name) を削除")
                             }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                            .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
                         }
-                        .padding(.vertical, 4)
                     }
-                    .listRowInsets(EdgeInsets())
+                    .padding(.horizontal, 24)
                 }
+                .padding(.vertical, 6)
             }
         }
     }
 
     private func addParticipant() {
-        // P18 H2: 改行除去→trim→50文字上限、かつ既存と重複していれば追加しない。
+        // P18 H2: 改行除去→trim→50文字上限、既存重複はスキップ。
         let noNewlines = newParticipant.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
         let trimmed = String(noNewlines.trimmingCharacters(in: .whitespaces).prefix(50))
         guard !trimmed.isEmpty, !draft.participantNames.contains(trimmed) else { return }
@@ -751,76 +769,73 @@ private struct ComposerFocusView: View {
 
     // MARK: - how
 
-    // P18 H7: 「金額」と「重要度」の意味混在解消のため上下2サブセクションに分ける。
+    @ViewBuilder
     private var howContent: some View {
-        Form {
-            Section("金額") {
-                TextField("金額（例: 1490）", text: $draft.amountText)
-                    .keyboardType(.decimalPad)
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "金額")
+            VStack(alignment: .leading, spacing: 10) {
+                S8Field(placeholder: "金額（例: 1490）", text: $draft.amountText)
                 if !draft.amountText.isEmpty && draft.parsedAmount == nil {
                     Text("金額は正の数値で入力してください")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(S8Font.jp(11))
+                        .foregroundColor(c.danger)
                 }
-                TextField("支払方法（例: クレジットカード）", text: $draft.paymentMethod)
+                S8Field(placeholder: "支払方法（例: クレジットカード）", text: $draft.paymentMethod)
             }
-            Section("重要度") {
-                Toggle(isOn: $draft.isImportant) {
-                    HStack {
-                        Image(systemName: draft.isImportant ? "star.fill" : "star")
-                            .foregroundStyle(draft.isImportant ? .yellow : .gray)
-                        Text("重要")
-                    }
-                }
+            .padding(.horizontal, 24).padding(.vertical, 12)
+
+            S8SectionLabel(text: "重要度")
+            S8SetRow(icon: draft.isImportant ? "star" : "star", label: "重要") {
+                S8Toggle(on: draft.isImportant) { draft.isImportant.toggle() }
             }
         }
     }
 
     // MARK: - other
 
+    @ViewBuilder
     private var otherContent: some View {
-        Form {
-            Section("メモ") {
-                TextEditor(text: $draft.notes)
-                    .frame(minHeight: 160)
-            }
-            Section("色") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(Self.colorPresets, id: \.self) { hex in
-                            Button(action: { draft.colorHex = hex }) {
-                                Circle()
-                                    .fill(Color(hex: hex))
-                                    .frame(width: 40, height: 40)
-                                    .overlay(
-                                        draft.colorHex == hex
-                                            ? Circle().stroke(.black, lineWidth: 2)
-                                            : nil
-                                    )
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("色を選択")
-                        }
+        VStack(spacing: 0) {
+            S8SectionLabel(text: "メモ")
+            TextEditor(text: $draft.notes)
+                .font(S8Font.jp(14))
+                .foregroundColor(c.fg1)
+                .scrollContentBackground(.hidden)
+                .background(c.surface)
+                .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                .frame(minHeight: 160)
+                .padding(.horizontal, 24).padding(.vertical, 10)
 
-                        Button(action: { draft.colorHex = nil }) {
-                            ZStack {
-                                Circle().fill(.gray.opacity(0.3))
-                                Text("✓")
-                                    .font(.caption)
-                                    .opacity(draft.colorHex == nil ? 1 : 0.5)
-                            }
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                draft.colorHex == nil
-                                    ? Circle().stroke(.black, lineWidth: 2)
-                                    : nil
-                            )
+            S8SectionLabel(text: "色")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Self.colorPresets, id: \.self) { hex in
+                        Button(action: { draft.colorHex = hex }) {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 34, height: 34)
+                                .overlay(
+                                    Circle().stroke(draft.colorHex == hex ? c.fg1 : Color.clear, lineWidth: 2)
+                                )
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("色をクリア")
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("色を選択")
                     }
-                    .padding(.vertical, 8)
+                    Button(action: { draft.colorHex = nil }) {
+                        ZStack {
+                            Circle().fill(c.surface2)
+                            S8Icon(name: "x", size: 14, color: c.fg2)
+                        }
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            Circle().stroke(draft.colorHex == nil ? c.fg1 : Color.clear, lineWidth: 2)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("色をクリア")
                 }
+                .padding(.horizontal, 24).padding(.vertical, 8)
             }
         }
     }

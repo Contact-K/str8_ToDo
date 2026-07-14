@@ -232,9 +232,10 @@ private struct AliasRow: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Toggle("", isOn: $alias.isEnabled)
-                .labelsHidden()
-                .onChange(of: alias.isEnabled) { _, _ in try? context.save() }
+            S8Toggle(on: alias.isEnabled) {
+                alias.isEnabled.toggle()
+                try? context.save()
+            }
         }
         .swipeActions(edge: .trailing) {
             if !isBuiltIn {

@@ -26,7 +26,7 @@ struct TimerView: View {
     @State private var selectedMinutes = 25
     @State private var linkedTaskID: UUID?
     @State private var linkedSubjectID: UUID?
-    @State private var dragBaseMinutes: Int?
+    // dragBaseMinutes 廃止 2026-07-14: 円盤縦ドラッグは Crown ホイール（ホイール中心長押し）へ移行。
     /// Handoff 00c: ホイール PRESET ダイヤル（0=preset1 / 1=preset2 / 2=preset3）と連動。
     @AppStorage("wheel.timer.preset") private var wheelPreset = 0
     /// ユーザーカスタマイズ可能なプリセット（設定で編集）。
@@ -87,7 +87,9 @@ struct TimerView: View {
                         .contentTransition(.numericText())
 
                     if !isSessionActive {
-                        presets
+                        // ponytail 2026-07-14: 中央プリセットピルは廃止。3 プリセットの分数編集を
+                        // 設定タブから移設。中心タップで循環、長押しで Crown ホイール展開。
+                        presetEditRows
                     }
 
                     taskPicker
@@ -106,11 +108,12 @@ struct TimerView: View {
 
                     if motion.isAvailable && !isSessionActive {
                         if motion.phase == .armed {
-                            Label("待機中 — 上下反転で開始", systemImage: "bell.ring")
+                            // 中央ホログラム「ひっくり返して開始」で誘導、下部ラベルは補助のみ。
+                            Label("回すと開始", systemImage: "arrow.triangle.2.circlepath")
                                 .font(.caption)
                                 .foregroundStyle(c.info)
                         } else if motion.phase == .setting {
-                            Label("画面を上にして置くと待機", systemImage: "iphone.landscape")
+                            Label("端末上下を反転で待機（充電口を上）", systemImage: "iphone.gen3")
                                 .font(.caption)
                                 .foregroundStyle(c.fg3)
                         }
@@ -166,7 +169,8 @@ struct TimerView: View {
 
     // MARK: - パーツ
 
-    /// Handoff 02a/02b: 計器フェイスプレート内に砂時計。外周ティック + 残分アーク + 中央ドラッグ増減。
+    /// Handoff 02a/02b: 計器フェイスプレート内に砂時計。外周ティック + 残分アーク。
+    /// 時間調整はホイール中心長押しで Crown 展開（旧・円盤縦ドラッグは廃止 2026-07-14）。
     /// 長押しでセッションキャンセル。
     private var hourglass: some View {
         let progress = totalDuration > 0 ? min(1, elapsed / totalDuration) : 0
@@ -174,18 +178,25 @@ struct TimerView: View {
         return ZStack {
             faceplate(remainFraction: remainFraction)
             hourglassShape(progress: progress)
+            // 仕様反転 2026-07-14: armed 状態は「上部を下」で待機している。ユーザー視点では
+            // テキストが逆さまなので 180° 回転して描画 → 端末を戻すと正立に見えつつ running に遷移。
+            if motion.phase == .armed {
+                Text("ひっくり返して開始")
+                    .font(S8Font.jp(15, .bold))
+                    .foregroundColor(c.accent)
+                    .rotationEffect(.degrees(180))
+            }
             VStack {
                 Spacer()
                 Text(isSessionActive
                      ? "REMAIN \(timeText(remaining)) / \(String(format: "%02d:00", selectedMinutes))"
-                     : "SET \(selectedMinutes) MIN · DRAG ±1")
+                     : "SET \(selectedMinutes) MIN")
                     .font(S8Font.mono(8)).tracking(1.6).foregroundColor(c.fg3)
                     .padding(.bottom, 22)
             }
         }
         .frame(width: 264, height: 264)
         .contentShape(Circle())
-        .gesture(dragToAdjust)
         .onLongPressGesture(minimumDuration: 0.8) {
             if isSessionActive { cancelSession() }
         }
@@ -269,46 +280,55 @@ struct TimerView: View {
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(c.line, lineWidth: 1))
     }
 
-    /// 縦ドラッグで1分刻み増減（セッション中は無効）。
-    private var dragToAdjust: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                guard !isSessionActive else { return }
-                if dragBaseMinutes == nil { dragBaseMinutes = selectedMinutes }
-                let delta = -Int(value.translation.height / 12)
-                selectedMinutes = min(120, max(1, (dragBaseMinutes ?? selectedMinutes) + delta))
-            }
-            .onEnded { _ in dragBaseMinutes = nil }
+    /// プリセット編集行（設定タブから移設 2026-07-14）。3 枠の分数を S8Stepper で編集。
+    /// 現在選択中の枠は accent 表示、選択されていない枠はタップで切替。
+    /// 長押しで Crown ホイールを起動（S8ClickWheel 中心コアと同じアクションを直接呼ぶ）。
+    private var presetEditRows: some View {
+        let c = self.c
+        return VStack(spacing: 0) {
+            S8SectionLabel(text: "タイマープリセット")
+            presetEditRow(index: 0, minutes: $preset1)
+            S8Rule()
+            presetEditRow(index: 1, minutes: $preset2)
+            S8Rule()
+            presetEditRow(index: 2, minutes: $preset3)
+        }
+        .background(c.paper)
     }
 
-    private var presets: some View {
-        HStack(spacing: 8) {
-            ForEach(timerPresets, id: \.self) { minutes in
-                S8Chip("\(minutes)分", selected: selectedMinutes == minutes, action: { selectedMinutes = minutes })
+    private func presetEditRow(index: Int, minutes: Binding<Int>) -> some View {
+        let c = self.c
+        let isCurrent = wheelPreset == index
+        return HStack(spacing: 14) {
+            Button(action: { wheelPreset = index }) {
+                HStack(spacing: 10) {
+                    S8Icon(name: "hourglass", size: 20, color: isCurrent ? c.accent : c.fg2)
+                    Text("プリセット\(index + 1)").font(S8Font.jp(15, isCurrent ? .bold : .regular)).foregroundColor(isCurrent ? c.accent : c.fg1)
+                }
             }
+            .buttonStyle(.plain)
+            Spacer()
+            S8Stepper(value: minutes, range: 1...180, step: 1, unit: "分", width: 132)
         }
+        .padding(.horizontal, 24).padding(.vertical, 15)
     }
 
     private var taskPicker: some View {
-        Picker("タスク", selection: $linkedTaskID) {
-            Text("紐付けなし").tag(nil as UUID?)
-            ForEach(linkableTasks, id: \.id) { task in
-                Text(task.title).tag(task.id as UUID?)
-            }
-        }
-        .pickerStyle(.menu)
-        .tint(c.fg2)
+        S8Picker(
+            selection: $linkedTaskID,
+            options: [(nil as UUID?, "紐付けなし")] + linkableTasks.map { ($0.id as UUID?, $0.title) },
+            style: .sheet,
+            placeholder: "タスクを選択"
+        )
     }
 
     private var subjectPicker: some View {
-        Picker("科目", selection: $linkedSubjectID) {
-            Text("科目なし").tag(nil as UUID?)
-            ForEach(subjects, id: \.id) { subject in
-                Text(subject.name).tag(subject.id as UUID?)
-            }
-        }
-        .pickerStyle(.menu)
-        .tint(c.fg2)
+        S8Picker(
+            selection: $linkedSubjectID,
+            options: [(nil as UUID?, "科目なし")] + subjects.map { ($0.id as UUID?, $0.name) },
+            style: .sheet,
+            placeholder: "科目を選択"
+        )
     }
 
     @ViewBuilder

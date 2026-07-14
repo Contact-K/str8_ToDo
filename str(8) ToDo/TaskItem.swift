@@ -259,11 +259,13 @@ extension TaskItem {
         return calendar.date(byAdding: .day, value: 1, to: start) ?? date
     }
 
-    /// 表示色：個別色 colorHex が優先、無ければカテゴリ色、どちらも無ければ accentColor。
-    var effectiveColor: Color {
+    /// 表示色：個別色 colorHex が優先、無ければカテゴリ色。どちらも無ければ nil を返し、
+    /// View 側が palette の accent（`c.accent`）で fallback する。
+    /// ponytail: 以前は `.accentColor`（system）を返していたが system と s8 の accent がズレるバグの原因だった。
+    var effectiveColor: Color? {
         if let hex = colorHex { return Color(hex: hex) }
         if let catHex = category?.colorHex { return Color(hex: catHex) }
-        return .accentColor
+        return nil
     }
 
     /// 最小 RRULE 展開：その日 day に出現するか。startDate 当日は常に true。

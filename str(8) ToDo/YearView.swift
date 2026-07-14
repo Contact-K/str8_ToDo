@@ -16,6 +16,8 @@ struct YearView: View {
     @Query private var tasks: [TaskItem]
     @Query private var dayStats: [DayStat]
     @State private var selectedYear: Int = 0
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     private let cal = Calendar.current
 
@@ -56,29 +58,11 @@ struct YearView: View {
         let minYear = currentYear - 9
         let maxYear = currentYear
 
-        VStack(spacing: 12) {
-            Text("\(selectedYear)")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(Color.accentColor)
-
-            Slider(
-                value: Binding(
-                    get: { Double(selectedYear) },
-                    set: { selectedYear = Int($0.rounded()) }
-                ),
-                in: Double(minYear)...Double(maxYear),
-                step: 1
-            )
-            .tint(Color.accentColor)
-
-            Text("\(minYear) - \(maxYear)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        YearSliderCard(
+            selectedYear: $selectedYear,
+            minYear: minYear,
+            maxYear: maxYear
+        )
     }
 
     // MARK: - サマリーカード
@@ -92,42 +76,42 @@ struct YearView: View {
                 Text("\(stats.totalCount)")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(c.accent)
                 Text("達成タスク")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
+            .background(c.surface)
             .cornerRadius(12)
 
             VStack(spacing: 4) {
                 Text("\(stats.peakMonth)月")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(c.accent)
                 Text("最多月")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
+            .background(c.surface)
             .cornerRadius(12)
 
             VStack(spacing: 4) {
                 Text("\(stats.longestStreak)日")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(c.accent)
                 Text("連続記録")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
+            .background(c.surface)
             .cornerRadius(12)
             .accessibilityLabel("\(stats.longestStreak)日連続")
         }
@@ -161,7 +145,7 @@ struct YearView: View {
                 HeatmapView(
                     year: selectedYear,
                     values: heatmapValues,
-                    tint: Color.accentColor,
+                    tint: c.accent,
                     intensity: { value in
                         switch Int(value) {
                         case 0: return 0.15
@@ -315,6 +299,48 @@ struct YearView: View {
         }
 
         return (totalCount: total, peakMonth: peakMonth, longestStreak: longestStreak)
+    }
+}
+
+// MARK: - 年スライダーカード（s8 化）
+
+/// `S8Slider` を使った年切替。ヘッドライン数字＋レンジラベルを s8 で統一。
+private struct YearSliderCard: View {
+    @Binding var selectedYear: Int
+    let minYear: Int
+    let maxYear: Int
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        VStack(spacing: 12) {
+            Text("\(selectedYear)")
+                .font(S8Font.mono(36, .bold))
+                .foregroundColor(c.accent)
+
+            S8Slider(
+                value: Binding(
+                    get: { Double(selectedYear) },
+                    set: { selectedYear = Int($0.rounded()) }
+                ),
+                range: Double(minYear)...Double(maxYear),
+                step: 1
+            )
+
+            HStack {
+                Text("\(minYear)")
+                Spacer()
+                Text("\(maxYear)")
+            }
+            .font(S8Font.mono(10))
+            .tracking(1.2)
+            .foregroundColor(c.fg3)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(c.surface)
+        .overlay(RoundedRectangle(cornerRadius: S8Radius.lg).stroke(c.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
     }
 }
 

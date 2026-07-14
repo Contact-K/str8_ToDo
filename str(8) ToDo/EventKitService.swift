@@ -146,6 +146,29 @@ final class EventKitService {
         try? context.save()
     }
 
+    /// 日本の祝日を EventKit の購読カレンダーから取得。指定期間内の祝日 startOfDay を Set で返す。
+    /// タイトル一致（"日本の祝日" or "Japanese Holiday" 含む）または `.birthday` 以外のシステム購読カレンダーを対象。
+    /// 権限未取得なら空セット。ponytail: 名前一致は雑だが iOS 26 でも祝日カレンダーの命名は安定。
+    func fetchJapaneseHolidays(in range: Range<Date>) -> Set<Date> {
+        guard authState == .authorized else { return [] }
+        let calendars = store.calendars(for: .event).filter { cal in
+            let title = cal.title
+            return title.contains("日本の休日")
+                || title.contains("日本の祝日")
+                || title.contains("Japanese Holiday")
+                || title.contains("Holidays in Japan")
+        }
+        guard !calendars.isEmpty else { return [] }
+        let predicate = store.predicateForEvents(withStart: range.lowerBound, end: range.upperBound, calendars: calendars)
+        let events = store.events(matching: predicate)
+        var result: Set<Date> = []
+        let jaCal = Calendar(identifier: .gregorian)
+        for ev in events {
+            result.insert(jaCal.startOfDay(for: ev.startDate))
+        }
+        return result
+    }
+
     /// 外部変更（.EKEventStoreChanged）を購読して自動再同期する。
     func observeChanges(into context: ModelContext) {
         guard changeObserver == nil else { return }
