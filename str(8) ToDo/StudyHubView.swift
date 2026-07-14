@@ -9,6 +9,11 @@
 import SwiftUI
 import SwiftData
 
+extension Notification.Name {
+    /// Handoff 00c: 勉強タブ ホイール中心タップ→科目追加シート
+    static let s8StudyAddSubject = Notification.Name("s8.study.addSubject")
+}
+
 struct StudyHubView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
@@ -18,15 +23,16 @@ struct StudyHubView: View {
 
     @State private var showAddSubjectSheet = false
     @State private var selectedTab = 0
+    /// Handoff 00c: ホイール VIEW ダイヤル（0=サマリ 1=詳細）と連動。
+    @AppStorage("wheel.study.view") private var wheelStudyView = 0
 
     private let cal = Calendar.current
 
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            S8TopBar("勉強", sub: "study hub · focus & streak") {
-                S8IconButton(icon: "plus", accent: true, action: { showAddSubjectSheet = true })
-            }
+            // ponytail: ヘッダ + ボタンは撤去。科目追加はホイール中心コアで発火。
+            S8TopBar("勉強", sub: "study hub · focus & streak") { EmptyView() }
 
             HStack(spacing: 8) {
                 S8Chip("サマリ", selected: selectedTab == 0, action: { selectedTab = 0 })
@@ -48,6 +54,10 @@ struct StudyHubView: View {
         .background(c.paper.ignoresSafeArea())
         .sheet(isPresented: $showAddSubjectSheet) {
             AddSubjectSheet(isPresented: $showAddSubjectSheet, context: context)
+        }
+        // ホイール中心の科目追加ボタンからの発火を購読
+        .onReceive(NotificationCenter.default.publisher(for: .s8StudyAddSubject)) { _ in
+            showAddSubjectSheet = true
         }
     }
 
@@ -335,6 +345,8 @@ struct StudyHubView: View {
 struct AddSubjectSheet: View {
     @Binding var isPresented: Bool
     let context: ModelContext
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     @State private var name = ""
     @State private var colorHex = "4F8DFD"
@@ -345,73 +357,91 @@ struct AddSubjectSheet: View {
     private let colorOptions = ["FF6B6B", "4ECDC4", "45B7D1", "FFA07A", "98D8C8", "F7DC6F", "BB8FCE"]
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("基本情報") {
-                    TextField("科目名", text: $name)
-                        .accessibilityLabel("科目名入力")
-
-                    HStack {
-                        Text("色")
-                        Spacer()
-                        Circle()
-                            .fill(Color(hex: colorHex))
-                            .frame(width: 32, height: 32)
-                        Menu {
-                            ForEach(colorOptions, id: \.self) { hex in
-                                Button(action: { colorHex = hex }) {
-                                    HStack {
-                                        Circle().fill(Color(hex: hex)).frame(width: 12, height: 12)
-                                        Text(hex)
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.blue)
-                        }
-                        .accessibilityLabel("色選択")
-                    }
+        let c = self.c
+        VStack(spacing: 0) {
+            // Handoff ヘッダ: [キャンセル][タイトル][追加]
+            HStack {
+                Button("キャンセル") { isPresented = false }
+                    .font(S8Font.jp(14)).foregroundColor(c.fg2)
+                Spacer()
+                Text("科目を追加").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+                Button("追加") {
+                    let subject = Subject(
+                        id: UUID(), name: name, colorHex: colorHex,
+                        dailyGoalMinutes: dailyGoalMinutes,
+                        weeklyGoalMinutes: weeklyGoalMinutes,
+                        pomodoroMinutes: pomodoroMinutes
+                    )
+                    context.insert(subject)
+                    try? context.save()
+                    isPresented = false
                 }
-
-                Section("目標") {
-                    Stepper("日目標: \(dailyGoalMinutes)分", value: $dailyGoalMinutes, in: 5...480, step: 5)
-                        .accessibilityLabel("日目標分数")
-                    Stepper("週目標: \(weeklyGoalMinutes)分", value: $weeklyGoalMinutes, in: 30...2400, step: 30)
-                        .accessibilityLabel("週目標分数")
-                }
-
-                Section("ポモドーロ") {
-                    Stepper("セッション時間: \(pomodoroMinutes)分", value: $pomodoroMinutes, in: 5...60, step: 5)
-                        .accessibilityLabel("ポモドーロセッション時間")
-                }
+                .font(S8Font.jp(14, .bold))
+                .foregroundColor(name.trimmingCharacters(in: .whitespaces).isEmpty ? c.fg3 : c.accentInk)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .navigationTitle("科目を追加")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
-                        isPresented = false
+            .padding(.horizontal, 24).padding(.vertical, 12)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    sectionCap("BASIC", jp: "基本情報")
+                        .padding(.top, 8)
+                    // 科目名
+                    S8Field(placeholder: "科目名（例: 統計学）", text: $name)
+                        .padding(.top, 8)
+                    // 色選択（Handoff: パレット直置き）
+                    HStack(spacing: 10) {
+                        Text("色").font(S8Font.jp(13.5)).foregroundColor(c.fg2)
+                        Spacer()
+                        ForEach(colorOptions, id: \.self) { hex in
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(colorHex == hex ? c.fg1 : Color.clear, lineWidth: 2))
+                                .onTapGesture { colorHex = hex }
+                        }
                     }
+                    .padding(.vertical, 14)
+                    .overlay(alignment: .top) { S8Rule() }
+
+                    sectionCap("GOALS", jp: "目標")
+                        .padding(.top, 20)
+                    stepperRow(label: "日目標", value: $dailyGoalMinutes, range: 5...480, step: 5, unit: "分")
+                    stepperRow(label: "週目標", value: $weeklyGoalMinutes, range: 30...2400, step: 30, unit: "分")
+
+                    sectionCap("POMODORO", jp: "ポモドーロ")
+                        .padding(.top, 20)
+                    stepperRow(label: "セッション時間", value: $pomodoroMinutes, range: 5...60, step: 5, unit: "分")
+
+                    Color.clear.frame(height: 24)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("追加") {
-                        let subject = Subject(
-                            id: UUID(),
-                            name: name,
-                            colorHex: colorHex,
-                            dailyGoalMinutes: dailyGoalMinutes,
-                            weeklyGoalMinutes: weeklyGoalMinutes,
-                            pomodoroMinutes: pomodoroMinutes
-                        )
-                        context.insert(subject)
-                        try? context.save()
-                        isPresented = false
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
+                .padding(.horizontal, 24)
             }
         }
+        .background(c.paper.ignoresSafeArea())
+    }
+
+    private func sectionCap(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func stepperRow(label: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int, unit: String) -> some View {
+        HStack {
+            Text(label).font(S8Font.jp(13.5)).foregroundColor(c.fg2)
+            Spacer()
+            Text("\(value.wrappedValue)\(unit)")
+                .font(S8Font.mono(14, .bold))
+                .foregroundColor(c.fg1)
+            Stepper("", value: value, in: range, step: step).labelsHidden()
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { S8Rule() }
     }
 }
 

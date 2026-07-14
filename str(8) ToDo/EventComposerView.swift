@@ -152,13 +152,17 @@ struct EventComposerView: View {
     /// what 以外の6分類。タイルグリッド・フォーカス内ジャンプバー共通の並び順。
     static let tileCategories: [WHCategory] = WHCategory.allCases.filter { $0 != .what }
 
-    /// RRULE プリセット（4パターン + なし）。TaskItem.occurs() が解釈できる形のみ。
+    /// RRULE プリセット。TaskItem.occurs() が解釈できる形のみ。
+    /// 授業/バイト等の定期イベント作成に対応（毎週/毎月/毎年）。
     static let repeatOptions: [(String, String, String?)] = [
         ("none", "なし", nil),
         ("daily", "毎日", "FREQ=DAILY"),
+        ("weekly", "毎週（同曜日）", "FREQ=WEEKLY"),
         ("weekday", "平日", "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"),
         ("mwf", "毎週月水金", "FREQ=WEEKLY;BYDAY=MO,WE,FR"),
-        ("weekend", "毎週末", "FREQ=WEEKLY;BYDAY=SA,SU")
+        ("weekend", "毎週末", "FREQ=WEEKLY;BYDAY=SA,SU"),
+        ("monthly", "毎月（同日）", "FREQ=MONTHLY"),
+        ("yearly", "毎年", "FREQ=YEARLY")
     ]
 
     private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -465,6 +469,8 @@ private struct ComposerFocusView: View {
     var onNavigate: (WHCategory) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query(sort: \Profile.name) private var profiles: [Profile]
 
     @State private var newParticipant: String = ""
@@ -477,43 +483,64 @@ private struct ComposerFocusView: View {
         return f
     }()
 
+    /// Handoff タイル→フォーカス編集の S8 化。デフォルト NavigationStack + toolbar は撤去、
+    /// カスタムヘッダ + ジャンプバー + Form 本体で構成する。
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                jumpBar
-                Divider()
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Text(category.label).font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+            }
+            .padding(.horizontal, 24).padding(.top, 14)
+            .overlay(alignment: .trailing) {
+                Button("閉じる") { dismiss() }
+                    .font(S8Font.jp(14)).foregroundColor(c.accentInk)
+                    .padding(.trailing, 20).padding(.top, 14)
+            }
+            jumpBar
+                .padding(.top, 8)
+            S8Rule()
+            NavigationStack {
                 content
             }
-            .navigationTitle(category.label)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
         }
+        .background(c.paper.ignoresSafeArea())
     }
 
-    /// 他タイルへの直接ジャンプアイコン列（横移動導線）。
+    /// Handoff: 他タイルへの直接ジャンプアイコン列。S8 accent 色でアクティブ強調。
     private var jumpBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
                 ForEach(EventComposerView.tileCategories) { cat in
                     Button(action: { onNavigate(cat) }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: cat.iconName)
-                                .font(.system(size: 16, weight: cat == category ? .bold : .regular))
+                        VStack(spacing: 3) {
+                            S8Icon(name: whCategoryToS8Icon(cat), size: 16,
+                                   color: cat == category ? c.accentInk : c.fg3)
                             Text(cat.label)
-                                .font(.caption2)
+                                .font(S8Font.jp(10, cat == category ? .bold : .regular))
+                                .foregroundColor(cat == category ? c.accentInk : c.fg3)
                         }
-                        .foregroundStyle(cat == category ? Color.accentColor : Color.secondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(cat.label)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// WHCategory → S8Icon の Lucide 名マッピング。
+    private func whCategoryToS8Icon(_ cat: WHCategory) -> String {
+        switch cat {
+        case .what:   return "text-cursor"
+        case .when:   return "clock"
+        case .where_: return "map-pin"
+        case .which:  return "tag"
+        case .who:    return "users"
+        case .how:    return "gauge"
+        case .other:  return "file"
         }
     }
 

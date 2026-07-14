@@ -29,6 +29,8 @@ struct TaskDetailView: View {
                 HStack(spacing: 6) {
                     S8IconButton(icon: "star", accent: task.isImportant, action: toggleImportant)
                         .accessibilityLabel(task.isImportant ? "重要を解除" : "重要に設定")
+                    S8IconButton(icon: "copy", action: duplicateTask)
+                        .accessibilityLabel("複製")
                     S8IconButton(icon: "trash", action: { showDeleteConfirmation = true })
                         .accessibilityLabel("削除")
                 }
@@ -459,6 +461,48 @@ struct TaskDetailView: View {
     private func toggleImportant() {
         task.isImportant.toggle()
         save()
+    }
+
+    /// 複製: タイトル/日時/カテゴリ/場所/繰り返し等をコピーして新規タスクを作る。
+    /// 完了/承認/仕分けフェーズはリセット。
+    private func duplicateTask() {
+        let copy = TaskItem(
+            id: UUID(),
+            title: task.title + "（コピー）",
+            category: task.category,
+            startDate: task.startDate,
+            duration: task.duration,
+            isAllDay: task.isAllDay,
+            place: task.place,
+            phase: task.startDate == nil ? .someday : .today,
+            status: .active,
+            completedAt: nil,
+            approvedAt: nil,
+            unlockDate: nil,
+            approverID: nil,
+            rrule: task.rrule,
+            eventKitID: nil,
+            isFromEventKit: false,
+            createdAt: .now,
+            notes: task.notes,
+            isImportant: task.isImportant,
+            colorHex: task.colorHex,
+            notificationOffsets: task.notificationOffsets,
+            timeZoneIdentifier: task.timeZoneIdentifier,
+            amount: task.amount,
+            paymentMethod: task.paymentMethod,
+            actualDuration: nil,
+            isTimePinned: task.isTimePinned,
+            sortIndex: task.sortIndex,
+            lastSortedDay: nil,
+            snoozeUntil: nil,
+            subjectID: task.subjectID,
+            profile: task.profile,
+            participantNames: task.participantNames
+        )
+        modelContext.insert(copy)
+        save()
+        dismiss()
     }
 
     private func markDone() {

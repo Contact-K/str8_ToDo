@@ -19,6 +19,7 @@ enum CalendarScale: Int, CaseIterable, Identifiable {
     case month = 0
     case week  = 1
     case day   = 2
+    case year  = 3
 
     var id: Int { rawValue }
     var label: String {
@@ -26,13 +27,28 @@ enum CalendarScale: Int, CaseIterable, Identifiable {
         case .month: return "月"
         case .week:  return "週"
         case .day:   return "日"
+        case .year:  return "年"
         }
     }
 
-    /// ズームイン（月→週→日）。端ではそのまま。
-    var zoomedIn: CalendarScale { CalendarScale(rawValue: min(rawValue + 1, CalendarScale.day.rawValue))! }
-    /// ズームアウト（日→週→月）。
-    var zoomedOut: CalendarScale { CalendarScale(rawValue: max(rawValue - 1, CalendarScale.month.rawValue))! }
+    /// ズームイン（月→週→日）。端ではそのまま。年→月へ戻る。
+    var zoomedIn: CalendarScale {
+        switch self {
+        case .year:  return .month
+        case .month: return .week
+        case .week:  return .day
+        case .day:   return .day
+        }
+    }
+    /// ズームアウト（日→週→月→年）。
+    var zoomedOut: CalendarScale {
+        switch self {
+        case .day:   return .week
+        case .week:  return .month
+        case .month: return .year
+        case .year:  return .year
+        }
+    }
 }
 
 /// matchedGeometryEffect 用の安定キー（その日の yyyymmdd）。
@@ -52,11 +68,14 @@ struct CalendarRootView: View {
     @State private var scale: CalendarScale = .month
     @State private var selectedDate: Date = Calendar.current.startOfDay(for: .now)
     @Namespace private var morph
+    /// Handoff 00c: ホイール MODE ダイヤルと連動。
+    @AppStorage("wheel.cal.mode") private var wheelCalMode = 0
 
     @State private var selectedTask: TaskItem?
     @State private var showSettings = false
     @State private var showYear = false
     @State private var showMoneyBreakdown = false
+    @State private var showComposer = false
     @State private var categoryFilter: Set<UUID>? = nil
     @Query(sort: \Category.name) private var categories: [Category]
 
@@ -69,14 +88,9 @@ struct CalendarRootView: View {
             S8TopBar(titleText, sub: "calendar · \(scale.label)ビュー") {
                 HStack(spacing: 4) {
                     categoryFilterButton
-                    S8IconButton(icon: "bar-chart", action: { showYear = true })
-                        .accessibilityLabel("年ビュー")
-                    S8IconButton(icon: "circle-dot", action: {
-                        withAnimation(morphAnimation) { selectedDate = cal.startOfDay(for: .now) }
-                    })
-                    .accessibilityLabel("今日")
-                    S8IconButton(icon: "settings", action: { showSettings = true })
-                        .accessibilityLabel("設定")
+                    // Handoff 01: + イベント作成（accent）は復活。年月切替はホイール中心へ集約。
+                    S8IconButton(icon: "plus", accent: true, action: { showComposer = true })
+                        .accessibilityLabel("イベント作成")
                 }
             }
 
@@ -113,6 +127,10 @@ struct CalendarRootView: View {
                         selectedTask = task
                     })
                         .transition(.opacity)
+                case .year:
+                    // Handoff 00c: 年ビューはホイール MODE の一員としてメインペイン化。
+                    YearView()
+                        .transition(.opacity)
                 }
             }
         }
@@ -135,11 +153,26 @@ struct CalendarRootView: View {
                 MoneyBreakdownView(month: selectedDate)
             }
         }
+        .sheet(isPresented: $showComposer) {
+            EventComposerView(initialStart: selectedDate)
+        }
         .task {
             if eventKit.authState == .authorized {
                 eventKit.sync(into: context)
                 eventKit.observeChanges(into: context)
             }
+        }
+        // Handoff 00c: ホイール MODE ダイヤルからのモード切替を購読。
+        .onAppear {
+            if let s = CalendarScale(rawValue: wheelCalMode) { scale = s }
+        }
+        .onChange(of: wheelCalMode) { _, new in
+            if let s = CalendarScale(rawValue: new) {
+                withAnimation(morphAnimation) { scale = s }
+            }
+        }
+        .onChange(of: scale) { _, new in
+            if wheelCalMode != new.rawValue { wheelCalMode = new.rawValue }
         }
     }
 
@@ -212,6 +245,7 @@ struct CalendarRootView: View {
         case .month: f.dateFormat = "yyyy年 M月"
         case .week:  f.dateFormat = "yyyy年 M月 '第'W週"
         case .day:   f.dateFormat = "M月d日 (E)"
+        case .year:  f.dateFormat = "yyyy年"
         }
         return f.string(from: selectedDate)
     }

@@ -18,6 +18,8 @@ struct WeekView: View {
     var onOpenSettings: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query private var tasks: [TaskItem]
     @AppStorage(AppSettingsKey.weekShowSevenDays) private var showSevenDays = AppSettingsKey.weekShowSevenDaysDefault
     @State private var bandFrames: [BandFrameInfo] = []
@@ -38,7 +40,7 @@ struct WeekView: View {
         return c
     }
 
-    private let gridLine = Color(.systemGray4)
+    /// Handoff 01b: 罫線は S8 line 系。当日ハイライトは accent-wash。
 
     private var weekDays: [Date] {
         guard let interval = weekCalendar.dateInterval(of: .weekOfMonth, for: selectedDate) else {
@@ -73,24 +75,21 @@ struct WeekView: View {
                                             maxHeight: rowMaxHeight, base: rowBaseHeight, perChip: rowPerChip)
 
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Picker("表示", selection: $showSevenDays) {
-                        Text("7日").tag(true)
-                        Text("平日").tag(false)
+                // Handoff 01b: [7日 | 平日] のピル型トグル（右寄せ）
+                HStack {
+                    Spacer()
+                    HStack(spacing: 0) {
+                        weekToggleSegment("7日", on: showSevenDays)
+                            .onTapGesture { showSevenDays = true }
+                        Rectangle().fill(c.lineStrong).frame(width: 1, height: 20)
+                        weekToggleSegment("平日", on: !showSevenDays)
+                            .onTapGesture { showSevenDays = false }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 220)
-
-                    if let onOpenSettings {
-                        Button(action: onOpenSettings) {
-                            Image(systemName: "gearshape")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .accessibilityLabel("時間割を編集")
-                    }
+                    .overlay(Capsule().stroke(c.lineStrong, lineWidth: 1))
+                    .clipShape(Capsule())
+                    // ponytail: 設定はホイール6番目タブへ移設したのでここには置かない
                 }
-                .padding(.vertical, 6)
+                .padding(.horizontal, 24).padding(.vertical, 8)
 
                 ScrollView(.vertical, showsIndicators: true) {
                     ScrollViewReader { proxy in
@@ -199,20 +198,22 @@ struct WeekView: View {
         .frame(width: width)
     }
 
+    /// Handoff 01b: 曜日 + 日付。当日は accent-wash 背景 + accent-ink 文字。
     private func dayHeaderCell(_ day: Date, width: CGFloat) -> some View {
-        let header = VStack(spacing: 4) {
+        let today = isToday(day)
+        let hcolor = today ? c.accentInk : weekdayColor(day)
+        let hbg = today ? c.accentWash : Color.clear
+        let header = VStack(spacing: 1) {
             Text(dayString(day))
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(isToday(day) ? Color.accentColor : weekdayColor(day))
+                .font(S8Font.jp(11, .bold))
+                .foregroundColor(hcolor)
             Text("\(weekCalendar.component(.day, from: day))")
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundStyle(isToday(day) ? Color.accentColor : Color.primary)
+                .font(S8Font.mono(12.5, .bold))
+                .foregroundColor(hcolor)
         }
         .frame(width: width, height: headerHeight)
-        .background(isToday(day) ? Color.accentColor.opacity(0.08) : Color.clear)
-        .border(gridLine, width: 0.5)
+        .background(hbg)
+        .overlay(Rectangle().stroke(c.line, lineWidth: 0.5))
         .contentShape(Rectangle())
         .onTapGesture { onPickDay(day) }
 
@@ -225,6 +226,15 @@ struct WeekView: View {
         }
     }
 
+    /// Handoff 01b: 7日/平日 セグメント。
+    private func weekToggleSegment(_ label: String, on: Bool) -> some View {
+        Text(label)
+            .font(S8Font.jp(11, on ? .bold : .medium))
+            .foregroundColor(on ? c.fg1 : c.fg3)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(on ? c.surface2 : Color.clear)
+    }
+
     private func allDayRow(_ day: Date, width: CGFloat) -> some View {
         let allDay = weekTasks(on: day).filter { $0.isAllDay }
         return HStack(spacing: 2) {
@@ -233,42 +243,42 @@ struct WeekView: View {
             }
             if allDay.count > 2 {
                 Text("+\(allDay.count - 2)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(S8Font.mono(9))
+                    .foregroundColor(c.fg3)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 3)
         .frame(width: width, height: allDayRowHeight, alignment: .leading)
-        .border(gridLine, width: 0.5)
+        .overlay(Rectangle().stroke(c.line, lineWidth: 0.5))
         .clipped()
     }
 
-    /// 枠セル共通レイアウト。band が非 nil のときだけ BandFramePreferenceKey を発行する
-    /// （キャプセル座標は枠セルのフレームのみから作る非対称を維持。落とすと座標が壊れる）。
+    /// Handoff 01b: 枠セル。上部に mono BAND ラベル、下にチップ列。
+    /// band が非 nil のときだけ BandFramePreferenceKey を発行する
+    /// （キャプセル座標は枠セルのフレームのみから作る非対称を維持）。
     private func gridCell(day: Date, title: String, band: Band?, rowIndex: Int,
                           cellTasks: [TaskItem], width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            // 左ラベル列の代わりにセル上部に枠名（列ごとにテンプレが違っても成立）
             Text(title)
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .font(S8Font.mono(8, .bold))
+                .tracking(0.8)
+                .foregroundColor(c.fg3)
 
             ForEach(cellTasks.prefix(5), id: \.id) { task in
                 taskChip(task, day: day)
             }
             if cellTasks.count > 5 {
                 Text("+\(cellTasks.count - 5)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(S8Font.mono(9))
+                    .foregroundColor(c.fg3)
             }
             Spacer(minLength: 0)
         }
         .padding(3)
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(Color.gray.opacity(0.05))
-        .border(gridLine, width: 0.5)
+        .background(c.surface)
+        .overlay(Rectangle().stroke(c.line, lineWidth: 0.5))
         .clipped()
         .background(
             Group {
@@ -287,31 +297,34 @@ struct WeekView: View {
 
     // MARK: - チップとキャプセル
 
+    /// Handoff 01b: チップ = カテゴリドット + タイトル + 時刻 mono + STAR。
+    /// 完了は取り消し線、色は task.effectiveColor 14% 塗り。
     @ViewBuilder
     private func taskChip(_ task: TaskItem, day: Date) -> some View {
         let chip = HStack(spacing: 3) {
-            Circle().fill(task.effectiveColor).frame(width: 7, height: 7)
+            Circle().fill(task.effectiveColor).frame(width: 6, height: 6)
             Text(task.title)
-                .font(.caption)
+                .font(S8Font.jp(9))
+                .foregroundColor(c.fg1)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .strikethrough(task.isDone)
             if !task.isAllDay, let start = task.startDate {
                 Text(hhmmLabel(minuteOfDay(of: start, calendar: weekCalendar)))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(S8Font.mono(7.5))
+                    .foregroundColor(c.fg3)
             }
             if task.isImportant {
                 Image(systemName: "star.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.yellow)
+                    .font(.system(size: 8))
+                    .foregroundStyle(c.accent)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
-        .background(task.effectiveColor.opacity(0.2))
-        .cornerRadius(4)
+        .padding(.horizontal, 3)
+        .padding(.vertical, 1.5)
+        .background(task.effectiveColor.opacity(0.14))
+        .cornerRadius(3)
         .contentShape(Rectangle())
         .onTapGesture { onSelectTask?(task) }
         .accessibilityElement(children: .combine)
@@ -354,9 +367,9 @@ struct WeekView: View {
 
     private func weekdayColor(_ date: Date) -> Color {
         let weekday = weekCalendar.component(.weekday, from: date)
-        if weekday == 1 { return .red }
-        if weekday == 7 { return .blue }
-        return .gray
+        if weekday == 1 { return c.danger }   // 日
+        if weekday == 7 { return c.info }     // 土
+        return c.fg2
     }
 }
 

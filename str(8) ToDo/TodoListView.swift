@@ -217,40 +217,65 @@ private struct SchedulePromoteSheet: View {
     let task: TaskItem
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     @State private var startDate: Date = .now
     @State private var duration: TimeInterval = 3600
 
     var body: some View {
-        NavigationStack {
-            Form {
-                DatePicker("開始", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
+        let c = self.c
+        VStack(spacing: 0) {
+            HStack {
+                Button("キャンセル") { dismiss() }
+                    .font(S8Font.jp(14)).foregroundColor(c.fg2)
+                Spacer()
+                Text("日時を決める").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+                Button("決定") {
+                    let effective = max(startDate, .now)
+                    task.scheduleAt(start: effective, duration: duration, context: context)
+                    dismiss()
+                }
+                .font(S8Font.jp(14, .bold)).foregroundColor(c.accentInk)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 12)
 
+            VStack(spacing: 0) {
+                sectionCap("WHEN", jp: "開始")
+                    .padding(.top, 8)
+                DatePicker("", selection: $startDate,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .datePickerStyle(.graphical)
+                    .padding(.vertical, 8)
+                    .overlay(alignment: .top) { S8Rule() }
+
+                sectionCap("DURATION", jp: "所要時間")
+                    .padding(.top, 16)
                 HStack {
-                    Text("所要時間")
+                    Text(durationText(duration))
+                        .font(S8Font.mono(15, .bold)).foregroundColor(c.fg1)
                     Spacer()
-                    Stepper(value: $duration, in: 300...(24 * 3600), step: 300) {
-                        Text(durationText(duration))
-                    }
+                    Stepper("", value: $duration, in: 300...(24 * 3600), step: 300).labelsHidden()
                 }
+                .padding(.vertical, 12)
+                .overlay(alignment: .top) { S8Rule() }
             }
-            .navigationTitle("日時を決める")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("決定") {
-                        // ponytail: sheet を開いたまま時間が経過→過去時刻がコミットされる問題を回避。
-                        // 押下時に startDate が過去なら現時刻へシフト。
-                        let effective = max(startDate, .now)
-                        task.scheduleAt(start: effective, duration: duration, context: context)
-                        dismiss()
-                    }
-                }
-            }
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 0)
         }
+        .background(c.paper.ignoresSafeArea())
+    }
+
+    private func sectionCap(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+        .padding(.bottom, 8)
     }
 }
 

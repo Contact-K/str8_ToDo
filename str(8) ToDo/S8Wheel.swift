@@ -17,6 +17,7 @@ let s8Tabs: [S8TabDef] = [
     .init(id: "list", icon: "list", label: "リスト"),
     .init(id: "approve", icon: "check-circle", label: "承認"),
     .init(id: "study", icon: "book-open", label: "勉強"),
+    .init(id: "settings", icon: "settings", label: "設定"),
 ]
 
 // MARK: - 触覚フィードバック
@@ -30,6 +31,23 @@ private enum S8WheelHaptic {
 
 // MARK: - クリックホイール
 
+/// Handoff 00c: タブ別センターコアの表示・タップ動作設定。
+/// 長押しは S8ClickWheel 側で常に P2P トグルに固定。nil で既存 P2P コア表示。
+///
+/// タップは「モードホイール」を開く。ホイールを回して該当モードを選ぶ流儀
+/// （str(8)_Talk のフィルタ機能と同じ操作感）。options.isEmpty のときはタップ無効。
+struct S8CenterCoreConfig {
+    let cap: String                            // "MODE" / "PRESET" / "FILTER" / "VIEW"
+    let main: String                           // 現在選択の主表示
+    let sub: String?                           // 補助テキスト（pips 非表示時）
+    let pips: [Bool]                           // pip インジケータ（現在位置ハイライト）
+    let options: [S8WheelFilterItem]           // モードホイールの選択肢（icon+label）
+    let selectedIndex: Int                     // 現在の options index
+    let onSelect: (Int) -> Void                // モード確定時のコールバック
+    /// 非 nil のとき、タップでモードホイールを開かず直接発火する（勉強タブの「科目追加」等）。
+    var directAction: (() -> Void)? = nil
+}
+
 struct S8ClickWheel: View {
     @Binding var tabIndex: Int
     @Binding var minimized: Bool
@@ -39,6 +57,10 @@ struct S8ClickWheel: View {
     var quality: Int = 0
     /// 画面下端のセーフエリア量（ホームインジケータ帯）。表示はここまで埋め、当たり判定はこの帯を除外する。
     var bottomSafe: CGFloat = 0
+    /// Handoff 00c: タブ別コア設定（nil で既存 P2P コア）。
+    var centerCore: S8CenterCoreConfig? = nil
+    /// Handoff 00c 改: 中心タップで開く「モードホイール」を要求（options 非空時のみ）。
+    var onOpenModeWheel: () -> Void = {}
     let onToggleConn: () -> Void
 
     private let D: CGFloat = 280
@@ -55,8 +77,9 @@ struct S8ClickWheel: View {
     /// ノードごとの SF Symbol バウンス用カウンタ。選択された瞬間だけ増やす＝移動先のみ弾む。
     @State private var bump = [Int](repeating: 0, count: s8Tabs.count)
 
-    /// 下端ドックの半ドームの可視高さ（円の下側を画面下端に埋める）。中心 P2P コアは収まる。
-    private var domeH: CGFloat { D * 0.67 }
+    /// 下端ドックの半ドームの可視高さ（円の下側を画面下端に埋める）。
+    /// 0.67→0.72 に緩め、中心コアの下端（y=182）に 20px の余白を確保して見切れ回避。
+    private var domeH: CGFloat { D * 0.72 }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -229,12 +252,10 @@ struct S8ClickWheel: View {
         return best
     }
 
-    // 中心 P2P コア：長押しで接続トグル。バーは通信強度（linkQuality 0〜3）を表す。
+    /// 中心コア：長押しで P2P トグル（全タブ共通）、タップで centerCore.onTap（あれば）。
+    /// centerCore == nil のとき、Handoff 04a と同じ P2P LINK ビジュアルを維持。
     private func centerCore(_ c: S8Palette) -> some View {
-        let live = connected && peers > 0
-        let qColor: Color = !connected ? c.fg3 : (live ? c.ok : c.warn)
-        let qText: String = !connected ? "OFF" : (live ? "\(peers)人" : "探索中")
-        let ringColor: Color = connected ? c.danger : c.ok   // 長押しで OFF にするなら赤、ON にするなら緑
+        let ringColor: Color = connected ? c.danger : c.ok   // 長押しで OFF/ON を色で示唆
         return ZStack {
             Circle().fill(c.surface2)
             // 長押し進捗リング（0→1 充填で確定）
@@ -244,18 +265,15 @@ struct S8ClickWheel: View {
                 .rotationEffect(.degrees(-90))
                 .padding(3)
             Circle().stroke(c.lineStrong, lineWidth: 1)
-            VStack(spacing: 3) {
-                // 通信強度バー（人数連動ではなくリンク状態 0〜3）
-                HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(0..<3, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(quality > i ? qColor : c.line)
-                            .frame(width: 4, height: 6 + CGFloat(i) * 4)
-                    }
-                }
-                .frame(height: 14, alignment: .bottom)
-                Text(qText).font(S8Font.mono(12, .bold)).foregroundColor(c.fg1)
-                Text("品質").font(S8Font.mono(8)).tracking(1.5).foregroundColor(c.fg3)
+            // Handoff 00c: 上端に MODE/PRESET/VIEW のミニインジケータ（centerCore あるとき）
+            if centerCore != nil {
+                Rectangle().fill(c.accent).frame(width: 2, height: 7)
+                    .offset(y: -38.5)
+            }
+            if let cfg = centerCore {
+                modeCoreContent(cfg, c: c)
+            } else {
+                p2pCoreContent(c: c)
             }
         }
         .frame(width: 84, height: 84)
@@ -263,6 +281,15 @@ struct S8ClickWheel: View {
         .scaleEffect(pressing ? 0.94 : 1)
         .animation(.spring(response: 0.2), value: pressing)
         .contentShape(Circle())
+        .onTapGesture {
+            guard let cfg = centerCore else { return }
+            S8WheelHaptic.tap()
+            if let direct = cfg.directAction {
+                direct()   // 直接発火（勉強タブの「科目追加」等）
+            } else if !cfg.options.isEmpty {
+                onOpenModeWheel()   // モードホイールを開く
+            }
+        }
         .onLongPressGesture(minimumDuration: 0.6, pressing: { isPressing in
             pressing = isPressing
             if isPressing {
@@ -278,6 +305,49 @@ struct S8ClickWheel: View {
             pressing = false
             withAnimation(.easeOut(duration: 0.2)) { pressProgress = 0 }
         })
+    }
+
+    /// P2P LINK ビジュアル（Approve タブや centerCore == nil のフォールバック）。
+    private func p2pCoreContent(c: S8Palette) -> some View {
+        let live = connected && peers > 0
+        let qColor: Color = !connected ? c.fg3 : (live ? c.ok : c.warn)
+        let qText: String = !connected ? "OFF" : (live ? "\(peers)人" : "探索中")
+        return VStack(spacing: 3) {
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(quality > i ? qColor : c.line)
+                        .frame(width: 4, height: 6 + CGFloat(i) * 4)
+                }
+            }
+            .frame(height: 14, alignment: .bottom)
+            Text(qText).font(S8Font.mono(12, .bold)).foregroundColor(c.fg1)
+            Text("品質").font(S8Font.mono(8)).tracking(1.5).foregroundColor(c.fg3)
+        }
+    }
+
+    /// Handoff 00c: MODE / PRESET / FILTER / VIEW コアの表示。
+    private func modeCoreContent(_ cfg: S8CenterCoreConfig, c: S8Palette) -> some View {
+        VStack(spacing: 2) {
+            Text(cfg.cap).font(S8Font.mono(7.5)).tracking(1.6).foregroundColor(c.fg3)
+            Text(cfg.main)
+                .font(S8Font.jp(cfg.main.count > 2 ? 14 : 21, .bold))
+                .foregroundColor(c.accentInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            if !cfg.pips.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(0..<cfg.pips.count, id: \.self) { i in
+                        Circle()
+                            .fill(cfg.pips[i] ? c.accent : c.lineStrong)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+            } else if let sub = cfg.sub {
+                Text(sub).font(S8Font.mono(7)).tracking(1.0).foregroundColor(c.fg3)
+                    .lineLimit(1)
+            }
+        }
     }
 
     private func minimizedCapsule(_ c: S8Palette) -> some View {
@@ -324,7 +394,7 @@ struct S8FilterWheel: View {
     private let R: CGFloat = 92
     private var N: Int { max(1, items.count) }
     private var STEP: Double { 360.0 / Double(N) }
-    private var domeH: CGFloat { D * 0.67 }
+    private var domeH: CGFloat { D * 0.72 }
 
     @State private var rot: Double = 0
     @State private var dragging = false

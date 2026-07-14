@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import Foundation
+import ActivityKit
 
 // MARK: - Handoff palette（Widget 目的別・S8 と同値）
 private enum W {
@@ -358,10 +359,182 @@ struct str8Widget: Widget {
     }
 }
 
+// MARK: - Live Activity（Handoff 08c: ロック画面バナー + Dynamic Island）
+
+@available(iOS 16.1, *)
+struct TimerLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: TimerAttributes.self) { context in
+            // ロック画面バナー
+            lockBanner(context: context)
+                .activityBackgroundTint(Color(red: 0x1a/255, green: 0x19/255, blue: 0x14/255))
+                .activitySystemActionForegroundColor(Color(red: 0xF1/255, green: 0xEF/255, blue: 0xE6/255))
+        } dynamicIsland: { context in
+            DynamicIsland {
+                // 展開時（左/右/中央/下）
+                DynamicIslandExpandedRegion(.leading) {
+                    ringGauge(context: context, size: 44)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    remainDisplay(context: context, size: 26)
+                        .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.attributes.taskTitle)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("FOCUS" + (context.attributes.subjectName.map { " · \($0)" } ?? ""))
+                            .font(.system(size: 9, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    progressBar(context: context)
+                        .padding(.top, 4)
+                }
+            } compactLeading: {
+                Image(systemName: "hourglass")
+                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+            } compactTrailing: {
+                remainDisplay(context: context, size: 13)
+                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+            } minimal: {
+                Image(systemName: "hourglass")
+                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+            }
+            .keylineTint(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+        }
+    }
+
+    /// Handoff 08c ロック画面バナー: ring ゲージ + タスク名 + 大きな残時間。
+    @ViewBuilder
+    private func lockBanner(context: ActivityViewContext<TimerAttributes>) -> some View {
+        HStack(spacing: 14) {
+            ringGauge(context: context, size: 56)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("STR(8) · FOCUS")
+                    .font(.system(size: 8.5, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundColor(.white.opacity(0.6))
+                Text(context.attributes.taskTitle)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(context.state.isPaused
+                     ? "一時停止中"
+                     : "起こすと一時停止" + (context.attributes.subjectName.map { " · \($0)" } ?? ""))
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 2) {
+                remainDisplay(context: context, size: 30)
+                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                Text("/ \(String(format: "%02d:00", context.state.totalMinutes))")
+                    .font(.system(size: 8, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(.white.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 16)
+    }
+
+    /// 残時間表示（endDate ベースで OS が自動更新 or 一時停止時は固定表示）。
+    @ViewBuilder
+    private func remainDisplay(context: ActivityViewContext<TimerAttributes>, size: CGFloat) -> some View {
+        if context.state.isPaused {
+            let m = context.state.pausedRemainingSec / 60
+            let s = context.state.pausedRemainingSec % 60
+            Text(String(format: "%02d:%02d", m, s))
+                .font(.system(size: size, weight: .bold, design: .monospaced))
+        } else {
+            Text(timerInterval: Date.now...context.state.endDate, countsDown: true, showsHours: false)
+                .font(.system(size: size, weight: .bold, design: .monospaced))
+                .monospacedDigit()
+        }
+    }
+
+    /// 円形 ring ゲージ（残時間比を弧で表示。一時停止時は色を薄く）。
+    @ViewBuilder
+    private func ringGauge(context: ActivityViewContext<TimerAttributes>, size: CGFloat) -> some View {
+        let accent = Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255)
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.2), lineWidth: 3)
+            // ring 進捗（endDate から算出する trim は Widget が自動更新しないため、
+            // ProgressView で「timerInterval」を利用して OS 側の再描画に任せる）。
+            if context.state.isPaused {
+                let done = 1.0 - Double(context.state.pausedRemainingSec)
+                                    / Double(max(1, context.state.totalMinutes * 60))
+                Circle()
+                    .trim(from: 0, to: max(0, min(1, done)))
+                    .stroke(accent.opacity(0.5), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            } else {
+                // ProgressView は自動で timerInterval を秒毎に進める（OS 提供）。
+                ProgressView(timerInterval: Date.now...context.state.endDate,
+                             countsDown: false,
+                             label: { EmptyView() },
+                             currentValueLabel: { EmptyView() })
+                    .progressViewStyle(.circular)
+                    .tint(accent)
+            }
+            Image(systemName: "hourglass")
+                .font(.system(size: size * 0.35, weight: .regular))
+                .foregroundColor(.white)
+        }
+        .frame(width: size, height: size)
+    }
+
+    /// 8 セグメントの離散進捗バー（Handoff 08c 下段）。
+    @ViewBuilder
+    private func progressBar(context: ActivityViewContext<TimerAttributes>) -> some View {
+        let accent = Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255)
+        let total = 8
+        let doneFrac: Double = {
+            let totalSec = Double(context.state.totalMinutes * 60)
+            if context.state.isPaused {
+                let remain = Double(context.state.pausedRemainingSec)
+                return max(0, min(1, 1 - remain / max(1, totalSec)))
+            } else {
+                let remain = max(0, context.state.endDate.timeIntervalSinceNow)
+                return max(0, min(1, 1 - remain / max(1, totalSec)))
+            }
+        }()
+        let filled = Int((doneFrac * Double(total)).rounded())
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 3) {
+                ForEach(0..<total, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(i < filled ? accent : Color.white.opacity(0.2))
+                        .frame(height: 4)
+                }
+            }
+            HStack {
+                Text(context.state.isPaused ? "PAUSED" : "RUNNING")
+                    .font(.system(size: 8, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(.white.opacity(0.55))
+                Spacer()
+                Text("FOCUS貫通")
+                    .font(.system(size: 8, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(.white.opacity(0.55))
+            }
+        }
+    }
+}
+
 // MARK: - Bundle
 @main
 struct str8WidgetBundle: WidgetBundle {
     var body: some Widget {
         str8Widget()
+        if #available(iOS 16.1, *) {
+            TimerLiveActivity()
+        }
     }
 }

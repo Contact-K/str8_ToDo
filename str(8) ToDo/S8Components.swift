@@ -395,6 +395,37 @@ struct S8Avatar: View {
     }
 }
 
+// MARK: - S8SetRow（設定画面の共通行）
+//
+// str(8)_Talk S8Profile.swift と同じ流儀：
+//   [icon fg2] [label] Spacer [trailing view] [(chevron/onTap)]
+
+struct S8SetRow<Trailing: View>: View {
+    let icon: String
+    let label: String
+    @ViewBuilder var trailing: () -> Trailing
+    var onTap: (() -> Void)? = nil
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let c = S8Palette.of(scheme)
+        let row = HStack(spacing: 14) {
+            S8Icon(name: icon, size: 20, color: c.fg2)
+            Text(label).font(S8Font.jp(15)).foregroundColor(c.fg1)
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.horizontal, 24).padding(.vertical, 15)
+        .contentShape(Rectangle())
+
+        if let onTap {
+            Button(action: onTap) { row }.buttonStyle(.plain)
+        } else {
+            row
+        }
+    }
+}
+
 // MARK: - Section label
 
 struct S8SectionLabel: View {

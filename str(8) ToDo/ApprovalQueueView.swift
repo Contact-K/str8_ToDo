@@ -50,6 +50,7 @@ struct ApprovalQueueView: View {
 
             if doneTasks.isEmpty {
                 emptyState
+                Spacer(minLength: 0)   // ヘッダを上に固定し空表示を上詰めに
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -311,22 +312,7 @@ struct PeerPairingView: View {
                             .padding(.top, 6)
                     }
 
-                    // DEBUG simulatorBypass
-                    #if DEBUG
-                    sectionCap("DEBUG", jp: "テスト")
-                        .padding(.top, 22)
-                    Button(action: { gate.simulatorBypass.toggle() }) {
-                        HStack {
-                            Text("近接をシミュレート").font(S8Font.jp(14)).foregroundColor(c.fg1)
-                            Spacer()
-                            S8Icon(name: gate.simulatorBypass ? "check-circle" : "circle-dot",
-                                   size: 17, color: gate.simulatorBypass ? c.ok : c.fg3)
-                        }
-                        .padding(.vertical, 13)
-                        .overlay(alignment: .top) { S8Rule() }
-                    }
-                    .buttonStyle(.plain)
-                    #endif
+                    // ponytail: DEBUG simulatorBypass セクションは撤去（本番向け）
 
                     Color.clear.frame(height: 24)
                 }

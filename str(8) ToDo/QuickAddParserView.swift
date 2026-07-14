@@ -14,6 +14,8 @@ import SwiftData
 struct QuickAddParserView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
 
     @Query(filter: #Predicate<PhraseAlias> { $0.isEnabled }) private var aliases: [PhraseAlias]
 
@@ -28,55 +30,84 @@ struct QuickAddParserView: View {
     @State private var aliasDraftWord: AliasCandidateWord?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("自然文で入力") {
-                    TextField("例: 明日 14:00 大学でレポート", text: $text)
+        let c = self.c
+        VStack(spacing: 0) {
+            // Handoff 03d ヘッダ: [キャンセル][クイック追加][spacer]
+            HStack {
+                Button("キャンセル") { dismiss() }
+                    .font(S8Font.jp(14))
+                    .foregroundColor(c.fg2)
+                Spacer()
+                Text("クイック追加").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+                Color.clear.frame(width: 64, height: 1)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 12)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    // INPUT
+                    sectionCap("INPUT", jp: "自然文で入力")
+                        .padding(.top, 8)
+                    // 太い accent 縁のテキスト入力
+                    TextField("例: 明日 14:00 大学でレポート", text: $text, axis: .vertical)
+                        .font(S8Font.jp(14))
+                        .foregroundColor(c.fg1)
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .background(c.surface)
+                        .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.accent, lineWidth: 1.5))
                         .onChange(of: text) { _, newValue in
                             scheduleParse(newValue)
                         }
-                }
 
-                if !parseResult.recognizedChips.isEmpty {
-                    Section("自動認識") {
-                        chipsView
+                    // PARSED
+                    if !parseResult.recognizedChips.isEmpty {
+                        sectionCap("PARSED", jp: "自動認識")
+                            .padding(.top, 20)
+                        parsedChips
+                            .padding(.top, 4)
                     }
-                }
 
-                if enableDictionarySuggestions && !parseResult.unrecognizedWords.isEmpty {
-                    Section("辞書に登録できそうな語") {
-                        ForEach(parseResult.unrecognizedWords, id: \.self) { word in
-                            HStack {
-                                Text(word)
-                                Spacer()
-                                Button("+分類選択") { aliasDraftWord = AliasCandidateWord(word: word) }
-                                    .font(.caption)
-                                    .buttonStyle(.bordered)
+                    // DICTIONARY
+                    if enableDictionarySuggestions && !parseResult.unrecognizedWords.isEmpty {
+                        sectionCap("DICTIONARY", jp: "辞書に登録できそうな語")
+                            .padding(.top, 20)
+                        VStack(spacing: 0) {
+                            ForEach(parseResult.unrecognizedWords, id: \.self) { word in
+                                HStack {
+                                    Text(word).font(S8Font.jp(14)).foregroundColor(c.fg1)
+                                    Spacer()
+                                    Button(action: { aliasDraftWord = AliasCandidateWord(word: word) }) {
+                                        Text("+ 分類選択")
+                                            .font(S8Font.jp(11.5)).foregroundColor(c.fg2)
+                                            .padding(.horizontal, 10).padding(.vertical, 5)
+                                            .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 12)
+                                .overlay(alignment: .top) { S8Rule() }
                             }
                         }
+                        Text("「\(parseResult.unrecognizedWords.first ?? "語")」→「25分」のように言い換えを登録すると次から自動認識")
+                            .font(S8Font.jp(11)).foregroundColor(c.fg3)
+                            .padding(.top, 6)
                     }
+                    Color.clear.frame(height: 24)
                 }
+                .padding(.horizontal, 24)
             }
-            .navigationTitle("クイック追加")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
+
+            // 固定ボトム: 保存 / 詳細を追加
+            HStack(spacing: 12) {
+                S8Button("保存", variant: .secondary, enabled: !isEmptyInput, action: saveDirect)
+                S8Button("詳細を追加", variant: .primary, enabled: !isEmptyInput, action: openComposer)
             }
-            .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 12) {
-                    Button("保存", action: saveDirect)
-                        .buttonStyle(.bordered)
-                        .disabled(isEmptyInput)
-                    Button("詳細を追加", action: openComposer)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isEmptyInput)
-                }
-                .padding()
-                .background(.bar)
-            }
+            .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 20)
+            .background(c.surface)
+            .overlay(alignment: .top) { S8Rule() }
         }
+        .background(c.paper.ignoresSafeArea())
         .sheet(isPresented: $showComposer) {
             // P18 M13: ParseResult の全ヒント（titleRemainder/startDate/duration/placeHint/
             // categoryHint(→Profile優先/Category)/whoHint/otherHint）を一括プリフィル init に渡す。
@@ -104,35 +135,82 @@ struct QuickAddParserView: View {
         text.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    // MARK: - 自動認識チップ
+    // MARK: - 自動認識チップ（Handoff 03d: 「いつ:」「どこ:」等の wash 色ピル）
 
-    private var chipsView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(parseResult.recognizedChips.enumerated()), id: \.offset) { _, chip in
-                    let (category, value) = chip
-                    Label(value, systemImage: category.iconName)
-                        .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(chipColor(for: category).opacity(0.15)))
-                        .foregroundStyle(chipColor(for: category))
+    private var parsedChips: some View {
+        let items = parseResult.recognizedChips
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, chip in
+                    let (cat, value) = chip
+                    HStack(spacing: 5) {
+                        S8Icon(name: iconName(cat), size: 12, color: chipColorFG(cat))
+                        Text("\(chipLabel(cat)): \(value)")
+                            .font(S8Font.jp(11.5)).foregroundColor(chipColorFG(cat))
+                    }
+                    .padding(.horizontal, 11).padding(.vertical, 5)
+                    .background(chipColorBG(cat))
+                    .clipShape(Capsule())
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
         }
-        .listRowInsets(EdgeInsets())
     }
 
-    private func chipColor(for category: WHCategory) -> Color {
-        switch category {
-        case .what:   return .primary
-        case .when:   return .blue
-        case .where_: return .green
-        case .which:  return .orange
-        case .who:    return .purple
-        case .how:    return .pink
-        case .other:  return .gray
+    private func sectionCap(_ tag: String, jp: String) -> some View {
+        HStack(spacing: 10) {
+            Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            S8Rule()
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func chipColorFG(_ cat: WHCategory) -> Color {
+        switch cat {
+        case .when:   return c.info
+        case .where_: return c.ok
+        case .how:    return c.accentInk
+        case .who:    return c.info
+        case .which:  return c.accentInk
+        case .what:   return c.fg1
+        case .other:  return c.fg3
+        }
+    }
+
+    private func chipColorBG(_ cat: WHCategory) -> Color {
+        switch cat {
+        case .when:   return c.infoWash
+        case .where_: return c.okWash
+        case .how:    return c.accentWash
+        case .who:    return c.infoWash
+        case .which:  return c.accentWash
+        case .what:   return c.surface2
+        case .other:  return c.surface2
+        }
+    }
+
+    private func chipLabel(_ cat: WHCategory) -> String {
+        switch cat {
+        case .when: return "いつ"
+        case .where_: return "どこ"
+        case .how: return "どのくらい"
+        case .who: return "誰と"
+        case .which: return "どれ"
+        case .what: return "何を"
+        case .other: return "その他"
+        }
+    }
+
+    private func iconName(_ cat: WHCategory) -> String {
+        switch cat {
+        case .when: return "clock"
+        case .where_: return "map-pin"
+        case .how: return "gauge"
+        case .who: return "users"
+        case .which: return "tag"
+        case .what: return "text-cursor"
+        case .other: return "file"
         }
     }
 

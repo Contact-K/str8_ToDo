@@ -11,6 +11,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import ActivityKit
 
 struct TimerView: View {
     @Environment(\.modelContext) private var context
@@ -26,6 +27,14 @@ struct TimerView: View {
     @State private var linkedTaskID: UUID?
     @State private var linkedSubjectID: UUID?
     @State private var dragBaseMinutes: Int?
+    /// Handoff 00c: ホイール PRESET ダイヤル（0=preset1 / 1=preset2 / 2=preset3）と連動。
+    @AppStorage("wheel.timer.preset") private var wheelPreset = 0
+    /// ユーザーカスタマイズ可能なプリセット（設定で編集）。
+    @AppStorage(AppSettingsKey.timerPreset1) private var preset1 = AppSettingsKey.timerPreset1Default
+    @AppStorage(AppSettingsKey.timerPreset2) private var preset2 = AppSettingsKey.timerPreset2Default
+    @AppStorage(AppSettingsKey.timerPreset3) private var preset3 = AppSettingsKey.timerPreset3Default
+
+    private var timerPresets: [Int] { [preset1, preset2, preset3] }
 
     // セッション状態（経過は paused を除いて累積）
     @State private var sessionStart: Date?
@@ -38,6 +47,8 @@ struct TimerView: View {
     /// View 再生成で変わらないよう @State（cancel が schedule と同じ ID を指す）。
     @State private var alarmID = UUID()
     @State private var showRoom = false
+    /// Handoff 08c: Live Activity ハンドル（session を跨いで1本のみ）。
+    @State private var activity: Activity<TimerAttributes>? = nil
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isSessionActive: Bool { sessionStart != nil }
@@ -64,8 +75,7 @@ struct TimerView: View {
         let c = self.c
         VStack(spacing: 0) {
             S8TopBar("タイマー", sub: "hourglass · flip 180°") {
-                S8IconButton(icon: "bug", action: { showHUD = true })
-                    .accessibilityLabel("モーション HUD を開く")
+                EmptyView()   // ponytail: bug/motion HUD ボタンは撤去（デバッグ機能）
             }
             ScrollView {
                 VStack(spacing: 24) {
@@ -113,11 +123,6 @@ struct TimerView: View {
             }
         }
         .background(c.paper.ignoresSafeArea())
-        .sheet(isPresented: $showHUD) {
-            NavigationStack {
-                MotionHUDView(service: motion)
-            }
-        }
         .sheet(isPresented: $showRoom) {
             FocusRoomView()
         }
@@ -150,6 +155,12 @@ struct TimerView: View {
                     selectedMinutes = subject.pomodoroMinutes
                 }
             }
+        }
+        // Handoff 00c: ホイール PRESET 変更で selectedMinutes を切替（実行中は無視）。
+        .onChange(of: wheelPreset) { _, new in
+            guard !isSessionActive else { return }
+            let idx = max(0, min(timerPresets.count - 1, new))
+            selectedMinutes = timerPresets[idx]
         }
     }
 
@@ -272,7 +283,7 @@ struct TimerView: View {
 
     private var presets: some View {
         HStack(spacing: 8) {
-            ForEach([25, 5, 15], id: \.self) { minutes in
+            ForEach(timerPresets, id: \.self) { minutes in
                 S8Chip("\(minutes)分", selected: selectedMinutes == minutes, action: { selectedMinutes = minutes })
             }
         }
@@ -424,6 +435,7 @@ struct TimerView: View {
         }
         AlarmService.schedule(id: alarmID, fireDate: .now.addingTimeInterval(remaining),
                               title: "タイマー終了")
+        startActivityIfNeeded()
     }
 
     private func pauseRun() {
@@ -433,6 +445,7 @@ struct TimerView: View {
             runStartedAt = nil
         }
         AlarmService.cancel(id: alarmID)
+        updateActivity(isPaused: true)
     }
 
     private func resumeRun() {
@@ -442,6 +455,7 @@ struct TimerView: View {
         }
         AlarmService.schedule(id: alarmID, fireDate: .now.addingTimeInterval(remaining),
                               title: "タイマー終了")
+        updateActivity(isPaused: false)
     }
 
     /// 完了（時間切れ or 手動終了）: FocusSession を記録。
@@ -456,6 +470,7 @@ struct TimerView: View {
         let subject = subjects.first { $0.id == linkedSubjectID }
         FocusSession.record(start: start, end: end, task: task, subject: subject, context: context)
         AlarmService.cancel(id: alarmID)
+        endActivity()
         resetSession()
         clearSnapshot()
     }
@@ -463,6 +478,7 @@ struct TimerView: View {
     /// キャンセル（長押し or ボタン）: 記録せずに破棄。
     private func cancelSession() {
         AlarmService.cancel(id: alarmID)
+        endActivity()
         resetSession()
         clearSnapshot()
     }
@@ -472,6 +488,64 @@ struct TimerView: View {
         runStartedAt = nil
         accumulated = 0
         motion.reset()
+    }
+
+    // MARK: - Handoff 08c: Live Activity
+
+    /// タイマー開始時に Live Activity を起動（既に走っていれば no-op）。
+    /// Activity.areActivitiesEnabled が false（ユーザーが Live Activity を無効化）なら黙って諦める。
+    private func startActivityIfNeeded() {
+        guard #available(iOS 16.1, *) else { return }
+        guard activity == nil else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let task = linkableTasks.first { $0.id == linkedTaskID }
+        let subject = subjects.first { $0.id == linkedSubjectID }
+        let attrs = TimerAttributes(
+            subjectName: subject?.name,
+            taskTitle: task?.title ?? "集中"
+        )
+        let state = TimerAttributes.ContentState(
+            endDate: .now.addingTimeInterval(remaining),
+            totalMinutes: selectedMinutes,
+            isPaused: false,
+            pausedRemainingSec: 0
+        )
+        do {
+            activity = try Activity.request(
+                attributes: attrs,
+                content: .init(state: state, staleDate: nil)
+            )
+        } catch {
+            // 起動失敗（enable=false 直後・quota 到達等）は UI 継続、Live Activity なしで動く。
+        }
+    }
+
+    /// 進行中の Activity を pause/resume 反映で更新。
+    private func updateActivity(isPaused: Bool) {
+        guard #available(iOS 16.1, *) else { return }
+        guard let activity else { return }
+        let paused = Int(remaining.rounded())
+        let state = TimerAttributes.ContentState(
+            endDate: .now.addingTimeInterval(remaining),
+            totalMinutes: selectedMinutes,
+            isPaused: isPaused,
+            pausedRemainingSec: paused
+        )
+        Task { await activity.update(.init(state: state, staleDate: nil)) }
+    }
+
+    /// Activity を終了（final state はロック画面に薄く残す）。
+    private func endActivity() {
+        guard #available(iOS 16.1, *) else { return }
+        guard let activity else { return }
+        self.activity = nil
+        let state = TimerAttributes.ContentState(
+            endDate: .now,
+            totalMinutes: selectedMinutes,
+            isPaused: true,
+            pausedRemainingSec: 0
+        )
+        Task { await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate) }
     }
 
     private func timeText(_ interval: TimeInterval) -> String {

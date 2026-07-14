@@ -290,6 +290,16 @@ extension TaskItem {
             let daysInMonth = calendar.range(of: .day, in: .month, for: day)?.count ?? 31
             return calendar.component(.day, from: day) == min(startDay, daysInMonth)
         }
+        if rrule == "FREQ=YEARLY" {
+            // 毎年同月同日。2/29→非閏年は 2/28 にクランプ。
+            let sm = calendar.component(.month, from: startDate)
+            let sd = calendar.component(.day, from: startDate)
+            let m = calendar.component(.month, from: day)
+            let d = calendar.component(.day, from: day)
+            if m != sm { return false }
+            let daysInMonth = calendar.range(of: .day, in: .month, for: day)?.count ?? 31
+            return d == min(sd, daysInMonth)
+        }
         return false
     }
 

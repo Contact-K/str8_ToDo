@@ -61,6 +61,10 @@
 		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
 		FF0000000000000000000208 /* str8Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000207 /* str8Widget.swift */; };
 		FF0000000000000000000210 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
+		FF0000000000000000000502 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
+		FF0000000000000000000503 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
+		FF0000000000000000000602 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000601 /* SettingsRootView.swift */; };
+		FF0000000000000000000702 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000701 /* PermissionManager.swift */; };
 		FF0000000000000000000211 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
 		FF0000000000000000000239 /* WeekReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023A /* WeekReviewView.swift */; };
 		FF000000000000000000023B /* RoomMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023C /* RoomMessage.swift */; };
@@ -157,6 +161,9 @@
 		FF0000000000000000000166 /* FocusRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRoom.swift; sourceTree = "<group>"; };
 		FF0000000000000000000201 /* str8Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000000000000000000203 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
+		FF0000000000000000000501 /* TimerActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivity.swift; sourceTree = "<group>"; };
+		FF0000000000000000000601 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000701 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		FF0000000000000000000205 /* WidgetSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotService.swift; sourceTree = "<group>"; };
 		FF0000000000000000000207 /* str8Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = str8Widget.swift; sourceTree = "<group>"; };
 		FF0000000000000000000209 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -279,6 +286,9 @@
 				FF0000000000000000000125 /* YearView.swift */,
 				FF0000000000000000000127 /* str_8__ToDoApp.swift */,
 				FF0000000000000000000203 /* WidgetShared.swift */,
+				FF0000000000000000000501 /* TimerActivity.swift */,
+				FF0000000000000000000601 /* SettingsRootView.swift */,
+				FF0000000000000000000701 /* PermissionManager.swift */,
 				FF0000000000000000000205 /* WidgetSnapshotService.swift */,
 				FF0000000000000000000304 /* S8Tokens.swift */,
 				FF0000000000000000000306 /* S8Components.swift */,
@@ -459,6 +469,9 @@
 				FF0000000000000000000126 /* YearView.swift in Sources */,
 				FF0000000000000000000128 /* str_8__ToDoApp.swift in Sources */,
 				FF0000000000000000000204 /* WidgetShared.swift in Sources */,
+				FF0000000000000000000502 /* TimerActivity.swift in Sources */,
+				FF0000000000000000000602 /* SettingsRootView.swift in Sources */,
+				FF0000000000000000000702 /* PermissionManager.swift in Sources */,
 				FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */,
 				FF0000000000000000000305 /* S8Tokens.swift in Sources */,
 				FF0000000000000000000307 /* S8Components.swift in Sources */,
@@ -471,6 +484,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FF0000000000000000000210 /* WidgetShared.swift in Sources */,
+				FF0000000000000000000503 /* TimerActivity.swift in Sources */,
 				FF0000000000000000000211 /* Color+Hex.swift in Sources */,
 				FF0000000000000000000208 /* str8Widget.swift in Sources */,
 			);

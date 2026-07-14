@@ -11,6 +11,9 @@ struct CalendarSettingsView: View {
     @AppStorage(AppSettingsKey.syncSystemCalendar) var syncSystemCalendar = AppSettingsKey.syncSystemCalendarDefault
     @AppStorage(AppSettingsKey.enableNotifications) var enableNotifications = AppSettingsKey.enableNotificationsDefault
     @AppStorage(AppSettingsKey.lastBackupExportDate) var lastBackupExportDate = 0.0
+    @AppStorage(AppSettingsKey.timerPreset1) var timerPreset1 = AppSettingsKey.timerPreset1Default
+    @AppStorage(AppSettingsKey.timerPreset2) var timerPreset2 = AppSettingsKey.timerPreset2Default
+    @AppStorage(AppSettingsKey.timerPreset3) var timerPreset3 = AppSettingsKey.timerPreset3Default
 
     @State private var eventKit = EventKitService()
 
@@ -102,6 +105,16 @@ struct CalendarSettingsView: View {
             // MARK: - 辞書セクション
             Section(header: Text("入力の設定")) {
                 NavigationLink("辞書管理", destination: DictionarySettingsView())
+            }
+
+            // MARK: - タイマープリセット
+            Section(header: Text("タイマープリセット")) {
+                Stepper("プリセット1: \(timerPreset1)分", value: $timerPreset1, in: 1...180, step: 1)
+                    .accessibilityLabel("タイマープリセット1")
+                Stepper("プリセット2: \(timerPreset2)分", value: $timerPreset2, in: 1...180, step: 1)
+                    .accessibilityLabel("タイマープリセット2")
+                Stepper("プリセット3: \(timerPreset3)分", value: $timerPreset3, in: 1...180, step: 1)
+                    .accessibilityLabel("タイマープリセット3")
             }
 
             // MARK: - マイ時間割セクション
@@ -260,50 +273,63 @@ struct CalendarSettingsView: View {
                 }
             }
 
-            // MARK: - バックアップセクション
-            Section(header: Text("バックアップ")) {
-                // エクスポートボタン
-                Button(action: {
-                    passphraseInput = ""
-                    passphraseConfirm = ""
-                    showExportPassphrasePrompt = true
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.up.doc")
-                            .accessibilityLabel("エクスポート")
-                        Text("エクスポート (.str8)")
+            // MARK: - バックアップセクション（Handoff 07b: str8 計器スタンプカード）
+            Section(header: Text("バックアップ（.str8）")) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // 計器スタンプ: 「STR8 · AES-GCM · V3 · LOCAL ONLY」
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(s8: 0xDC8B28)).frame(width: 5, height: 5)
+                        Text("STR8 · AES-GCM · ")
+                            .font(S8Font.mono(9.5)).tracking(1.4)
+                            .foregroundColor(Color(s8: 0x8A877C))
+                            + Text("V3")
+                            .font(S8Font.mono(9.5, .bold)).tracking(1.4)
+                            .foregroundColor(Color(s8: 0x46443E))
+                            + Text(" · LOCAL ONLY")
+                            .font(S8Font.mono(9.5)).tracking(1.4)
+                            .foregroundColor(Color(s8: 0x8A877C))
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-
-                // インポートボタン
-                Button(action: {
-                    showImporter = true
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.down.doc")
-                            .accessibilityLabel("インポート")
-                        Text("インポート")
+                    // 最終エクスポート日時
+                    HStack(spacing: 4) {
+                        Text("最終エクスポート").font(S8Font.jp(12)).foregroundColor(Color(s8: 0x46443E))
+                        if lastBackupExportDate > 0 {
+                            Text(Date(timeIntervalSinceReferenceDate: lastBackupExportDate),
+                                 format: .dateTime.month().day().hour().minute())
+                                .font(S8Font.mono(12, .bold))
+                                .foregroundColor(Color(s8: 0x1F1E1A))
+                        } else {
+                            Text("未実施").font(S8Font.mono(12)).foregroundColor(Color(s8: 0x8A877C))
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-
-                // 最終エクスポート日時表示
-                HStack {
-                    Text("最終エクスポート")
-                    Spacer()
-                    if lastBackupExportDate > 0 {
-                        Text(Date(timeIntervalSinceReferenceDate: lastBackupExportDate), style: .date)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("未実施")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // エクスポート / インポート
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            passphraseInput = ""
+                            passphraseConfirm = ""
+                            showExportPassphrasePrompt = true
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("エクスポート")
+                            }
+                            .font(S8Font.jp(13.5, .medium))
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        Button(action: { showImporter = true }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc")
+                                Text("インポート")
+                            }
+                            .font(S8Font.jp(13.5, .medium))
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                     }
+                    Text("月1回、古くなると控えめにリマインドします。")
+                        .font(S8Font.jp(10.5)).foregroundColor(Color(s8: 0x8A877C))
                 }
+                .padding(.vertical, 4)
 
                 // 30日超過時の警告
                 if shouldShowBackupWarning() {
@@ -313,20 +339,7 @@ struct CalendarSettingsView: View {
                 }
             }
 
-            // MARK: - デバッグセクション
-            Section(header: Text("デバッグ")) {
-                Button(action: {
-                    DayStat.rebuildDayStats(context: modelContext)
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.clockwise.circle")
-                            .accessibilityLabel("再構築")
-                        Text("DayStat を再構築")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-            }
+            // ponytail: デバッグセクションは撤去（本番向け）
         }
         .navigationTitle("カレンダー設定")
         .fileExporter(
