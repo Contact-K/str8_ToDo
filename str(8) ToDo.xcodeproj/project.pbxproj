@@ -638,23 +638,26 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "ーToDo";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "近くのデバイスと通信するためにBluetoothを使用します。";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "近くのデバイスと通信するためにBluetoothを使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くの端末との承認・集中ルーム同期のためにローカルネットワークを使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "０.1.0";
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = str8ToDo;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -678,23 +681,26 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "ーToDo";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "タイマーの終了をロック中・サイレント中でも確実に知らせるために使用します。";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "近くのデバイスと通信するためにBluetoothを使用します。";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "近くのデバイスと通信するためにBluetoothを使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "予定をカレンダーに重ねて表示するために、カレンダーへの読み取りアクセスを使用します。書き込みや同期は行いません。";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ペア承認のため、近くの相手の端末とローカルネットワークで直接通信します。";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くの端末との承認・集中ルーム同期のためにローカルネットワークを使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "日の出と出発時刻の計算のために現在地を使用します。位置情報は端末内でのみ利用します。";
 				INFOPLIST_KEY_NSMotionUsageDescription = "砂時計タイマーの姿勢検出（伏せて開始・起こして一時停止）に使用します。";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "承認時に相手の端末との距離を測り、近接しているときだけ確定できるようにします。";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "０.1.0";
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = str8ToDo;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
