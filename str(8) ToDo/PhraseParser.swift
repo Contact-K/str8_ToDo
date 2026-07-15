@@ -48,17 +48,39 @@ struct PhraseParser {
     private static func parse(_ text: String, aliases: [PhraseAlias], depth: Int) -> ParseResult {
         var result = ParseResult()
 
-        // ① 日時・相対日付の抽出（P18 H5: 複数マッチ対応。最初の1件だけ startDate として確定し、
-        // 除去する。2件目以降は remaining に残したまま「追加の時刻」chip として見える化するだけ）
+        // ① 日時・相対日付の抽出
+        //   - 1件目を startDate、range を remaining から除去。
+        //   - (a) 1件目が NSDataDetector から duration を貰っていればそれを採用（英語 "3-4pm" 等）。
+        //   - (b) 2件目が同日・後方・24h 以内なら「終了時刻」とみなし duration を算出し、
+        //         チップを「開始 – 終了」1本に統合（レンジ表記）。
+        //   - どれにも該当しない 2件目以降は従来通り「追加の時刻」チップに落とす。
         var remaining = text
         let dateHits = dateMatches(in: remaining)
         if let first = dateHits.first {
             result.startDate = first.date
             result.recognizedChips.append((.when, chipLabelFormatter.string(from: first.date)))
             remaining.removeSubrange(first.range)
-        }
-        for extra in dateHits.dropFirst() {
-            result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
+
+            if first.duration > 0 {
+                result.duration = first.duration
+                for extra in dateHits.dropFirst() {
+                    result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
+                }
+            } else if let second = dateHits.dropFirst().first,
+                      let gap = validRangeEnd(start: first.date, end: second.date) {
+                result.duration = gap
+                // 2件目を吸収したので、開始チップを「開始 – 終了」表記に置換。
+                result.recognizedChips.removeLast()
+                result.recognizedChips.append((.when,
+                    "\(chipLabelFormatter.string(from: first.date)) – \(extraTimeFormatter.string(from: second.date))"))
+                for extra in dateHits.dropFirst(2) {
+                    result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
+                }
+            } else {
+                for extra in dateHits.dropFirst() {
+                    result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
+                }
+            }
         }
 
         // ② PhraseAlias 照合（部分文字列検索。理由は上のヘッダコメント参照）
@@ -107,9 +129,9 @@ struct PhraseParser {
         }
 
         // ③ 残りを分かち書きして titleRemainder / unrecognizedWords を確定
-        let leftover = tokenize(remaining)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        //    NLTagger の lexicalClass で POS 判定し、内容語（名詞/動詞/形容詞/数詞/固有名詞）だけ残す。
+        //    助詞・副詞・接続詞・代名詞・感嘆詞・限定詞・その他は辞書登録候補として無意味なため除外。
+        let leftover = meaningfulWords(remaining)
         result.unrecognizedWords = leftover
         result.titleRemainder = leftover.joined(separator: " ")
         return result
@@ -117,15 +139,26 @@ struct PhraseParser {
 
     // MARK: - ① 日時抽出
 
-    /// P18 H5: 1件目だけでなく全マッチを返す（呼び出し側で先頭を startDate、残りを chip 化する）。
-    private static func dateMatches(in text: String) -> [(date: Date, range: Range<String.Index>)] {
+    /// P18 H5: 1件目だけでなく全マッチを返す。`duration` は NSDataDetector が範囲表現から
+    /// 抽出した秒数（例 "3-4pm" → 3600）。単独時刻や日本語ではふつう 0。
+    private static func dateMatches(in text: String) -> [(date: Date, duration: TimeInterval, range: Range<String.Index>)] {
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return [] }
         let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
         let matches = detector.matches(in: text, options: [], range: nsRange)
         return matches.compactMap { match in
             guard let date = match.date, let range = Range(match.range, in: text) else { return nil }
-            return (date, range)
+            return (date, match.duration, range)
         }
+    }
+
+    /// 2件目が終了時刻として妥当なら差分（秒）を返す。妥当条件: 開始より後、同日、24h 以内。
+    private static func validRangeEnd(start: Date, end: Date) -> TimeInterval? {
+        let cal = Calendar.current
+        guard end > start,
+              cal.isDate(start, inSameDayAs: end),
+              end.timeIntervalSince(start) <= 24 * 3600
+        else { return nil }
+        return end.timeIntervalSince(start)
     }
 
     private static let chipLabelFormatter: DateFormatter = {
@@ -151,17 +184,42 @@ struct PhraseParser {
         return !(scalar.properties.isAlphabetic || character.isNumber)
     }
 
-    // MARK: - ③ 分かち書き
+    // MARK: - ③ 分かち書き（POS フィルタつき）
 
-    private static func tokenize(_ text: String) -> [String] {
-        let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = text
-        var tokens: [String] = []
-        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
-            tokens.append(String(text[range]))
+    /// 内容語（名詞/動詞/形容詞/数詞/固有名詞）だけを抽出。助詞・副詞・接続詞・代名詞・
+    /// 感嘆詞・限定詞・その他語を除外。1 文字トークンも助詞取りこぼし対策で捨てる。
+    /// 日本語混在時は言語を .japanese に固定（自動判定が英語に振れると POS スキームが変わるため）。
+    private static func meaningfulWords(_ text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let tagger = NLTagger(tagSchemes: [.lexicalClass])
+        tagger.string = trimmed
+        if trimmed.unicodeScalars.contains(where: isJapaneseScalar) {
+            tagger.setLanguage(.japanese, range: trimmed.startIndex..<trimmed.endIndex)
+        }
+        // 残す品詞。personalName/placeName/organizationName は .lexicalClass では出ないが
+        // 将来 .nameType スキームと併用する時のために保険で入れておく（含んでも無害）。
+        let keep: Set<NLTag> = [.noun, .verb, .adjective, .number, .otherWord,
+                                 .personalName, .placeName, .organizationName]
+        var out: [String] = []
+        let opts: NLTagger.Options = [.omitWhitespace, .omitPunctuation, .joinNames]
+        tagger.enumerateTags(in: trimmed.startIndex..<trimmed.endIndex,
+                              unit: .word, scheme: .lexicalClass, options: opts) { tag, range in
+            let word = String(trimmed[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard word.count >= 2 else { return true }
+            if let tag, keep.contains(tag) {
+                out.append(word)
+            }
             return true
         }
-        return tokens
+        return out
+    }
+
+    /// 平仮名 / 片仮名 / CJK 統合漢字 のいずれか。
+    private static func isJapaneseScalar(_ s: Unicode.Scalar) -> Bool {
+        (0x3040...0x309F).contains(s.value)
+            || (0x30A0...0x30FF).contains(s.value)
+            || (0x4E00...0x9FFF).contains(s.value)
     }
 
     // MARK: - how（所要時間）の簡易パース

@@ -33,15 +33,19 @@ struct HourglassStateMachine {
     /// 実機チューニングで触るのはここだけ。
     enum Tuning {
         /// |gravity.y| がこれを超えたら faceUp/faceDown に入る（端末垂直判定: 上端上 ≈ -1 / 上端下 ≈ +1）。
-        static let enter = 0.75
+        /// 完全垂直でなくても拾えるよう 0.75 → 0.65 に緩和。
+        static let enter = 0.65
         /// これを下回ったら faceUp/faceDown から抜ける（ヒステリシス）。
-        static let exit = 0.6
-        /// 姿勢がこの秒数継続して初めて遷移する。
-        static let debounce: TimeInterval = 0.3
+        static let exit = 0.5
+        /// 姿勢がこの秒数継続して初めて遷移する。反応を早めるため 0.3 → 0.2 に短縮。
+        static let debounce: TimeInterval = 0.2
         /// |rotationRate| がこれを超えたら意図的フリップとみなす（rad/s）。
-        static let gyroPeakThreshold = 4.0
+        /// 4.0 → 2.0 → 1.2 と段階的に緩和。手首の返しが軽くても拾える水準。
+        /// 机置き誤発火は enter 閾値で二重ガード。
+        static let gyroPeakThreshold = 1.2
         /// フリップピークの有効時間（デバウンス経由でも running 判定が拾えるだけの幅）。
-        static let gyroPeakWindow: TimeInterval = 0.8
+        /// debounce 短縮に合わせても余裕を持たせるため 0.8 → 1.5 秒に拡張。
+        static let gyroPeakWindow: TimeInterval = 1.5
     }
 
     private(set) var phase: Phase = .setting
@@ -145,7 +149,13 @@ final class HourglassMotionService {
                 guard let self else { return }
                 self.gravityY = motion.gravity.y
                 self.rotationRateX = motion.rotationRate.x
-                let peak = abs(motion.rotationRate.x) > HourglassStateMachine.Tuning.gyroPeakThreshold
+                // ponytail: 旧実装は rotationRate.x だけを見ていたため、フリップ軸が縦方向 (y) や
+                // 斜めに寄ると gyroPeak が拾えず armed→running に遷移しなかった。3 軸合成で拾う。
+                let rx = motion.rotationRate.x
+                let ry = motion.rotationRate.y
+                let rz = motion.rotationRate.z
+                let magnitude = (rx * rx + ry * ry + rz * rz).squareRoot()
+                let peak = magnitude > HourglassStateMachine.Tuning.gyroPeakThreshold
                 self.machine.ingest(gravityZ: motion.gravity.y, gyroPeak: peak, at: motion.timestamp)
             }
         }
