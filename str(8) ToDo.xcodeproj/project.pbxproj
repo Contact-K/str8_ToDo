@@ -9,10 +9,6 @@
 /* Begin PBXBuildFile section */
 		FF0000000000000000000104 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* AppSettings.swift */; };
 		FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000105 /* CalendarSettingsView.swift */; };
-		FF0000000000000000000169 /* S8Samon.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000168 /* S8Samon.swift */; };
-		FF000000000000000000016B /* ShopModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016A /* ShopModels.swift */; };
-		FF000000000000000000016D /* ShopManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016C /* ShopManager.swift */; };
-		FF000000000000000000016F /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016E /* ShopView.swift */; };
 		FF0000000000000000000108 /* CategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* CategoryPickerView.swift */; };
 		FF000000000000000000010A /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
 		FF000000000000000000010C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* ContentView.swift */; };
@@ -60,15 +56,15 @@
 		FF0000000000000000000163 /* WeekReportSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000162 /* WeekReportSource.swift */; };
 		FF0000000000000000000164 /* WeekMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000165 /* WeekMath.swift */; };
 		FF0000000000000000000167 /* FocusRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000166 /* FocusRoom.swift */; };
+		FF0000000000000000000169 /* S8Samon.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000168 /* S8Samon.swift */; };
+		FF000000000000000000016B /* ShopModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016A /* ShopModels.swift */; };
+		FF000000000000000000016D /* ShopManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016C /* ShopManager.swift */; };
+		FF000000000000000000016F /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016E /* ShopView.swift */; };
 		FF0000000000000000000202 /* str8Widget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000201 /* str8Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FF0000000000000000000204 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
 		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
 		FF0000000000000000000208 /* str8Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000207 /* str8Widget.swift */; };
 		FF0000000000000000000210 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
-		FF0000000000000000000502 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
-		FF0000000000000000000503 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
-		FF0000000000000000000602 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000601 /* SettingsRootView.swift */; };
-		FF0000000000000000000702 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000701 /* PermissionManager.swift */; };
 		FF0000000000000000000211 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
 		FF0000000000000000000239 /* WeekReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023A /* WeekReviewView.swift */; };
 		FF000000000000000000023B /* RoomMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000023C /* RoomMessage.swift */; };
@@ -85,6 +81,10 @@
 		FF0000000000000000000305 /* S8Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000304 /* S8Tokens.swift */; };
 		FF0000000000000000000307 /* S8Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000306 /* S8Components.swift */; };
 		FF0000000000000000000309 /* S8Wheel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000308 /* S8Wheel.swift */; };
+		FF0000000000000000000502 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
+		FF0000000000000000000503 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
+		FF0000000000000000000602 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000601 /* SettingsRootView.swift */; };
+		FF0000000000000000000702 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000701 /* PermissionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -116,10 +116,6 @@
 		A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "str(8) ToDo.entitlements"; sourceTree = "<group>"; };
 		FF0000000000000000000103 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		FF0000000000000000000105 /* CalendarSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsView.swift; sourceTree = "<group>"; };
-		FF0000000000000000000168 /* S8Samon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Samon.swift; sourceTree = "<group>"; };
-		FF000000000000000000016A /* ShopModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopModels.swift; sourceTree = "<group>"; };
-		FF000000000000000000016C /* ShopManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopManager.swift; sourceTree = "<group>"; };
-		FF000000000000000000016E /* ShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000107 /* CategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPickerView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000109 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		FF000000000000000000010B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -167,11 +163,12 @@
 		FF0000000000000000000162 /* WeekReportSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekReportSource.swift; sourceTree = "<group>"; };
 		FF0000000000000000000165 /* WeekMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekMath.swift; sourceTree = "<group>"; };
 		FF0000000000000000000166 /* FocusRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRoom.swift; sourceTree = "<group>"; };
+		FF0000000000000000000168 /* S8Samon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Samon.swift; sourceTree = "<group>"; };
+		FF000000000000000000016A /* ShopModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopModels.swift; sourceTree = "<group>"; };
+		FF000000000000000000016C /* ShopManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopManager.swift; sourceTree = "<group>"; };
+		FF000000000000000000016E /* ShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000201 /* str8Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000000000000000000203 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
-		FF0000000000000000000501 /* TimerActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivity.swift; sourceTree = "<group>"; };
-		FF0000000000000000000601 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
-		FF0000000000000000000701 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		FF0000000000000000000205 /* WidgetSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotService.swift; sourceTree = "<group>"; };
 		FF0000000000000000000207 /* str8Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = str8Widget.swift; sourceTree = "<group>"; };
 		FF0000000000000000000209 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -191,6 +188,9 @@
 		FF0000000000000000000304 /* S8Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Tokens.swift; sourceTree = "<group>"; };
 		FF0000000000000000000306 /* S8Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Components.swift; sourceTree = "<group>"; };
 		FF0000000000000000000308 /* S8Wheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Wheel.swift; sourceTree = "<group>"; };
+		FF0000000000000000000501 /* TimerActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivity.swift; sourceTree = "<group>"; };
+		FF0000000000000000000601 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000701 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -652,7 +652,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "０.1.0";
 				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -692,7 +692,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "０.1.0";
 				PRODUCT_BUNDLE_IDENTIFIER = str8.todo.str8;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
