@@ -11,6 +11,27 @@ struct ShopView: View {
     /// @Observable の再描画を確実に受けるためインスタンスを保持。
     @State private var shop = ShopManager.shared
 
+    // MARK: - DEBUG Konami コード（↑↑↓↓←→←→タップタップ で +100pt）
+    #if DEBUG
+    private enum KonamiInput { case up, down, left, right, tap }
+    private static let konamiSequence: [KonamiInput] = [.up, .up, .down, .down, .left, .right, .left, .right, .tap, .tap]
+    @State private var konamiProgress: Int = 0
+    private func konamiIngest(_ input: KonamiInput) {
+        let expected = Self.konamiSequence[konamiProgress]
+        if input == expected {
+            konamiProgress += 1
+            if konamiProgress >= Self.konamiSequence.count {
+                konamiProgress = 0
+                shop.debugGrant(100)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        } else {
+            // 途中失敗: 最初の入力に一致するなら 1 から再スタート、そうでなければリセット
+            konamiProgress = (input == Self.konamiSequence[0]) ? 1 : 0
+        }
+    }
+    #endif
+
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
@@ -78,6 +99,26 @@ struct ShopView: View {
         .background(c.surface)
         .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+        .contentShape(Rectangle())
+        #if DEBUG
+        // デバッグ用 Konami: ↑↑↓↓←→←→タップタップ で +100pt（Release では無効）。
+        // ScrollView 内のドラッグ競合を避けるため highPriorityGesture で優先。
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { g in
+                    let w = g.translation.width
+                    let h = g.translation.height
+                    let mag = max(abs(w), abs(h))
+                    if mag < 15 {
+                        konamiIngest(.tap)
+                    } else if abs(h) > abs(w) {
+                        konamiIngest(h > 0 ? .down : .up)
+                    } else {
+                        konamiIngest(w > 0 ? .right : .left)
+                    }
+                }
+        )
+        #endif
     }
 
     // MARK: - デイリーボーナス
