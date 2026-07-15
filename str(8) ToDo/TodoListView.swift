@@ -93,7 +93,7 @@ struct TodoListView: View {
                 }
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバル S8SamonPaper に任せる
         .sheet(item: $selectedTask) { task in
             TaskDetailView(task: task)
         }

@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		FF0000000000000000000104 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* AppSettings.swift */; };
 		FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000105 /* CalendarSettingsView.swift */; };
+		FF0000000000000000000169 /* S8Samon.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000168 /* S8Samon.swift */; };
+		FF000000000000000000016B /* ShopModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016A /* ShopModels.swift */; };
+		FF000000000000000000016D /* ShopManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016C /* ShopManager.swift */; };
+		FF000000000000000000016F /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000016E /* ShopView.swift */; };
 		FF0000000000000000000108 /* CategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* CategoryPickerView.swift */; };
 		FF000000000000000000010A /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
 		FF000000000000000000010C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* ContentView.swift */; };
@@ -112,6 +116,10 @@
 		A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "str(8) ToDo.entitlements"; sourceTree = "<group>"; };
 		FF0000000000000000000103 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		FF0000000000000000000105 /* CalendarSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000168 /* S8Samon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Samon.swift; sourceTree = "<group>"; };
+		FF000000000000000000016A /* ShopModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopModels.swift; sourceTree = "<group>"; };
+		FF000000000000000000016C /* ShopManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopManager.swift; sourceTree = "<group>"; };
+		FF000000000000000000016E /* ShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000107 /* CategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPickerView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000109 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		FF000000000000000000010B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -293,6 +301,10 @@
 				FF0000000000000000000304 /* S8Tokens.swift */,
 				FF0000000000000000000306 /* S8Components.swift */,
 				FF0000000000000000000308 /* S8Wheel.swift */,
+				FF0000000000000000000168 /* S8Samon.swift */,
+				FF000000000000000000016A /* ShopModels.swift */,
+				FF000000000000000000016C /* ShopManager.swift */,
+				FF000000000000000000016E /* ShopView.swift */,
 				FF0000000000000000000129 /* Assets.xcassets */,
 			);
 			path = "str(8) ToDo";
@@ -476,6 +488,10 @@
 				FF0000000000000000000305 /* S8Tokens.swift in Sources */,
 				FF0000000000000000000307 /* S8Components.swift in Sources */,
 				FF0000000000000000000309 /* S8Wheel.swift in Sources */,
+				FF0000000000000000000169 /* S8Samon.swift in Sources */,
+				FF000000000000000000016B /* ShopModels.swift in Sources */,
+				FF000000000000000000016D /* ShopManager.swift in Sources */,
+				FF000000000000000000016F /* ShopView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

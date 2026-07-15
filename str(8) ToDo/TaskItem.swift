@@ -250,6 +250,8 @@ extension TaskItem {
         let now = Date.now
         approvedAt = now
         self.approverID = approverID
+        // 承認1件につき +1pt（ショップ通貨）。全承認経路が通る唯一のチョークポイント。
+        Task { @MainActor in ShopManager.shared.earn(.taskApproved) }
         return true
     }
 

@@ -195,6 +195,8 @@ struct WeekReviewView: View {
             fetchError = true
             return
         }
+        // 週次締めボーナス +5pt。fetch 成功時のみ発火（無効な締めではポイントを与えない）
+        ShopManager.shared.earn(.weekReviewClosed)
         dismiss()
         onClose?()
     }

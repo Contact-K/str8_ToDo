@@ -114,7 +114,7 @@ struct ApprovalQueueView: View {
                 }
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバル S8SamonPaper に任せる
         .sheet(isPresented: $showPeerPairing) {
             NavigationStack {
                 PeerPairingView(session: peerSession, gate: proximityGate)

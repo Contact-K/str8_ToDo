@@ -29,14 +29,21 @@ struct TimerView: View {
     // dragBaseMinutes 廃止 2026-07-14: 円盤縦ドラッグは Crown ホイール（ホイール中心長押し）へ移行。
     /// Handoff 00c: ホイール PRESET ダイヤル（0=preset1 / 1=preset2 / 2=preset3）と連動。
     @AppStorage("wheel.timer.preset") private var wheelPreset = 0
-    /// ユーザーカスタマイズ可能なプリセット（設定で編集）。
+    /// ユーザーカスタマイズ可能なプリセット（設定で編集）。ショップで枠を購入すると 4/5/6 が有効化。
     @AppStorage(AppSettingsKey.timerPreset1) private var preset1 = AppSettingsKey.timerPreset1Default
     @AppStorage(AppSettingsKey.timerPreset2) private var preset2 = AppSettingsKey.timerPreset2Default
     @AppStorage(AppSettingsKey.timerPreset3) private var preset3 = AppSettingsKey.timerPreset3Default
+    @AppStorage(AppSettingsKey.timerPreset4) private var preset4 = AppSettingsKey.timerPreset4Default
+    @AppStorage(AppSettingsKey.timerPreset5) private var preset5 = AppSettingsKey.timerPreset5Default
+    @AppStorage(AppSettingsKey.timerPreset6) private var preset6 = AppSettingsKey.timerPreset6Default
     /// 手動時間（0=未設定）。設定されているとプリセットより優先。
     @AppStorage("timer.manualMinutes") private var manualMinutes = 0
 
-    private var timerPresets: [Int] { [preset1, preset2, preset3] }
+    /// アクティブなプリセット配列（ショップの presetCap で切り詰め）。
+    private var timerPresets: [Int] {
+        let all = [preset1, preset2, preset3, preset4, preset5, preset6]
+        return Array(all.prefix(ShopManager.shared.presetCap))
+    }
 
     /// 手動値がある時は手動、無ければ選択プリセット。
     private var effectivePresetMinutes: Int {
@@ -128,7 +135,7 @@ struct TimerView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバル S8SamonPaper に任せる
         .sheet(isPresented: $showRoom) {
             FocusRoomView()
         }
@@ -323,20 +330,32 @@ struct TimerView: View {
         .presentationDetents([.medium])
     }
 
-    /// プリセット編集行（設定タブから移設 2026-07-14）。3 枠の分数を S8Stepper で編集。
+    /// プリセット編集行（設定タブから移設 2026-07-14）。ショップの presetCap 分だけ表示。
     /// 現在選択中の枠は accent 表示、選択されていない枠はタップで切替。
     /// 長押しで Crown ホイールを起動（S8ClickWheel 中心コアと同じアクションを直接呼ぶ）。
     private var presetEditRows: some View {
         let c = self.c
+        let cap = ShopManager.shared.presetCap
         return VStack(spacing: 0) {
             S8SectionLabel(text: "タイマープリセット")
-            presetEditRow(index: 0, minutes: $preset1)
-            S8Rule()
-            presetEditRow(index: 1, minutes: $preset2)
-            S8Rule()
-            presetEditRow(index: 2, minutes: $preset3)
+            ForEach(0..<cap, id: \.self) { i in
+                if i > 0 { S8Rule() }
+                presetEditRow(index: i, minutes: bindingForPreset(i))
+            }
         }
         .background(c.paper)
+    }
+
+    /// index に対応する @AppStorage への Binding を返す。ShopManager.presetCap を超える index は呼ばれない前提。
+    private func bindingForPreset(_ i: Int) -> Binding<Int> {
+        switch i {
+        case 0: return $preset1
+        case 1: return $preset2
+        case 2: return $preset3
+        case 3: return $preset4
+        case 4: return $preset5
+        default: return $preset6
+        }
     }
 
     private func presetEditRow(index: Int, minutes: Binding<Int>) -> some View {

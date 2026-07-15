@@ -27,7 +27,9 @@ struct CategoryPickerView: View {
     @State private var newCategoryColor: String = "4F8DFD"
     @State private var newCategorySymbol: String = "tag.fill"
 
-    private let colorPresets: [String] = ["4F8DFD", "34C759", "FF9500", "FF2D55", "AF52DE", "8E8E93"]
+    // ShopManager.availableIcons / availableColors を購読するため、参照時に都度取得。
+    private var colorPresets: [String] { ShopManager.shared.availableColors }
+    private var iconPresets: [String] { ShopManager.shared.availableIcons }
     private let iconColumns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
 
     var body: some View {
@@ -67,7 +69,7 @@ struct CategoryPickerView: View {
                     Text("アイコン")
                         .font(S8Font.mono(10)).tracking(1.4).foregroundColor(c.fg3)
                     LazyVGrid(columns: iconColumns, spacing: 10) {
-                        ForEach(S8IconPreset.symbols, id: \.self) { sym in
+                        ForEach(iconPresets, id: \.self) { sym in
                             let isSelected = newCategorySymbol == sym
                             Button(action: { newCategorySymbol = sym }) {
                                 Image(systemName: sym)
@@ -108,8 +110,15 @@ struct CategoryPickerView: View {
                         Spacer()
                     }
 
-                    S8Button("追加", icon: "plus", variant: .primary, enabled: !newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty, action: createNewCategory)
+                    let capReached = existingCategories.count >= ShopManager.shared.categoryCap
+                    S8Button("追加", icon: "plus", variant: .primary,
+                             enabled: !newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty && !capReached,
+                             action: createNewCategory)
                         .padding(.top, 4)
+                    if capReached {
+                        Text("上限（\(ShopManager.shared.categoryCap)）に達しています。ショップで枠を追加できます")
+                            .font(S8Font.jp(11)).foregroundColor(c.fg3)
+                    }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 12)
 
@@ -124,6 +133,7 @@ struct CategoryPickerView: View {
     }
 
     private func createNewCategory() {
+        guard existingCategories.count < ShopManager.shared.categoryCap else { return }
         let newCat = Category(
             name: newCategoryName.trimmingCharacters(in: .whitespaces),
             colorHex: newCategoryColor,

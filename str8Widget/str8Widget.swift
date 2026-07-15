@@ -54,6 +54,17 @@ struct StrTimelineProvider: TimelineProvider {
             for boundary in snapshot.timelineBoundaries(after: now) {
                 entries.append(StrEntry(date: boundary, snapshot: snapshot))
             }
+            // 「今日の枠」の状態遷移（朝→昼→夜）が現在時刻で反映されるよう、band 境界にも entry を打つ。
+            let cal = Calendar.current
+            let today = cal.startOfDay(for: now)
+            let bandBoundaries: [Date] = snapshot.bands.flatMap { band -> [Date] in
+                let s = cal.date(byAdding: .minute, value: band.startMinutes, to: today) ?? today
+                let e = cal.date(byAdding: .minute, value: band.endMinutes, to: today) ?? today
+                return [s, e]
+            }.filter { $0 > now }
+            for boundary in Array(Set(bandBoundaries)).sorted() {
+                entries.append(StrEntry(date: boundary, snapshot: snapshot))
+            }
         }
 
         // Reload at next day 00:00
@@ -208,13 +219,14 @@ struct StrWidgetView: View {
 
             Rectangle().fill(W.line).frame(width: 1)
 
-            // 右: 今日の枠
+            // 右: 今日の枠（entry.date の分位で past/current/future を判定。旧: i の位置固定で常時「1つ目達成／2つ目次」だったバグを修正）
             VStack(alignment: .leading, spacing: 5) {
                 Text("今日の枠").font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
-                ForEach(Array((entry.snapshot?.bands ?? []).prefix(3).enumerated()), id: \.offset) { i, band in
+                ForEach(Array((entry.snapshot?.bands ?? []).prefix(3).enumerated()), id: \.offset) { _, band in
                     HStack(spacing: 6) {
-                        // 単純に「1つ目は達成/2つ目は次/3つ目は未来」風の見た目
-                        if i == 0 {
+                        let phase = bandPhase(for: band, at: entry.date)
+                        switch phase {
+                        case .past:
                             ZStack {
                                 Circle().fill(W.ok)
                                 Image(systemName: "checkmark")
@@ -223,10 +235,10 @@ struct StrWidgetView: View {
                             }
                             .frame(width: 16, height: 16)
                             Text(band.name).font(WF.jp(10.5)).foregroundColor(W.fg3).strikethrough()
-                        } else if i == 1 {
+                        case .current:
                             Circle().strokeBorder(W.accent, lineWidth: 1.5).frame(width: 16, height: 16)
                             Text(band.name).font(WF.jp(10.5, .bold)).foregroundColor(W.fg1)
-                        } else {
+                        case .future:
                             Circle().strokeBorder(W.lineStrong, lineWidth: 1).frame(width: 16, height: 16)
                             Text(band.name).font(WF.jp(10.5)).foregroundColor(W.fg2)
                         }
@@ -240,6 +252,16 @@ struct StrWidgetView: View {
     }
 
     private var bandsCount: Int { entry.snapshot?.bands.count ?? 0 }
+
+    /// 「今日の枠」用: entry の時刻を基準に枠の状態を判定。
+    private enum BandPhase { case past, current, future }
+    private func bandPhase(for band: WidgetSnapshot.BandInfo, at date: Date) -> BandPhase {
+        let cal = Calendar.current
+        let minute = cal.component(.hour, from: date) * 60 + cal.component(.minute, from: date)
+        if minute >= band.endMinutes { return .past }
+        if minute >= band.startMinutes { return .current }
+        return .future
+    }
 
     /// 残り分（分未満なら「0」）。
     private func remainMinutes(for card: WidgetSnapshot.Card) -> Int {

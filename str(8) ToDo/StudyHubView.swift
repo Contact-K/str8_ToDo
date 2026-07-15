@@ -51,7 +51,7 @@ struct StudyHubView: View {
                 }
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバル S8SamonPaper に任せる
         .sheet(isPresented: $showAddSubjectSheet) {
             AddSubjectSheet(isPresented: $showAddSubjectSheet, context: context)
         }

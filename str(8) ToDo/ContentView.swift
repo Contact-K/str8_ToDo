@@ -60,7 +60,8 @@ struct ContentView: View {
         GeometryReader { geo in
             let bottomSafe = geo.safeAreaInsets.bottom
             ZStack(alignment: .bottom) {
-                c.paper.ignoresSafeArea()
+                // 砂紋つき紙背景（購入テーマの tint を反映）
+                S8SamonPaper(tint: ShopManager.shared.currentTint(isDark: scheme == .dark))
 
                 Group {
                     switch tabIndex {
@@ -69,7 +70,8 @@ struct ContentView: View {
                     case 2: TodoListView()
                     case 3: ApprovalQueueView(showWeekReview: $showWeekReview, peerSession: peerSession)
                     case 4: StudyHubView()
-                    default: SettingsRootView()   // 5: 設定
+                    case 5: ShopView()
+                    default: SettingsRootView()   // 6: 設定
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -277,7 +279,9 @@ struct ContentView: View {
                     NotificationCenter.default.post(name: .s8StudyAddSubject, object: nil)
                 }
             )
-        case 5: // Settings → 特に切替なし（P2P コア）
+        case 5: // Shop → 特に切替なし（P2P コア）
+            return nil
+        case 6: // Settings → 特に切替なし（P2P コア）
             return nil
         default:
             return nil

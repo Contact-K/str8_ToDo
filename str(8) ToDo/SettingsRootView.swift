@@ -105,7 +105,7 @@ struct SettingsRootView: View {
                 }
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバル S8SamonPaper に任せる
         .sheet(isPresented: $showDictionary) {
             NavigationStack { DictionarySettingsView() }
         }
@@ -191,6 +191,7 @@ private struct ProfileEditSheet: View {
     @State private var name: String = ""
     @State private var iconName: String = "person"
     @State private var showDeleteConfirm: Bool = false
+    @State private var showCapAlert: Bool = false
 
     private let iconColumns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
 
@@ -213,7 +214,7 @@ private struct ProfileEditSheet: View {
 
                     S8SectionLabel(text: "アイコン")
                     LazyVGrid(columns: iconColumns, spacing: 10) {
-                        ForEach(S8IconPreset.symbols, id: \.self) { sym in
+                        ForEach(ShopManager.shared.availableIcons, id: \.self) { sym in
                             let isSelected = iconName == sym
                             Button(action: { iconName = sym }) {
                                 Image(systemName: sym)
@@ -258,6 +259,11 @@ private struct ProfileEditSheet: View {
         } message: {
             Text("紐付いているタスクはプロフィール未設定になります")
         }
+        .alert("上限に達しています", isPresented: $showCapAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("プロフィール上限は \(ShopManager.shared.profileCap) 個です。ショップで枠を追加できます。")
+        }
     }
 
     private var canSave: Bool {
@@ -268,6 +274,12 @@ private struct ProfileEditSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         if isNew {
+            // 新規追加は cap チェック。既存の編集は cap 無関係。
+            let existing = (try? context.fetch(FetchDescriptor<Profile>())) ?? []
+            guard existing.count < ShopManager.shared.profileCap else {
+                showCapAlert = true
+                return
+            }
             let new = Profile(name: trimmed, iconName: iconName)
             context.insert(new)
         } else if let p = profile {

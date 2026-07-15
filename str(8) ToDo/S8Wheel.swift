@@ -17,6 +17,7 @@ let s8Tabs: [S8TabDef] = [
     .init(id: "list", icon: "list", label: "リスト"),
     .init(id: "approve", icon: "check-circle", label: "承認"),
     .init(id: "study", icon: "book-open", label: "勉強"),
+    .init(id: "shop", icon: "shopping-bag", label: "ショップ"),
     .init(id: "settings", icon: "settings", label: "設定"),
 ]
 

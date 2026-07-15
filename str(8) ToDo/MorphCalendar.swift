@@ -153,7 +153,7 @@ struct CalendarRootView: View {
                 }
             }
         }
-        .background(c.paper.ignoresSafeArea())
+        // 背景はグローバルの S8SamonPaper（ContentView）に任せる。ここでは paper を敷かない。
         .sheet(item: $selectedTask) { task in
             TaskDetailView(task: task)
         }

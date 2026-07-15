@@ -16,6 +16,9 @@ struct CalendarSettingsView: View {
     @AppStorage(AppSettingsKey.timerPreset1) var timerPreset1 = AppSettingsKey.timerPreset1Default
     @AppStorage(AppSettingsKey.timerPreset2) var timerPreset2 = AppSettingsKey.timerPreset2Default
     @AppStorage(AppSettingsKey.timerPreset3) var timerPreset3 = AppSettingsKey.timerPreset3Default
+    @AppStorage(AppSettingsKey.timerPreset4) var timerPreset4 = AppSettingsKey.timerPreset4Default
+    @AppStorage(AppSettingsKey.timerPreset5) var timerPreset5 = AppSettingsKey.timerPreset5Default
+    @AppStorage(AppSettingsKey.timerPreset6) var timerPreset6 = AppSettingsKey.timerPreset6Default
 
     @State private var eventKit = EventKitService()
 
@@ -113,11 +116,15 @@ struct CalendarSettingsView: View {
                 NavigationLink("辞書管理", destination: DictionarySettingsView())
             }
 
-            // MARK: - タイマープリセット
+            // MARK: - タイマープリセット（ショップの presetCap 分だけ表示）
             Section(header: Text("タイマープリセット")) {
+                let cap = ShopManager.shared.presetCap
                 s8PresetStepper(label: "プリセット1", value: $timerPreset1)
-                s8PresetStepper(label: "プリセット2", value: $timerPreset2)
-                s8PresetStepper(label: "プリセット3", value: $timerPreset3)
+                if cap >= 2 { s8PresetStepper(label: "プリセット2", value: $timerPreset2) }
+                if cap >= 3 { s8PresetStepper(label: "プリセット3", value: $timerPreset3) }
+                if cap >= 4 { s8PresetStepper(label: "プリセット4", value: $timerPreset4) }
+                if cap >= 5 { s8PresetStepper(label: "プリセット5", value: $timerPreset5) }
+                if cap >= 6 { s8PresetStepper(label: "プリセット6", value: $timerPreset6) }
             }
 
             // MARK: - マイ時間割セクション
@@ -262,9 +269,10 @@ struct CalendarSettingsView: View {
                             .fill(Color(hex: category.colorHex))
                             .frame(width: 24, height: 24)
 
-                        // プリセットhexスウォッチ群
+                        // プリセットhexスウォッチ群（ショップで購入した色パックも含む）
                         HStack(spacing: 8) {
-                            ForEach(["#4F8DFD", "#34C759", "#FF9500", "#FF2D55", "#AF52DE", "#8E8E93"], id: \.self) { hex in
+                            ForEach(ShopManager.shared.availableColors, id: \.self) { rawHex in
+                                let hex = "#\(rawHex)"
                                 Button(action: {
                                     category.colorHex = hex
                                     try? modelContext.save()

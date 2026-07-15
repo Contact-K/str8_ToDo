@@ -26,12 +26,19 @@ enum AppSettingsKey {
     static let enableDictionarySuggestionsDefault = true
 
     /// タイマープリセット分数（設定画面から編集）。SettingsRootView/CalendarSettingsView が参照。
+    /// ショップで枠を購入すると 4/5/6 番目が有効になる（ShopManager.presetCap）。
     static let timerPreset1 = "timerPreset1"
     static let timerPreset1Default = 25
     static let timerPreset2 = "timerPreset2"
     static let timerPreset2Default = 45
     static let timerPreset3 = "timerPreset3"
     static let timerPreset3Default = 90
+    static let timerPreset4 = "timerPreset4"
+    static let timerPreset4Default = 20
+    static let timerPreset5 = "timerPreset5"
+    static let timerPreset5Default = 30
+    static let timerPreset6 = "timerPreset6"
+    static let timerPreset6Default = 60
 
     /// タブナビ方式（true=ホイール / false=タブバー）。Talk 移植。
     static let navWheel = "s8_nav_wheel"
@@ -58,6 +65,9 @@ enum AppSettingsKey {
             timerPreset1: timerPreset1Default,
             timerPreset2: timerPreset2Default,
             timerPreset3: timerPreset3Default,
+            timerPreset4: timerPreset4Default,
+            timerPreset5: timerPreset5Default,
+            timerPreset6: timerPreset6Default,
             navWheel: navWheelDefault
         ])
     }
