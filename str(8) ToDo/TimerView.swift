@@ -33,8 +33,15 @@ struct TimerView: View {
     @AppStorage(AppSettingsKey.timerPreset1) private var preset1 = AppSettingsKey.timerPreset1Default
     @AppStorage(AppSettingsKey.timerPreset2) private var preset2 = AppSettingsKey.timerPreset2Default
     @AppStorage(AppSettingsKey.timerPreset3) private var preset3 = AppSettingsKey.timerPreset3Default
+    /// 手動時間（0=未設定）。設定されているとプリセットより優先。
+    @AppStorage("timer.manualMinutes") private var manualMinutes = 0
 
     private var timerPresets: [Int] { [preset1, preset2, preset3] }
+
+    /// 手動値がある時は手動、無ければ選択プリセット。
+    private var effectivePresetMinutes: Int {
+        manualMinutes > 0 ? manualMinutes : timerPresets[max(0, min(timerPresets.count - 1, wheelPreset))]
+    }
 
     // セッション状態（経過は paused を除いて累積）
     @State private var sessionStart: Date?
@@ -47,6 +54,7 @@ struct TimerView: View {
     /// View 再生成で変わらないよう @State（cancel が schedule と同じ ID を指す）。
     @State private var alarmID = UUID()
     @State private var showRoom = false
+    @State private var showPresetSettings = false
     /// Handoff 08c: Live Activity ハンドル（session を跨いで1本のみ）。
     @State private var activity: Activity<TimerAttributes>? = nil
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -75,7 +83,8 @@ struct TimerView: View {
         let c = self.c
         VStack(spacing: 0) {
             S8TopBar("タイマー", sub: "hourglass · flip 180°") {
-                EmptyView()   // ponytail: bug/motion HUD ボタンは撤去（デバッグ機能）
+                S8IconButton(icon: "settings", action: { showPresetSettings = true })
+                    .accessibilityLabel("プリセット設定")
             }
             ScrollView {
                 VStack(spacing: 24) {
@@ -85,12 +94,6 @@ struct TimerView: View {
                         .font(.system(size: 56, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .contentTransition(.numericText())
-
-                    if !isSessionActive {
-                        // ponytail 2026-07-14: 中央プリセットピルは廃止。3 プリセットの分数編集を
-                        // 設定タブから移設。中心タップで循環、長押しで Crown ホイール展開。
-                        presetEditRows
-                    }
 
                     taskPicker
 
@@ -129,6 +132,9 @@ struct TimerView: View {
         .sheet(isPresented: $showRoom) {
             FocusRoomView()
         }
+        .sheet(isPresented: $showPresetSettings) {
+            presetSettingsSheet
+        }
         .onReceive(timer) { date in
             now = date
             if isRunning && remaining <= 0 {
@@ -139,6 +145,10 @@ struct TimerView: View {
             motion.start()
             isAlarmAuthDenied = AlarmService.isAuthorizationDenied
             restoreSnapshot()
+            // 起動時: 手動値があればプリセットより優先して反映（セッション実行中は restoreSnapshot が上書き済み）。
+            if !isSessionActive {
+                selectedMinutes = effectivePresetMinutes
+            }
         }
         .onDisappear { motion.stop() }
         .onChange(of: motion.phase) { _, _ in
@@ -160,10 +170,21 @@ struct TimerView: View {
             }
         }
         // Handoff 00c: ホイール PRESET 変更で selectedMinutes を切替（実行中は無視）。
+        // プリセットを明示的に選び直したら手動値はリセット（プリセット優先の意思表示）。
         .onChange(of: wheelPreset) { _, new in
             guard !isSessionActive else { return }
             let idx = max(0, min(timerPresets.count - 1, new))
+            manualMinutes = 0
             selectedMinutes = timerPresets[idx]
+            clearSnapshot()
+        }
+        // 手動値が更新されたらそちらを反映＋古い残時間 snapshot は捨てる。
+        .onChange(of: manualMinutes) { _, new in
+            guard !isSessionActive else { return }
+            if new > 0 {
+                selectedMinutes = new
+            }
+            clearSnapshot()
         }
     }
 
@@ -278,6 +299,28 @@ struct TimerView: View {
         .padding(.horizontal, 12).padding(.vertical, 6)
         .background(c.surface)
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(c.line, lineWidth: 1))
+    }
+
+    /// プリセット設定シート（ヘッダの設定ボタンから開く）。
+    private var presetSettingsSheet: some View {
+        let c = self.c
+        return VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Text("タイマープリセット").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
+                Spacer()
+            }
+            .padding(.horizontal, 24).padding(.top, 18).padding(.bottom, 8)
+            .overlay(alignment: .trailing) {
+                Button("閉じる") { showPresetSettings = false }
+                    .font(S8Font.jp(14)).foregroundColor(c.accentInk)
+                    .padding(.trailing, 20).padding(.top, 18)
+            }
+            presetEditRows
+            Spacer(minLength: 0)
+        }
+        .background(c.paper.ignoresSafeArea())
+        .presentationDetents([.medium])
     }
 
     /// プリセット編集行（設定タブから移設 2026-07-14）。3 枠の分数を S8Stepper で編集。

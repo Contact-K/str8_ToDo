@@ -442,7 +442,14 @@ struct EventComposerView: View {
         if existingTask == nil {
             modelContext.insert(task)
         }
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            // ponytail: save 失敗を可視化。sheet を閉じずユーザーが失敗に気付ける
+            print("[EventComposer] save failed: \(error)")
+            assertionFailure("EventComposer save failed: \(error)")
+            return
+        }
 
         // P18: when（startDate/duration/通知設定）が変わった時だけ再スケジュール。
         // 新規タスクは old が空なので必ず走り、既存の挙動（常時 reschedule）を保つ。

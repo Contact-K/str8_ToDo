@@ -28,6 +28,8 @@ struct ContentView: View {
     @AppStorage(AppSettingsKey.timerPreset1) private var preset1 = AppSettingsKey.timerPreset1Default
     @AppStorage(AppSettingsKey.timerPreset2) private var preset2 = AppSettingsKey.timerPreset2Default
     @AppStorage(AppSettingsKey.timerPreset3) private var preset3 = AppSettingsKey.timerPreset3Default
+    // 手動時間（0=未設定）。長押し Crown で書き込まれる。プリセットを破壊せず独立して保持。
+    @AppStorage("timer.manualMinutes") private var timerManualMinutes = 0
     // Handoff 00c 改: モードホイールの開閉状態と一時選択。
     @State private var modeWheelOpen = false
     @State private var modeWheelSelection = 0
@@ -144,6 +146,7 @@ struct ContentView: View {
                         minimized: $minimized,
                         peers: live ? 1 : 0,
                         connected: peerSession.isConnected,
+                        searching: peerSession.isSearching && !peerSession.isConnected,
                         quality: peerSession.isConnected ? 3 : 0,
                         bottomSafe: bottomSafe,
                         centerCore: makeCenterCore(),
@@ -155,7 +158,7 @@ struct ContentView: View {
                             }
                         },
                         onToggleConn: {
-                            if peerSession.isConnected {
+                            if peerSession.isConnected || peerSession.isSearching {
                                 peerSession.stop()
                             } else {
                                 peerSession.start()
@@ -237,15 +240,12 @@ struct ContentView: View {
                     let next = (idx + 1) % presets.count
                     timerPreset = next
                 },
-                longPressAction: { [presets] in
-                    // 長押しで Crown ホイールを展開。決定でプリセットに反映（現在選択の枠に上書き）。
-                    let current = presets[idx]
+                longPressAction: {
+                    // 長押しで Crown ホイールを展開。プリセットは書き換えず、独立の手動時間として保持する。
+                    let current = timerManualMinutes > 0 ? timerManualMinutes : presets[idx]
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     S8WheelOverlayPresenter.shared.presentCrown(range: 1...180, currentValue: current) { picked in
-                        switch idx {
-                        case 0: preset1 = picked
-                        case 1: preset2 = picked
-                        default: preset3 = picked
-                        }
+                        timerManualMinutes = picked
                     }
                 }
             )

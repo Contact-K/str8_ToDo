@@ -178,7 +178,10 @@ struct TodoListView: View {
                 S8IconButton(icon: "check", action: {
                     withAnimation {
                         task.markDone()
-                        try? context.save()
+                        do { try context.save() } catch {
+                            print("[TodoList] markDone save failed: \(error)")
+                            assertionFailure("markDone save failed: \(error)")
+                        }
                     }
                 })
                 .accessibilityLabel("完了")
@@ -208,8 +211,14 @@ struct TodoListView: View {
         // 「今日やる」と自分で決めたタスクを当日のデッキで再質問しないよう、当日スタンプを押す
         context.insert(TaskItem(title: title, phase: .today, sortIndex: maxIndex + 1,
                                 lastSortedDay: Calendar.current.startOfDay(for: .now)))
-        try? context.save()
-        quickTitle = ""
+        do {
+            try context.save()
+            quickTitle = ""
+        } catch {
+            // ponytail: 保存失敗時は入力を残す＝ユーザーが黙って消えたと誤解しない
+            print("[TodoList] quickAdd save failed: \(error)")
+            assertionFailure("quickAdd save failed: \(error)")
+        }
     }
 
     // ponytail: List → ScrollView+LazyVStack 化で標準の .onMove ドラッグ並べ替えは使えなくなった。
@@ -233,18 +242,16 @@ private struct SchedulePromoteSheet: View {
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            HStack {
-                Button("キャンセル") { dismiss() }
-                    .font(S8Font.jp(14)).foregroundColor(c.fg2)
+            HStack(spacing: 10) {
+                S8Button("キャンセル", icon: "x", variant: .ghost, fillWidth: false, action: { dismiss() })
                 Spacer()
                 Text("日時を決める").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
                 Spacer()
-                Button("決定") {
+                S8Button("決定", icon: "check", variant: .primary, fillWidth: false, action: {
                     let effective = max(startDate, .now)
                     task.scheduleAt(start: effective, duration: duration, context: context)
                     dismiss()
-                }
-                .font(S8Font.jp(14, .bold)).foregroundColor(c.accentInk)
+                })
             }
             .padding(.horizontal, 24).padding(.vertical, 12)
 

@@ -79,10 +79,31 @@ enum WeekReportSource {
     }
 
     static func load(in range: Range<Date>, context: ModelContext) -> WeekReport {
-        WeekReport(
+        let report = WeekReport(
             focusTotalSec: focusTotalSec(in: range, context: context),
             moneyTotal: moneyTotal(in: range, context: context),
             approvedCount: approvedCount(in: range, context: context)
         )
+        // ponytail: 収支が「適当な値」に見える件の切り分け診断。
+        // range と合算した金額、貢献したタスク件数を1回だけ出力。原因判明後に削除。
+        let contribTasks: [(title: String, amount: Decimal, rrule: String?, weeklyHits: Int)] = {
+            let d = FetchDescriptor<TaskItem>(predicate: #Predicate { $0.startDate != nil })
+            let tasks = (try? context.fetch(d)) ?? []
+            let cal = Calendar.current
+            var out: [(String, Decimal, String?, Int)] = []
+            for t in tasks {
+                guard let a = t.amount, a > 0 else { continue }
+                var hits = 0
+                var cursor = range.lowerBound
+                while cursor < range.upperBound {
+                    if t.occurs(on: cursor) { hits += 1 }
+                    cursor = cal.date(byAdding: .day, value: 1, to: cursor)!
+                }
+                if hits > 0 { out.append((t.title, a, t.rrule, hits)) }
+            }
+            return out
+        }()
+        print("[WeekReport] range=\(range.lowerBound)..<\(range.upperBound) moneyTotal=\(report.moneyTotal) contrib=\(contribTasks)")
+        return report
     }
 }

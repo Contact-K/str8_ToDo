@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct CalendarSettingsView: View {
     @Environment(\.modelContext) var modelContext
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
     @Query(sort: \Category.name) var categories: [Category]
     @Query(sort: \BandTemplate.name) private var templates: [BandTemplate]
     @Query private var assignments: [BandAssignment]
@@ -288,29 +290,29 @@ struct CalendarSettingsView: View {
             // MARK: - バックアップセクション（Handoff 07b: str8 計器スタンプカード）
             Section(header: Text("バックアップ（.str8）")) {
                 VStack(alignment: .leading, spacing: 10) {
-                    // 計器スタンプ: 「STR8 · AES-GCM · V3 · LOCAL ONLY」
+                    // 計器スタンプ: 「STR8 · AES-GCM · V3 · LOCAL ONLY」— 色はアクセント追従
                     HStack(spacing: 8) {
-                        Circle().fill(Color(s8: 0xDC8B28)).frame(width: 5, height: 5)
+                        Circle().fill(c.accent).frame(width: 5, height: 5)
                         Text("STR8 · AES-GCM · ")
                             .font(S8Font.mono(9.5)).tracking(1.4)
-                            .foregroundColor(Color(s8: 0x8A877C))
+                            .foregroundColor(c.fg3)
                             + Text("V3")
                             .font(S8Font.mono(9.5, .bold)).tracking(1.4)
-                            .foregroundColor(Color(s8: 0x46443E))
+                            .foregroundColor(c.fg2)
                             + Text(" · LOCAL ONLY")
                             .font(S8Font.mono(9.5)).tracking(1.4)
-                            .foregroundColor(Color(s8: 0x8A877C))
+                            .foregroundColor(c.fg3)
                     }
                     // 最終エクスポート日時
                     HStack(spacing: 4) {
-                        Text("最終エクスポート").font(S8Font.jp(12)).foregroundColor(Color(s8: 0x46443E))
+                        Text("最終エクスポート").font(S8Font.jp(12)).foregroundColor(c.fg2)
                         if lastBackupExportDate > 0 {
                             Text(Date(timeIntervalSinceReferenceDate: lastBackupExportDate),
                                  format: .dateTime.month().day().hour().minute())
                                 .font(S8Font.mono(12, .bold))
-                                .foregroundColor(Color(s8: 0x1F1E1A))
+                                .foregroundColor(c.fg1)
                         } else {
-                            Text("未実施").font(S8Font.mono(12)).foregroundColor(Color(s8: 0x8A877C))
+                            Text("未実施").font(S8Font.mono(12)).foregroundColor(c.fg3)
                         }
                     }
                     // エクスポート / インポート
@@ -339,7 +341,7 @@ struct CalendarSettingsView: View {
                         .buttonStyle(.bordered)
                     }
                     Text("月1回、古くなると控えめにリマインドします。")
-                        .font(S8Font.jp(10.5)).foregroundColor(Color(s8: 0x8A877C))
+                        .font(S8Font.jp(10.5)).foregroundColor(c.fg3)
                 }
                 .padding(.vertical, 4)
 

@@ -56,6 +56,8 @@ struct S8ClickWheel: View {
     @Binding var minimized: Bool
     let peers: Int
     let connected: Bool
+    /// start() 後 peer 接続待ちの探索状態。center 表示で「反応してる」を可視化するため。
+    var searching: Bool = false
     /// 通信強度 0〜3（バー表示用。人数とは独立・項目 R2-③）。
     var quality: Int = 0
     /// 画面下端のセーフエリア量（ホームインジケータ帯）。表示はここまで埋め、当たり判定はこの帯を除外する。
@@ -298,21 +300,43 @@ struct S8ClickWheel: View {
     }
 
     /// P2P LINK ビジュアル（Approve タブや centerCore == nil のフォールバック）。
+    /// 中心タップで接続 ON/OFF が切り替わることを明示（wifi/wifi.slash アイコン＋タップヒント）。
     private func p2pCoreContent(c: S8Palette) -> some View {
         let live = connected && peers > 0
-        let qColor: Color = !connected ? c.fg3 : (live ? c.ok : c.warn)
-        let qText: String = !connected ? "OFF" : (live ? "\(peers)人" : "探索中")
-        return VStack(spacing: 3) {
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(0..<3, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(quality > i ? qColor : c.line)
-                        .frame(width: 4, height: 6 + CGFloat(i) * 4)
-                }
-            }
-            .frame(height: 14, alignment: .bottom)
-            Text(qText).font(S8Font.mono(12, .bold)).foregroundColor(c.fg1)
-            Text("品質").font(S8Font.mono(8)).tracking(1.5).foregroundColor(c.fg3)
+        let iconName: String
+        let iconColor: Color
+        let mainText: String
+        let hintText: String
+        if connected && live {
+            iconName = "wifi"
+            iconColor = c.ok
+            mainText = "\(peers)人"
+            hintText = "タップで切断"
+        } else if connected {
+            iconName = "wifi"
+            iconColor = c.warn
+            mainText = "接続中"
+            hintText = "タップで切断"
+        } else if searching {
+            iconName = "wifi"
+            iconColor = c.warn
+            mainText = "探索中"
+            hintText = "タップで停止"
+        } else {
+            iconName = "wifi.slash"
+            iconColor = c.fg3
+            mainText = "OFF"
+            hintText = "タップで接続"
+        }
+        return VStack(spacing: 2) {
+            Image(systemName: iconName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(iconColor)
+                .symbolEffect(.pulse, options: .repeating, isActive: searching && !connected)
+            Text(mainText).font(S8Font.mono(12, .bold)).foregroundColor(c.fg1)
+            Text(hintText).font(S8Font.mono(7.5)).tracking(1.2).foregroundColor(c.fg3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 
@@ -435,8 +459,9 @@ struct S8FilterWheel: View {
                             let x = D / 2 + R * cos(a)
                             let y = D / 2 + R * sin(a)
                             VStack(spacing: 2) {
+                                // ponytail: symbolVariant(.fill) を削除。ユーザーが選んだ SF Symbol 名
+                                // (例 "tag.fill") が二重 fill にならない
                                 S8Icon(name: item.icon, size: 17, color: i == sel ? c.accent : c.fg2)
-                                    .symbolVariant(i == sel ? .fill : .none)
                                 Text(item.label).font(S8Font.jp(9, i == sel ? .bold : .medium))
                                     .foregroundColor(i == sel ? c.accent : c.fg3)
                                     .lineLimit(1)
@@ -725,20 +750,49 @@ struct S8CrownWheel: View {
     let onClose: () -> Void
     var bottomSafe: CGFloat = 0
 
-    /// ドット環のサイズ・半径。S8FilterWheel と同寸で置き換え可能に。
+    /// ドット環のサイズ・半径。
     private let D: CGFloat = 280
     private let R: CGFloat = 118
-    /// 1 周 60 ドット固定（分単位の刻み）。
+    /// 1 周 60 ドット固定（1周目は分単位の刻み）。
     private let dotCount: Int = 60
-    /// 1 分あたりの角度（＝6°）。ハンドオフ準拠。
+    /// 1 ドットあたり 6°（＝360°/60）。
     private var stepDeg: Double { 360.0 / Double(dotCount) }
+    /// 2 周目に入る回転角。360°。
+    private var lap2StartDeg: Double { 360.0 }
+    /// 2 周目の最大回転角（180 分まで到達するのに必要な角度）: 360 + (180-60)/10 * 6 = 432°。
+    private var maxRotDeg: Double { 360.0 + Double(max(0, range.upperBound - 60)) / 10.0 * stepDeg }
     private var domeH: CGFloat { D * 0.72 }
 
-    @State private var accumulatedDeg: Double = 0
+    /// 累積回転角（ring rotation）。0..maxRotDeg。値の唯一の源。
+    @State private var rot: Double = 0
     @State private var dragging = false
     @State private var lastAngle: Double? = nil
 
     @Environment(\.colorScheme) private var scheme
+
+    /// 回転角 → 値（1周目=1分/dot、2周目=10分/dot）。
+    private func valueFor(_ deg: Double) -> Int {
+        let d = max(0, min(maxRotDeg, deg))
+        if d <= lap2StartDeg {
+            return max(range.lowerBound, min(60, Int(round(d / stepDeg))))
+        } else {
+            let laps2 = Int(round((d - lap2StartDeg) / stepDeg))   // 1..12
+            return min(range.upperBound, 60 + laps2 * 10)
+        }
+    }
+
+    /// 値 → 回転角（初期化用）。
+    private func rotFor(_ v: Int) -> Double {
+        let clamped = max(range.lowerBound, min(range.upperBound, v))
+        if clamped <= 60 {
+            return Double(clamped) * stepDeg
+        } else {
+            return lap2StartDeg + Double(clamped - 60) / 10.0 * stepDeg
+        }
+    }
+
+    /// 現在が 2 周目か。
+    private var isLap2: Bool { rot > lap2StartDeg + 0.5 }
 
     var body: some View {
         let c = S8Palette.of(scheme)
@@ -746,30 +800,47 @@ struct S8CrownWheel: View {
             .frame(width: D, height: domeH)
             .overlay(alignment: .top) {
                 ZStack(alignment: .top) {
-                    // rim
-                    Circle().fill(c.surface).overlay(Circle().stroke(c.lineStrong, lineWidth: 1))
+                    // rim（2周目はアクセント縁で識別）
+                    Circle().fill(c.surface)
+                        .overlay(Circle().stroke(isLap2 ? c.accent : c.lineStrong, lineWidth: isLap2 ? 2 : 1))
                     Circle().inset(by: 18).stroke(c.line, lineWidth: 1)
 
-                    // ドット環
-                    ForEach(0..<dotCount, id: \.self) { i in
-                        let a = (Double(i) * stepDeg - 90) * .pi / 180
-                        let x = D / 2 + R * cos(a)
-                        let y = D / 2 + R * sin(a)
-                        let lit = i < value
-                        let isMajor = (i % 5 == 0)
-                        Circle()
-                            .fill(lit ? c.accent : c.lineStrong)
-                            .frame(width: isMajor ? 6 : 4, height: isMajor ? 6 : 4)
-                            .position(x: x, y: y)
-                        if isMajor {
-                            Text("\(i)")
-                                .font(S8Font.mono(9, .bold))
-                                .foregroundColor(lit ? c.accent : c.fg3)
-                                .position(x: D / 2 + (R - 22) * cos(a), y: D / 2 + (R - 22) * sin(a))
+                    // 上部固定インジケータ（ここに揃った値が選択される）
+                    Rectangle().fill(c.accent)
+                        .frame(width: 3, height: 10)
+                        .position(x: D / 2, y: 8)
+
+                    // 回転するドット環：ring 側を .rotationEffect で回す。上部の pointer が「選択」を示す。
+                    ZStack {
+                        ForEach(0..<dotCount, id: \.self) { i in
+                            let a = (Double(i) * stepDeg - 90) * .pi / 180
+                            let x = D / 2 + R * cos(a)
+                            let y = D / 2 + R * sin(a)
+                            // 1周目: dot i が塗られる条件は i <= value（ただし value<=60）
+                            // 2周目: 全 60 dot を塗り、加えて (value-60)/10 個の 2周目 dot をアクセント強色で表現
+                            let litLap1 = i <= min(60, value)
+                            let lit2ndIndex = isLap2 ? Int(round((rot - lap2StartDeg) / stepDeg)) : 0
+                            let isLap2Dot = isLap2 && i > 0 && i <= lit2ndIndex
+                            let isMajor = (i % 5 == 0)
+                            Circle()
+                                .fill(isLap2Dot ? c.accent : (litLap1 ? c.accent : c.lineStrong))
+                                .frame(width: isMajor ? 6 : 4, height: isMajor ? 6 : 4)
+                                .position(x: x, y: y)
+                            if isMajor && i > 0 {
+                                // 1周目ラベル: 5,10,...,60。ring 回転を counter-rotate してテキストを常に上向きに。
+                                Text("\(i)")
+                                    .font(S8Font.mono(9, .bold))
+                                    .foregroundColor((litLap1 || isLap2Dot) ? c.accent : c.fg3)
+                                    .rotationEffect(.degrees(rot))
+                                    .position(x: D / 2 + (R - 22) * cos(a), y: D / 2 + (R - 22) * sin(a))
+                            }
                         }
                     }
+                    .rotationEffect(.degrees(-rot))
+                    .animation(.interactiveSpring(response: 0.15), value: rot)
+                    .allowsHitTesting(false)
 
-                    // ドラッグ面
+                    // ドラッグ面（回転しない固定レイヤ）
                     Color.clear
                         .frame(width: D, height: D)
                         .contentShape(Circle())
@@ -787,6 +858,9 @@ struct S8CrownWheel: View {
                             VStack(spacing: 2) {
                                 Text("\(value)").font(S8Font.mono(28, .bold)).foregroundColor(c.fg1)
                                 Text(unit.uppercased()).font(S8Font.mono(9)).tracking(1.5).foregroundColor(c.fg3)
+                                if isLap2 {
+                                    Text("×10").font(S8Font.mono(8, .bold)).tracking(1.2).foregroundColor(c.accent)
+                                }
                                 Text("とじる").font(S8Font.mono(8)).tracking(1.2).foregroundColor(c.fg3)
                                     .padding(.top, 2)
                             }
@@ -800,6 +874,10 @@ struct S8CrownWheel: View {
                 .frame(width: D, height: D)
             }
             .clipped()
+            .onAppear {
+                // 現在値に合わせて rot を初期化
+                rot = rotFor(value)
+            }
     }
 
     private var crownDrag: some Gesture {
@@ -818,25 +896,27 @@ struct S8CrownWheel: View {
                 if dragging, let prev = lastAngle, r > 32 {   // 中心ボタンは無視
                     var d = cur - prev
                     if d > 180 { d -= 360 } else if d < -180 { d += 360 }
-                    accumulatedDeg += d
                     lastAngle = cur
-                    // 6° 溜まるごとに ±1 分
-                    while accumulatedDeg >= stepDeg {
-                        accumulatedDeg -= stepDeg
-                        let next = min(range.upperBound, value + 1)
-                        if next != value { value = next; S8WheelHaptic.tick() }
-                    }
-                    while accumulatedDeg <= -stepDeg {
-                        accumulatedDeg += stepDeg
-                        let next = max(range.lowerBound, value - 1)
-                        if next != value { value = next; S8WheelHaptic.tick() }
+                    // Balmuda 参考：finger と scale を同方向に動かす直感に合わせるため d を反転。
+                    // CW ドラッグ → rot 減 → 値↓、CCW ドラッグ → rot 増 → 値↑。
+                    let effectiveD = -d
+                    let newRot = max(0, min(maxRotDeg, rot + effectiveD))
+                    let prevValue = value
+                    rot = newRot
+                    let nextValue = valueFor(newRot)
+                    if nextValue != prevValue {
+                        value = nextValue
+                        S8WheelHaptic.tick()
                     }
                 }
             }
             .onEnded { _ in
                 dragging = false
                 lastAngle = nil
-                accumulatedDeg = 0
+                // スナップ: 選択値に対応する rot に吸着（視覚的にドットが pointer に整列）
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                    rot = rotFor(value)
+                }
             }
     }
 }

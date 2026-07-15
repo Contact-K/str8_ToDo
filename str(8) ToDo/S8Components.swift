@@ -4,7 +4,10 @@
 import SwiftUI
 
 /// Lucide 名 → SF Symbol 名。
+/// ponytail: `.` を含む名前（"tag.fill" 等）は既に SF Symbol 名扱いで素通し。
+/// カテゴリアイコン（S8IconPreset.symbols）などユーザーが選んだ SF 名をそのまま渡せる。
 func s8Symbol(_ name: String) -> String {
+    if name.contains(".") { return name }
     switch name {
     case "waves": return "water.waves"
     case "newspaper": return "newspaper"

@@ -134,7 +134,16 @@ struct ApprovalQueueView: View {
                 }
             }
             Spacer()
-            S8Icon(name: "lock", size: 16, color: c.fg3)
+            HStack(spacing: 2) {
+                // ロック中でもペアに依頼可能（相手の approve が bypassesLock で通る）
+                if peerSession.isConnected {
+                    S8IconButton(icon: "send", action: {
+                        peerSession.send(.request(taskID: task.id, title: task.title))
+                    })
+                    .accessibilityLabel("ペアに依頼")
+                }
+                S8Icon(name: "lock", size: 16, color: c.fg3)
+            }
         }
         .padding(.horizontal, 24).padding(.vertical, 14)
         .overlay(alignment: .top) { S8Rule() }
@@ -268,18 +277,18 @@ struct PeerPairingView: View {
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            // Handoff ヘッダ: 空 / タイトル / 開始・停止
+            // Handoff ヘッダ: タイトル / 開始・停止（ボタンサイズを他画面と揃える）
             HStack {
-                Color.clear.frame(width: 64, height: 1)
-                Spacer()
                 Text("ペアリング").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
                 Spacer()
-                Button(action: { session.isConnected ? session.stop() : session.start() }) {
-                    Text(session.isConnected ? "停止" : "開始")
-                        .font(S8Font.jp(14))
-                        .foregroundColor(c.fg2)
-                }
-                .frame(width: 64, alignment: .trailing)
+                let active = session.isConnected || session.isSearching
+                S8Button(
+                    active ? "停止" : "開始",
+                    icon: active ? "x" : "plus",
+                    variant: active ? .secondary : .primary,
+                    fillWidth: false,
+                    action: { active ? session.stop() : session.start() }
+                )
             }
             .padding(.horizontal, 24).padding(.vertical, 12)
 

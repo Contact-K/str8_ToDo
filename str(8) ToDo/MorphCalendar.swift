@@ -205,7 +205,8 @@ struct CalendarRootView: View {
     private var filterItems: [S8WheelFilterItem] {
         var items = [S8WheelFilterItem(id: "all", icon: "filter", label: "すべて")]
         for cat in categories {
-            items.append(S8WheelFilterItem(id: cat.id.uuidString, icon: "tag", label: cat.name))
+            // ユーザーが設定したアイコン（例 "tag.fill"）をそのまま渡す。s8Symbol は `.` 含みを SF Symbol 名として素通しする。
+            items.append(S8WheelFilterItem(id: cat.id.uuidString, icon: cat.symbolName, label: cat.name))
         }
         return items
     }

@@ -44,7 +44,22 @@ struct WeekReviewView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // ponytail: NavigationStack+toolbar を廃止。iOS26 の toolbar が自動 liquid glass を付けるので
+        // s8 統一の S8TopBar+S8Button に置換
+        VStack(spacing: 0) {
+            S8TopBar("今週の締め", sub: "weekly review") {
+                S8IconButton(icon: "share", action: exportImage)
+                    .accessibilityLabel("画像でシェア")
+            }
+
+            HStack(spacing: 10) {
+                S8Button("閉じる", icon: "x", variant: .ghost, fillWidth: false, action: { dismiss(); onClose?() })
+                Spacer()
+                S8Button("締める", icon: "check", variant: .primary, fillWidth: false, action: commitAndClose)
+                    .disabled(fetchError)
+            }
+            .padding(.horizontal, 24).padding(.bottom, 12)
+
             ScrollView {
                 VStack(spacing: 24) {
                     approvalSection
@@ -54,44 +69,27 @@ struct WeekReviewView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
             }
-            .background(c.paper)
-            .navigationTitle("今週の締め")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss(); onClose?() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: commitAndClose) {
-                        Label("締める", systemImage: "checkmark.circle.fill")
-                    }
-                    .disabled(fetchError)
-                }
-                ToolbarItem(placement: .secondaryAction) {
-                    Button(action: exportImage) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                }
+        }
+        .background(c.paper.ignoresSafeArea())
+        .task(id: referenceDate) {
+            cachedReport = WeekReportSource.load(in: range, context: context)
+        }
+        .sheet(isPresented: $isShareSheetPresented) {
+            // ponytail: ShareLink(item:) は URL/String のみ対応（このSDKに UIImage 向けの直接オーバーロードなし）。
+            // Data/URL 化するには一時ファイル書き出しが必要で ShareSheet より複雑になるため、UIActivityViewController のままにする。
+            if let img = shareImage {
+                ShareSheet(items: [img])
             }
-            .task(id: referenceDate) {
-                cachedReport = WeekReportSource.load(in: range, context: context)
-            }
-            .sheet(isPresented: $isShareSheetPresented) {
-                // ponytail: ShareLink(item:) は URL/String のみ対応（このSDKに UIImage 向けの直接オーバーロードなし）。
-                // Data/URL 化するには一時ファイル書き出しが必要で ShareSheet より複雑になるため、UIActivityViewController のままにする。
-                if let img = shareImage {
-                    ShareSheet(items: [img])
-                }
-            }
-            .alert("エラー", isPresented: $fetchError) {
-                Button("OK") { fetchError = false }
-            } message: {
-                Text("データ取得に失敗しました。もう一度お試しください。")
-            }
-            .alert("エラー", isPresented: $exportFailed) {
-                Button("OK") { exportFailed = false }
-            } message: {
-                Text("画像の生成に失敗しました")
-            }
+        }
+        .alert("エラー", isPresented: $fetchError) {
+            Button("OK") { fetchError = false }
+        } message: {
+            Text("データ取得に失敗しました。もう一度お試しください。")
+        }
+        .alert("エラー", isPresented: $exportFailed) {
+            Button("OK") { exportFailed = false }
+        } message: {
+            Text("画像の生成に失敗しました")
         }
     }
 

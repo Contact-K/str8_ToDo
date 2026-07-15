@@ -85,6 +85,7 @@ struct DayAgendaView: View {
 
                                 taskRow(task, collapsed: isCollapsed)
                                     .id(row.id)
+                                    .contentShape(Rectangle())
                                     .onTapGesture {
                                         if isCollapsed {
                                             expandedIDs.insert(task.id)
@@ -413,7 +414,7 @@ struct DayAgendaView: View {
         return HStack(spacing: 8) {
             Image(systemName: isSunrise ? "sunrise.fill" : "sunset.fill")
                 .font(.caption)
-                .foregroundStyle(c.warn)
+                .foregroundStyle(c.accent)
 
             Text(isSunrise ? "日の出" : "日の入り")
                 .font(.caption2)
@@ -422,7 +423,7 @@ struct DayAgendaView: View {
             Text(formatTime(time))
                 .font(.caption2)
                 .fontWeight(.semibold)
-                .foregroundStyle(c.warn.opacity(0.7))
+                .foregroundStyle(c.accentInk.opacity(0.7))
 
             Spacer()
         }

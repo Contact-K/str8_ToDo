@@ -36,6 +36,8 @@ final class PeerSession: NSObject {
 
     private(set) var connectedPeerName: String?
     private(set) var isConnected = false
+    /// start() 後、まだ peer が接続していない探索状態。UI 側で「タップ即反応」の視覚フィードバックに使う。
+    private(set) var isSearching = false
     private(set) var receivedRequests: [PeerApprovalRequest] = []
     private(set) var pendingInvitation: (peerName: String, decide: (Bool) -> Void)?
     
@@ -72,6 +74,7 @@ final class PeerSession: NSObject {
     func start() {
         advertiser.startAdvertisingPeer()
         browser.startBrowsingForPeers()
+        isSearching = true
     }
 
     /// 全停止 + 切断。
@@ -81,6 +84,7 @@ final class PeerSession: NSObject {
         session.disconnect()
         connectedPeerName = nil
         isConnected = false
+        isSearching = false
         receivedRequests = []
         pendingInvitation = nil
     }
@@ -112,6 +116,7 @@ extension PeerSession: MCSessionDelegate {
             case .connected:
                 self.connectedPeerName = peerID.displayName
                 self.isConnected = true
+                self.isSearching = false
                 self.onPeerConnected?(peerID.displayName)
             case .notConnected:
                 self.connectedPeerName = nil

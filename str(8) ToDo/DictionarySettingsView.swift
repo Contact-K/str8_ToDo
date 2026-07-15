@@ -46,13 +46,8 @@ struct DictionarySettingsView: View {
                 Spacer()
                 Text("辞書管理").font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
                 Spacer()
-                Button(action: { showAddSheet = true }) {
-                    Text("新規追加")
-                        .font(S8Font.jp(13, .bold))
-                        .foregroundColor(c.accentInk)
-                        .frame(width: 88, height: 44, alignment: .trailing)
-                }
-                .buttonStyle(.plain)
+                S8Button("新規追加", icon: "plus", variant: .primary, fillWidth: false, action: { showAddSheet = true })
+                    .padding(.trailing, 8)
             }
             .padding(.horizontal, 12)
 

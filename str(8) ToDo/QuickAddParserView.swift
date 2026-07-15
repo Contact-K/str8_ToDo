@@ -232,6 +232,8 @@ struct QuickAddParserView: View {
     // MARK: - 操作
 
     /// 「保存」：パース結果から TaskItem を即作成。EventComposerView は開かない。
+    /// このビューはリストタブからのみ開かれるため、startDate/duration を落として必ずリスト
+    /// （浮遊タスク）へ入れる。日時付きで作りたい場合は「詳細を追加」を使う。
     private func saveDirect() {
         let remainder = parseResult.titleRemainder.trimmingCharacters(in: .whitespaces)
         let title = remainder.isEmpty ? text.trimmingCharacters(in: .whitespaces) : remainder
@@ -244,14 +246,20 @@ struct QuickAddParserView: View {
         let task = TaskItem(
             title: title,
             category: category,
-            startDate: parseResult.startDate,
-            duration: parseResult.duration ?? 0,
+            startDate: nil,
+            duration: 0,
             place: matchedPlace(),
             phase: .today,
             profile: profile
         )
         context.insert(task)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("[QuickAddParser] save failed: \(error)")
+            assertionFailure("QuickAddParser save failed: \(error)")
+            return
+        }
         NotificationService.reschedule(for: task)
         dismiss()
     }

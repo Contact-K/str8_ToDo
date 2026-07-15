@@ -56,10 +56,14 @@ struct WeekView: View {
         return days.filter { (2...6).contains(weekCalendar.component(.weekday, from: $0)) }
     }
 
+    /// 時刻軸カラムの幅（左端に固定）。
+    private let timeAxisWidth: CGFloat = 30
+
     var body: some View {
         GeometryReader { geo in
             let days = weekDays
-            let dayWidth: CGFloat = showSevenDays ? 96 : max(64, geo.size.width / CGFloat(max(days.count, 1)))
+            let gridAvailableWidth = max(0, geo.size.width - timeAxisWidth)
+            let dayWidth: CGFloat = showSevenDays ? max(72, gridAvailableWidth / CGFloat(max(days.count, 1))) : max(64, gridAvailableWidth / CGFloat(max(days.count, 1)))
             let bandsByDay = days.map { orderedBands(for: $0) }
             let chipsByDay = days.map { chipTasks(on: $0) }
             let chipCounts: [[Int]] = zip(bandsByDay, chipsByDay).map { bands, chips in
@@ -71,8 +75,30 @@ struct WeekView: View {
                 }
                 return counts
             }
-            let rowHeights = bandRowHeights(chipCounts: chipCounts, minHeight: rowMinHeight,
+            let rawHeights = bandRowHeights(chipCounts: chipCounts, minHeight: rowMinHeight,
                                             maxHeight: rowMaxHeight, base: rowBaseHeight, perChip: rowPerChip)
+
+            // 画面いっぱいに引き伸ばすためのスケーラ。toggle バー・ヘッダ・allDay 行を差し引いた高さに揃える。
+            let toggleBarH: CGFloat = 36 + 16   // ざっくり segment 高＋vertical padding
+            let availableH = max(1, geo.size.height - toggleBarH - headerHeight - allDayRowHeight - 8)
+            let rowSum = max(1, rawHeights.reduce(0, +))
+            let scale: CGFloat = rowSum > 0 ? max(0.6, min(2.5, availableH / rowSum)) : 1
+            let rowHeights = rawHeights.map { $0 * scale }
+
+            // 時刻軸カラム用の代表バンド（最初の日の band を採用）と対応 frame。
+            let axisBands = bandsByDay.first ?? []
+            let axisFrames: [BandRowFrame] = {
+                var frames: [BandRowFrame] = []
+                var y: CGFloat = 0
+                for (i, band) in axisBands.enumerated() {
+                    let h = i < rowHeights.count ? rowHeights[i] : rowMinHeight
+                    frames.append(BandRowFrame(startMinute: band.startMinutes,
+                                                endMinute: band.endMinutes,
+                                                minY: y, maxY: y + h))
+                    y += h
+                }
+                return frames
+            }()
 
             VStack(spacing: 0) {
                 // Handoff 01b: [7日 | 平日] のピル型トグル（右寄せ）
@@ -91,7 +117,12 @@ struct WeekView: View {
                 }
                 .padding(.horizontal, 24).padding(.vertical, 8)
 
-                ScrollView(.vertical, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
+                    // 左端 固定 時刻軸カラム
+                    timeAxisColumn(frames: axisFrames)
+                        .frame(width: timeAxisWidth)
+
+                    // 日ごとのグリッド（横スクロール）
                     ScrollViewReader { proxy in
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .top, spacing: 0) {
@@ -111,7 +142,6 @@ struct WeekView: View {
                             proxy.scrollTo(dayKey(selectedDate, weekCalendar), anchor: .center)
                         }
                     }
-                    .padding(.bottom, 8)
                 }
             }
         }
@@ -119,6 +149,34 @@ struct WeekView: View {
         .task(id: DayRowBuilder.travelRefreshKey(date: selectedDate, now: .now, calendar: weekCalendar)) {
             // 出発逆算 ETA を取得（週切替＋5分粒度で再実行。ゲートが24h以内に絞るので実質数件、実要求は30分キャッシュが抑える）
             await refreshTravelETAs()
+        }
+    }
+
+    /// 左端の時刻軸カラム。0/3/6/9/12/15/18/21/24 時のラベルを band に沿って配置。
+    private func timeAxisColumn(frames: [BandRowFrame]) -> some View {
+        let hours = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+        let totalH = frames.last?.maxY ?? 0
+        return VStack(spacing: 0) {
+            // 曜日ヘッダ + allDay 行と揃えるため空スペース
+            Color.clear.frame(height: headerHeight + allDayRowHeight)
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(c.surface2.opacity(0.5))
+                if !frames.isEmpty {
+                    ForEach(hours, id: \.self) { hour in
+                        let y = capsuleY(forMinute: hour * 60, rows: frames)
+                        HStack(spacing: 0) {
+                            Text(String(format: "%02d", hour))
+                                .font(S8Font.mono(9, .bold))
+                                .foregroundColor(c.fg3)
+                                .frame(width: timeAxisWidth - 6, alignment: .trailing)
+                                .padding(.trailing, 3)
+                        }
+                        .position(x: timeAxisWidth / 2, y: y)
+                    }
+                }
+                Rectangle().fill(c.line).frame(width: 1).frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .frame(height: totalH)
         }
     }
 
