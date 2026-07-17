@@ -6,7 +6,10 @@
 //  - ChopStateMachine: 純 Foundation のステートマシン（p5-selfcheck で検証、macOS でもコンパイル可）
 //  - ChopMotionService: CoreMotion を 60Hz で回してステートマシンに流す（実機のみ）
 //
-//  実機残項目: Tuning 値の実機調整（加速度ピークと静止の閾値は計測環境に依存）。
+//  Tuning は実機の「手で持ちながらハンコを振り下ろす」ジェスチャに合わせて緩めてある：
+//   - stillThreshold=0.4G: 手の常時微振動（0.1〜0.3G）を許容
+//   - stillDuration=0.08s: 人間の反応時間より短く、振り下ろし直後の一瞬の停止で確定
+//   - stillWindow=0.8s: 腕の惰性で 200ms 以内に静止しないケースを許容
 //
 
 import Foundation
@@ -24,11 +27,11 @@ struct ChopStateMachine {
         /// 下向きの加速度ピーク判定（g）。
         static let peakThreshold = 2.0
         /// ピーク後、この秒数以内に静止が必要。
-        static let stillWindow: TimeInterval = 0.5
-        /// 静止と判定する加速度の上限（g）。
-        static let stillThreshold = 0.15
-        /// 静止と判定するための継続時間（秒）。
-        static let stillDuration: TimeInterval = 0.2
+        static let stillWindow: TimeInterval = 0.8
+        /// 静止と判定する加速度の上限（g）。手の微振動を許容するため 0.4 まで緩めた。
+        static let stillThreshold = 0.4
+        /// 静止と判定するための継続時間（秒）。人間の反応時間より短く。
+        static let stillDuration: TimeInterval = 0.08
         /// chop 確定後、次のピークを無視する時間（秒）。
         static let cooldown: TimeInterval = 1.0
     }

@@ -75,6 +75,7 @@
 		FF0000000000000000000246 /* PhraseAlias.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000245 /* PhraseAlias.swift */; };
 		FF0000000000000000000248 /* EventComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000247 /* EventComposerView.swift */; };
 		FF000000000000000000024A /* PhraseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000249 /* PhraseParser.swift */; };
+		FF0000000000000000000802 /* JPRuleLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000801 /* JPRuleLayer.swift */; };
 		FF000000000000000000024C /* QuickAddParserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024B /* QuickAddParserView.swift */; };
 		FF000000000000000000024E /* DictionarySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024D /* DictionarySettingsView.swift */; };
 		FF0000000000000000000250 /* SuggestionQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000024F /* SuggestionQueue.swift */; };
@@ -182,6 +183,7 @@
 		FF0000000000000000000245 /* PhraseAlias.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraseAlias.swift; sourceTree = "<group>"; };
 		FF0000000000000000000247 /* EventComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventComposerView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000249 /* PhraseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraseParser.swift; sourceTree = "<group>"; };
+		FF0000000000000000000801 /* JPRuleLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JPRuleLayer.swift; sourceTree = "<group>"; };
 		FF000000000000000000024B /* QuickAddParserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddParserView.swift; sourceTree = "<group>"; };
 		FF000000000000000000024D /* DictionarySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettingsView.swift; sourceTree = "<group>"; };
 		FF000000000000000000024F /* SuggestionQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionQueue.swift; sourceTree = "<group>"; };
@@ -278,6 +280,7 @@
 				FF0000000000000000000245 /* PhraseAlias.swift */,
 				FF0000000000000000000247 /* EventComposerView.swift */,
 				FF0000000000000000000249 /* PhraseParser.swift */,
+				FF0000000000000000000801 /* JPRuleLayer.swift */,
 				FF000000000000000000024B /* QuickAddParserView.swift */,
 				FF000000000000000000024D /* DictionarySettingsView.swift */,
 				FF000000000000000000024F /* SuggestionQueue.swift */,
@@ -465,6 +468,7 @@
 				FF0000000000000000000246 /* PhraseAlias.swift in Sources */,
 				FF0000000000000000000248 /* EventComposerView.swift in Sources */,
 				FF000000000000000000024A /* PhraseParser.swift in Sources */,
+				FF0000000000000000000802 /* JPRuleLayer.swift in Sources */,
 				FF000000000000000000024C /* QuickAddParserView.swift in Sources */,
 				FF000000000000000000024E /* DictionarySettingsView.swift in Sources */,
 				FF0000000000000000000250 /* SuggestionQueue.swift in Sources */,

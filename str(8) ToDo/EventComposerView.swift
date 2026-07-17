@@ -114,7 +114,13 @@ struct EventComposerView: View {
     @State private var nlInput: String = ""
     @State private var nlDebounceTask: Task<Void, Never>? = nil
     @State private var recognizedChips: [(WHCategory, String)] = []
+    @State private var nlUnrecognizedWords: [String] = []
+    @State private var aliasDraftWord: AliasCandidateWord? = nil
     @FocusState private var nlFieldFocused: Bool
+
+    /// サジェスト機能の ON/OFF。QuickAddParserView と共有。
+    @AppStorage(AppSettingsKey.enableDictionarySuggestions)
+    private var enableDictionarySuggestions = AppSettingsKey.enableDictionarySuggestionsDefault
 
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
     /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
@@ -127,7 +133,10 @@ struct EventComposerView: View {
         prefillCategory: Category? = nil,
         prefillProfile: Profile? = nil,
         prefillParticipants: [String] = [],
-        prefillNotes: String = ""
+        prefillNotes: String = "",
+        prefillRRule: String? = nil,
+        prefillNotificationOffsets: [Int] = [],
+        prefillIsImportant: Bool = false
     ) {
         existingTask = nil
         let newDraft = ComposerDraft(defaultDate: initialStart ?? .now, prefillDuration: initialDuration)
@@ -136,6 +145,11 @@ struct EventComposerView: View {
         newDraft.profile = prefillProfile
         newDraft.participantNames = prefillParticipants
         newDraft.notes = prefillNotes
+        // Phase 16 拡張: JPRuleLayer 由来の rrule / reminder / priority を反映。
+        // rrule はプリセット一覧に無ければ "none" にフォールバック（生 rrule は composer で編集不可）。
+        newDraft.repeatPattern = EventComposerView.repeatOptions.first { $0.2 == prefillRRule }?.0 ?? "none"
+        newDraft.notificationOffsets = prefillNotificationOffsets
+        newDraft.isImportant = prefillIsImportant
         _draft = State(initialValue: newDraft)
         _pendingPlaceHint = State(initialValue: prefillPlace)
     }
@@ -213,6 +227,33 @@ struct EventComposerView: View {
                             }
                         }
                     }
+                    // 未認識語の辞書登録サジェスト。QuickAddParserView と同じ UI で「+ 分類選択」ボタンを
+                    // 出し、その場で PhraseAlias に登録できる。
+                    if enableDictionarySuggestions && !nlUnrecognizedWords.isEmpty {
+                        HStack(spacing: 6) {
+                            Text("DICT").font(S8Font.mono(9)).tracking(1.4).foregroundColor(c.fg3)
+                            Text("辞書に登録できそうな語").font(S8Font.jp(10.5)).foregroundColor(c.fg3)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.top, 6)
+                        VStack(spacing: 0) {
+                            ForEach(nlUnrecognizedWords, id: \.self) { word in
+                                HStack {
+                                    Text(word).font(S8Font.jp(13)).foregroundColor(c.fg1)
+                                    Spacer()
+                                    Button(action: { aliasDraftWord = AliasCandidateWord(word: word) }) {
+                                        Text("+ 分類選択")
+                                            .font(S8Font.jp(10.5)).foregroundColor(c.fg2)
+                                            .padding(.horizontal, 9).padding(.vertical, 4)
+                                            .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 8)
+                                .overlay(alignment: .top) { S8Rule() }
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 4)
@@ -234,6 +275,9 @@ struct EventComposerView: View {
             }
         }
         .background(c.paper.ignoresSafeArea())
+        .sheet(item: $aliasDraftWord) { draft in
+            NewAliasSheet(word: draft.word)
+        }
         .sheet(item: $focusedCategory) { category in
             ComposerFocusView(category: category, draft: draft) { focusedCategory = $0 }
         }
@@ -262,6 +306,7 @@ struct EventComposerView: View {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             recognizedChips = []
+            nlUnrecognizedWords = []
             return
         }
         nlDebounceTask = Task { @MainActor in
@@ -274,8 +319,14 @@ struct EventComposerView: View {
     /// PhraseParser 結果を draft に反映。既存の手動編集を尊重しつつヒントを埋める。
     private func applyParse(_ text: String) {
         let result = PhraseParser.parse(text, aliases: aliases)
-        // タイトル: 残り文字列を反映（自然文入力を使う=手動入力より優先）
-        draft.title = result.titleRemainder
+        // タイトル: 残り文字列があるときだけ反映（全て消費されたら元の入力をタイトルにフォールバック）。
+        // これで「午後一時」だけ入力→タイトル空欄で保存できない、を回避しつつ、
+        // 「明日 14時 会議」→titleRemainder="会議" は従来通り上書きされる。
+        if !result.titleRemainder.isEmpty {
+            draft.title = result.titleRemainder
+        } else if draft.title.isEmpty {
+            draft.title = text
+        }
         // when
         if let start = result.startDate {
             draft.isTimeSpecified = true
@@ -307,6 +358,11 @@ struct EventComposerView: View {
             else if !draft.notes.contains(other) { draft.notes += "\n" + other }
         }
         recognizedChips = result.recognizedChips
+        nlUnrecognizedWords = result.unrecognizedWords
+        // QuickAddParserView と同じく、未認識語を「登録待ち」キューに投入する。
+        if enableDictionarySuggestions {
+            result.unrecognizedWords.forEach(SuggestionQueue.enqueue)
+        }
     }
 
     private var isSaveDisabled: Bool {
@@ -367,7 +423,9 @@ struct EventComposerView: View {
             let end = Self.previewEndFormatter.string(from: draft.startDate.addingTimeInterval(draft.duration))
             return "\(start)–\(end)"
         case .where_:
-            return draft.place?.name ?? "未設定"
+            // 自然文由来のヒント（PlaceTag 未登録名: 公園/海 等）も表示する。実際の PlaceTag は
+            // save() で必要に応じて materialize する。
+            return draft.place?.name ?? pendingPlaceHint ?? "未設定"
         case .which:
             let parts = [draft.category?.name, draft.profile?.name].compactMap { $0 }
             return parts.isEmpty ? "未設定" : parts.joined(separator: "・")
@@ -421,6 +479,14 @@ struct EventComposerView: View {
         let oldDuration = task.duration
         let oldOffsets = task.notificationOffsets
         let oldAmount = task.amount
+
+        // 自然文ヒント（公園/海 等）で PlaceTag が未確定の場合、save 時に placeholder として作成。
+        // 座標なしで保持しておき、後で LocationPicker から座標を付けられる。
+        if draft.place == nil, let hint = pendingPlaceHint {
+            let placeholder = PlaceTag(name: hint)
+            modelContext.insert(placeholder)
+            draft.place = placeholder
+        }
 
         task.title = trimmedTitle
         task.category = draft.category
@@ -559,8 +625,9 @@ private struct ComposerFocusView: View {
         case .when:
             ScrollView { whenContent; Color.clear.frame(height: 24) }
         case .where_:
-            // LocationPickerView は自前ナビ・入力体系。NavigationStack で包んで直接。
-            NavigationStack { LocationPickerView(place: $draft.place) }
+            // LocationPickerView は S8 スタイルで ScrollView + S8SectionLabel/S8SetRow を積む
+            // 構成に統一（他カテゴリと同じ contentContainer 直下）。ヘッダ・NavigationStack は不要。
+            LocationPickerView(place: $draft.place)
         case .which:
             ScrollView { whichContent; Color.clear.frame(height: 24) }
         case .who:

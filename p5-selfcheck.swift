@@ -45,8 +45,8 @@ func testPeakWithoutStillness() {
     machine.ingest(accelerationMagnitude: 1.5, at: 0.2)
     assert(machine.state == .peaked, "Move after peak: state=peaked")
 
-    // stillWindow を超える → リセット
-    machine.ingest(accelerationMagnitude: 1.5, at: 0.6)
+    // stillWindow (0.8s) を超える → リセット
+    machine.ingest(accelerationMagnitude: 1.5, at: 0.9)
     assert(machine.state == .idle, "Exceeded stillWindow: state=idle")
 }
 

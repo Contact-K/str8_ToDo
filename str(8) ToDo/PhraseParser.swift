@@ -6,7 +6,11 @@
 //  iOS26 Foundation Models framework は不採用（対応端末限定を避けるため）。
 //
 //  パイプライン:
-//   ① NSDataDetector(.date) で日時・相対日付（「明日」「来週」「14:00」等）を抽出
+//   ⓪ JPRuleLayer で日本語の日時・繰り返し・リマインダー・優先度を規則ベース抽出（Phase 16 拡張）。
+//      NSDataDetector が拾えない相対表現（明日／来週火曜／14時半／1時間後 等）と、rrule /
+//      reminderOffsets / isImportant はここで確定する。消費した範囲は remaining から除く。
+//   ① NSDataDetector(.date) で日時・相対日付を抽出（英字絶対日時等のフォールバック）。
+//      ⓪ で startDate が確定していれば skip する（自前規則が優先）。
 //   ② 残りのテキストから PhraseAlias（isEnabled）のキーワードを部分文字列として検索・照合。
 //      ヒットしたら chip 化して remaining から取り除く。.when カテゴリのヒットだけは
 //      replacement を元の文に埋め戻して①から再パース（replacement が新たな日時表現を
@@ -34,6 +38,12 @@ struct PhraseParser {
         var whoHint: String?
         /// P18 H6: other（その他）カテゴリのヒット。最初の1件を採用。
         var otherHint: String?
+        /// Phase 16 拡張: JPRuleLayer が抽出する RRULE 文字列（例: FREQ=WEEKLY;BYDAY=WE）。
+        var rrule: String?
+        /// Phase 16 拡張: JPRuleLayer が抽出する通知オフセット分数（例: [10, 60]）。
+        var reminderOffsets: [Int] = []
+        /// Phase 16 拡張: 優先度（! / 重要 / 至急 / 緊急 / 優先）を検出したら true。
+        var isImportant: Bool = false
         var recognizedChips: [(WHCategory, String)] = []
         var unrecognizedWords: [String] = []
     }
@@ -48,13 +58,27 @@ struct PhraseParser {
     private static func parse(_ text: String, aliases: [PhraseAlias], depth: Int) -> ParseResult {
         var result = ParseResult()
 
-        // ① 日時・相対日付の抽出
+        // ⓪ JPRuleLayer: 日本語規則ベースで when/rrule/reminder/priority を先に抽出。
+        //    消費した範囲は remaining から除去し、後段は残りだけ扱う。
+        let jp = JPRuleLayer.extract(text)
+        result.startDate = jp.startDate
+        result.duration = jp.duration
+        result.rrule = jp.rrule
+        result.reminderOffsets = jp.reminderOffsets
+        result.isImportant = jp.isImportant
+        result.whoHint = jp.whoHint  // Phase 16.5: 関係語彙は JPRuleLayer 優先、辞書 who はフォールバック
+        result.placeHint = jp.whereHint  // Phase 16.5: 場所語彙も JPRuleLayer 優先
+        result.recognizedChips.append(contentsOf: jp.chips)
+        var remaining = JPRuleLayer.remainder(from: text, consumed: jp.consumed)
+
+        // ① 日時・相対日付の抽出（NSDataDetector, 英字絶対日時等のフォールバック）
         //   - 1件目を startDate、range を remaining から除去。
         //   - (a) 1件目が NSDataDetector から duration を貰っていればそれを採用（英語 "3-4pm" 等）。
         //   - (b) 2件目が同日・後方・24h 以内なら「終了時刻」とみなし duration を算出し、
         //         チップを「開始 – 終了」1本に統合（レンジ表記）。
         //   - どれにも該当しない 2件目以降は従来通り「追加の時刻」チップに落とす。
-        var remaining = text
+        //   - ただし ⓪ で startDate 確定済みなら二重パースを避けて skip。
+        if result.startDate == nil {
         let dateHits = dateMatches(in: remaining)
         if let first = dateHits.first {
             result.startDate = first.date
@@ -81,6 +105,7 @@ struct PhraseParser {
                     result.recognizedChips.append((.when, "追加の時刻: \(extraTimeFormatter.string(from: extra.date))"))
                 }
             }
+        }
         }
 
         // ② PhraseAlias 照合（部分文字列検索。理由は上のヘッダコメント参照）
@@ -114,7 +139,10 @@ struct PhraseParser {
                 }
             case .when:
                 // ponytail: 最初にマッチした範囲だけ置換（同じ語が複数回現れる稀なケースは近似で許容）
-                if depth < maxRecursionDepth, let rewriteRange = rewritten.range(of: alias.keyword) {
+                // Phase 16 拡張: JPRuleLayer で startDate 確定済みなら辞書 when は skip（自前規則優先）。
+                if result.startDate == nil,
+                   depth < maxRecursionDepth,
+                   let rewriteRange = rewritten.range(of: alias.keyword) {
                     rewritten.replaceSubrange(rewriteRange, with: alias.replacement)
                     shouldRecurse = true
                 }
@@ -176,19 +204,39 @@ struct PhraseParser {
         return f
     }()
 
-    /// P18 H4: 指定文字が単語境界か（nil＝文字列端も境界扱い）。日本語(Han/Hiragana/Katakana)や
-    /// 英数字はいずれも Unicode.Scalar.Properties.isAlphabetic / Character.isNumber で判定できるため、
-    /// 前後どちらかがそれに該当する場合は「複合語の内部」とみなし境界ではないと判定する。
+    /// P18 H4: 指定文字が単語境界か（nil＝文字列端も境界扱い）。
+    /// - 漢字(Han)・カタカナ・英数字：複合語の内部と判断して境界ではない（大学 vs 大学院/大学ノート）。
+    /// - 平仮名：助詞（で/を/に/の/は/が/と/も 等）の可能性が高いため境界扱い（大学でレポート）。
+    /// - 空白・記号：境界扱い。
     private static func isWordBoundary(_ character: Character?) -> Bool {
         guard let character, let scalar = character.unicodeScalars.first else { return true }
-        return !(scalar.properties.isAlphabetic || character.isNumber)
+        if character.isWhitespace { return true }
+        if character.isNumber { return false }
+        let v = scalar.value
+        // Han (CJK 統合漢字 + 拡張A)
+        if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) { return false }
+        // カタカナ
+        if (0x30A0...0x30FF).contains(v) { return false }
+        // 平仮名は境界扱い（助詞のため）
+        if (0x3040...0x309F).contains(v) { return true }
+        // ASCII 英字は複合語内部扱い、その他は境界扱い
+        if v < 0x80 { return !scalar.properties.isAlphabetic }
+        return true
     }
 
     // MARK: - ③ 分かち書き（POS フィルタつき）
 
     /// 内容語（名詞/動詞/形容詞/数詞/固有名詞）だけを抽出。助詞・副詞・接続詞・代名詞・
-    /// 感嘆詞・限定詞・その他語を除外。1 文字トークンも助詞取りこぼし対策で捨てる。
-    /// 日本語混在時は言語を .japanese に固定（自動判定が英語に振れると POS スキームが変わるため）。
+    /// 感嘆詞・限定詞・その他語を除外。日本語混在時は言語を .japanese に固定（自動判定が
+    /// 英語に振れると POS スキームが変わるため）。
+    ///
+    /// Phase 16.5: NLTagger は日本語トークンを .otherWord タグにし、複合名詞（マグロ漁 /
+    /// 就職活動 / 図書館）を機械的に短単位分割する。そのため 3 段構成にした：
+    ///   Stage 1: 全トークンを (text, tag, range) で収集
+    ///   Stage 2: 隣接する .otherWord 同士を merge（range が完全接続 = 元テキストで隣り合ってる）
+    ///   Stage 3: keep タグ判定 + count >= 2 フィルタ
+    /// これで「マグロ(3字) + 漁(1字)」→「マグロ漁(4字)」として救済され、単字 fallback による
+    /// 情報欠落を防ぐ。「大学 図書館」は空白が range gap になるので過剰マージしない。
     private static func meaningfulWords(_ text: String) -> [String] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -201,18 +249,59 @@ struct PhraseParser {
         // 将来 .nameType スキームと併用する時のために保険で入れておく（含んでも無害）。
         let keep: Set<NLTag> = [.noun, .verb, .adjective, .number, .otherWord,
                                  .personalName, .placeName, .organizationName]
-        var out: [String] = []
+
+        // Stage 1: 全トークン収集
+        struct Tok { var text: String; var tag: NLTag?; var range: Range<String.Index> }
+        var tokens: [Tok] = []
         let opts: NLTagger.Options = [.omitWhitespace, .omitPunctuation, .joinNames]
         tagger.enumerateTags(in: trimmed.startIndex..<trimmed.endIndex,
                               unit: .word, scheme: .lexicalClass, options: opts) { tag, range in
             let word = String(trimmed[range]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard word.count >= 2 else { return true }
-            if let tag, keep.contains(tag) {
-                out.append(word)
+            if !word.isEmpty {
+                tokens.append(Tok(text: word, tag: tag, range: range))
             }
             return true
         }
+
+        // Stage 2: 隣接する otherWord 同士を merge（間に何も無い＝元テキストで隣り合ってる）。
+        // ただし NLTagger は日本語トークン（助詞・動詞語尾を含む）を全部 .otherWord にするため、
+        // 両側の先頭文字が「漢字またはカタカナ」の時だけ merge する。平仮名で始まる語は助詞や動詞
+        // 語尾（を/に/と/する/だ 等）と判断して結合しない。これで「掃除 + を + する」は分離維持、
+        // 「マグロ + 漁」「就職 + 活動」「図書 + 館」は正しく結合される。
+        var merged: [Tok] = []
+        for t in tokens {
+            if let last = merged.last,
+               last.tag == .otherWord, t.tag == .otherWord,
+               last.range.upperBound == t.range.lowerBound,
+               startsWithKanjiOrKatakana(last.text),
+               startsWithKanjiOrKatakana(t.text) {
+                let combined = Tok(text: last.text + t.text, tag: .otherWord,
+                                    range: last.range.lowerBound..<t.range.upperBound)
+                merged[merged.count - 1] = combined
+            } else {
+                merged.append(t)
+            }
+        }
+
+        // Stage 3: 品詞フィルタ + 2字以上
+        var out: [String] = []
+        for t in merged {
+            guard let tag = t.tag, keep.contains(tag) else { continue }
+            guard t.text.count >= 2 else { continue }
+            out.append(t.text)
+        }
         return out
+    }
+
+    /// 語の先頭が漢字（CJK 統合漢字 + 拡張A）または カタカナ か。複合名詞 merge 判定用。
+    private static func startsWithKanjiOrKatakana(_ text: String) -> Bool {
+        guard let s = text.unicodeScalars.first else { return false }
+        let v = s.value
+        // Han
+        if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) { return true }
+        // Katakana
+        if (0x30A0...0x30FF).contains(v) { return true }
+        return false
     }
 
     /// 平仮名 / 片仮名 / CJK 統合漢字 のいずれか。

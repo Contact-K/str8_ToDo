@@ -123,7 +123,10 @@ struct QuickAddParserView: View {
                 prefillCategory: category,
                 prefillProfile: profile,
                 prefillParticipants: parseResult.whoHint.map { [$0] } ?? [],
-                prefillNotes: parseResult.otherHint ?? ""
+                prefillNotes: parseResult.otherHint ?? "",
+                prefillRRule: parseResult.rrule,
+                prefillNotificationOffsets: parseResult.reminderOffsets,
+                prefillIsImportant: parseResult.isImportant
             )
         }
         .sheet(item: $aliasDraftWord) { draft in
@@ -232,8 +235,8 @@ struct QuickAddParserView: View {
     // MARK: - 操作
 
     /// 「保存」：パース結果から TaskItem を即作成。EventComposerView は開かない。
-    /// このビューはリストタブからのみ開かれるため、startDate/duration を落として必ずリスト
-    /// （浮遊タスク）へ入れる。日時付きで作りたい場合は「詳細を追加」を使う。
+    /// Phase 16 拡張: JPRuleLayer が抽出した startDate/duration/rrule/reminderOffsets/isImportant
+    /// を TaskItem に反映する。startDate が nil のときのみ浮遊タスクとしてリスト入り。
     private func saveDirect() {
         let remainder = parseResult.titleRemainder.trimmingCharacters(in: .whitespaces)
         let title = remainder.isEmpty ? text.trimmingCharacters(in: .whitespaces) : remainder
@@ -243,14 +246,22 @@ struct QuickAddParserView: View {
         let profile = matchedProfile()
         let category = profile == nil ? matchedCategory() : nil
 
+        let start = parseResult.startDate
+        let dur = start != nil ? (parseResult.duration ?? 3600) : 0
+
         let task = TaskItem(
             title: title,
             category: category,
-            startDate: nil,
-            duration: 0,
+            startDate: start,
+            duration: dur,
             place: matchedPlace(),
             phase: .today,
-            profile: profile
+            rrule: parseResult.rrule,
+            notes: parseResult.otherHint ?? "",
+            isImportant: parseResult.isImportant,
+            notificationOffsets: parseResult.reminderOffsets,
+            profile: profile,
+            participantNames: parseResult.whoHint.map { [$0] } ?? []
         )
         context.insert(task)
         do {
@@ -281,12 +292,19 @@ struct QuickAddParserView: View {
 
     private func matchedPlace() -> PlaceTag? {
         guard let hint = parseResult.placeHint else { return nil }
-        return try? context.fetch(FetchDescriptor<PlaceTag>(predicate: #Predicate { $0.name == hint })).first
+        if let existing = try? context.fetch(FetchDescriptor<PlaceTag>(predicate: #Predicate { $0.name == hint })).first {
+            return existing
+        }
+        // 自然文ヒントで新規 PlaceTag を作成（座標なし）。後で LocationPicker から座標を付けられる。
+        let placeholder = PlaceTag(name: hint)
+        context.insert(placeholder)
+        return placeholder
     }
 }
 
 /// サジェストからの新規 PhraseAlias 登録ダイアログ（分類選択のみの簡易版。管理 UI 本体は P17）。
-private struct NewAliasSheet: View {
+/// EventComposerView からも同一 UI で登録できるように internal 公開。
+struct NewAliasSheet: View {
     let word: String
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
