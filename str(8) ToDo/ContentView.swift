@@ -67,11 +67,11 @@ struct ContentView: View {
                     switch tabIndex {
                     case 0: CalendarRootView()
                     case 1: TimerView()
-                    case 2: TodoListView()
-                    case 3: ApprovalQueueView(showWeekReview: $showWeekReview, peerSession: peerSession)
-                    case 4: StudyHubView()
-                    case 5: ShopView()
-                    default: SettingsRootView()   // 6: 設定
+                    // Phase 17: 承認タブは List に統合済み。showWeekReview / peerSession を注入。
+                    case 2: TodoListView(showWeekReview: $showWeekReview, peerSession: peerSession)
+                    case 3: StudyHubView()
+                    case 4: ShopView()
+                    default: SettingsRootView()   // 5: 設定
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -196,9 +196,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NotificationService.weeklyReviewTappedNotification)) { _ in
             showWeekReview = true
         }
-        // 集中ルーム終了「承認へ進む」→ 承認タブへ直行（P14 debate-review #11）
+        // 集中ルーム終了「承認へ進む」→ 統合リストタブへ直行（Phase 17: 3→2）
         .onReceive(NotificationCenter.default.publisher(for: FocusRoomView.proceedToApprovalNotification)) { _ in
-            tabIndex = 3
+            tabIndex = 2
         }
     }
 
@@ -264,9 +264,7 @@ struct ContentView: View {
                     NotificationCenter.default.post(name: .s8ListAddTask, object: nil)
                 }
             )
-        case 3: // Approve → P2P（nil で既存 P2P LINK 表示・中心タップで接続トグル）
-            return nil
-        case 4: // Study → 科目追加ボタン（直接アクション）
+        case 3: // Study → 科目追加ボタン（直接アクション）※ Phase 17: 4→3
             return .init(
                 cap: "ADD",
                 main: "＋科目",
@@ -279,9 +277,9 @@ struct ContentView: View {
                     NotificationCenter.default.post(name: .s8StudyAddSubject, object: nil)
                 }
             )
-        case 5: // Shop → 特に切替なし（P2P コア）
+        case 4: // Shop → 特に切替なし（P2P コア）※ Phase 17: 5→4
             return nil
-        case 6: // Settings → 特に切替なし（P2P コア）
+        case 5: // Settings → 特に切替なし（P2P コア）※ Phase 17: 6→5
             return nil
         default:
             return nil

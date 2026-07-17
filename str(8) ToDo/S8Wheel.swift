@@ -11,11 +11,11 @@ struct S8TabDef: Identifiable {
     let label: String
 }
 
+// Phase 17: 承認タブはリストタブに統合。7→6 タブ。
 let s8Tabs: [S8TabDef] = [
     .init(id: "cal", icon: "calendar", label: "カレンダー"),
     .init(id: "timer", icon: "hourglass", label: "タイマー"),
     .init(id: "list", icon: "list", label: "リスト"),
-    .init(id: "approve", icon: "check-circle", label: "承認"),
     .init(id: "study", icon: "book-open", label: "勉強"),
     .init(id: "shop", icon: "shopping-bag", label: "ショップ"),
     .init(id: "settings", icon: "settings", label: "設定"),

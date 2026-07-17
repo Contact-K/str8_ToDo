@@ -2,8 +2,8 @@
 //  StudyHubView.swift
 //  str8ToDo
 //
-//  科目管理・集中統計・目標とストリーク。
-//  S0: 今日/今週合計、科目リスト。S1: ヒートマップ・週次バー・科目別内訳。
+//  勉強＝振り返りハブ。ヒーローカード（persona + goal + 3-stat）+ 目標バー + 12週ヒートマップ + 7日バー。
+//  タブ切替は廃止し 1 スクロールに統合（デザイン B1）。共有カードは B2 の StudyShareCard を ShareLink で書き出す。
 //
 
 import SwiftUI
@@ -14,6 +14,73 @@ extension Notification.Name {
     static let s8StudyAddSubject = Notification.Name("s8.study.addSubject")
 }
 
+// MARK: - Persona 判定
+
+enum StudyPersona {
+    case earlyBird       // 朝型
+    case afternoon       // 午後型
+    case nightOwl        // 夜型
+    case allDay          // 終日均等
+    case unknown         // データ不足
+
+    var name: String {
+        switch self {
+        case .earlyBird:  return "朝型集中タイプ"
+        case .afternoon:  return "午後の追い込み型"
+        case .nightOwl:   return "夜に伸びるタイプ"
+        case .allDay:     return "終日均等タイプ"
+        case .unknown:    return "計測中"
+        }
+    }
+
+    /// Lucide 相当のアイコン名。左のバッジ内に表示。
+    var iconName: String {
+        switch self {
+        case .earlyBird:  return "sunrise"
+        case .afternoon:  return "sun"
+        case .nightOwl:   return "moon"
+        case .allDay:     return "layers"
+        case .unknown:    return "hourglass"
+        }
+    }
+
+    /// Assets.xcassets に格納されたイラストの名前。
+    var illustrationName: String {
+        switch self {
+        case .earlyBird:  return "study-achieve"
+        case .afternoon:  return "study-think"
+        case .nightOwl:   return "study-focus"
+        case .allDay:     return "study-rest"
+        case .unknown:    return "study-think"
+        }
+    }
+
+    /// 直近 30 日のセッション start 時刻から最頻帯を判定。
+    static func from(sessions: [FocusSession], now: Date = .now, calendar: Calendar = .current) -> StudyPersona {
+        let cutoff = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        let recent = sessions.filter { $0.start >= cutoff }
+        var buckets: [StudyPersona: Int] = [.earlyBird: 0, .afternoon: 0, .nightOwl: 0]
+        for s in recent {
+            let secs = max(0, min(Int(s.end.timeIntervalSince(s.start)), 24 * 3600))
+            guard secs > 0 else { continue }
+            let h = calendar.component(.hour, from: s.start)
+            switch h {
+            case 5..<11:  buckets[.earlyBird, default: 0] += secs
+            case 11..<18: buckets[.afternoon, default: 0] += secs
+            default:      buckets[.nightOwl, default: 0] += secs
+            }
+        }
+        let total = buckets.values.reduce(0, +)
+        guard total >= 3600 else { return .unknown }
+        if let (top, mins) = buckets.max(by: { $0.value < $1.value }), mins * 10 >= total * 5 {
+            return top
+        }
+        return .allDay
+    }
+}
+
+// MARK: - StudyHubView
+
 struct StudyHubView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
@@ -22,321 +89,470 @@ struct StudyHubView: View {
     @Query private var subjects: [Subject]
 
     @State private var showAddSubjectSheet = false
-    @State private var selectedTab = 0
-    /// Handoff 00c: ホイール VIEW ダイヤル（0=サマリ 1=詳細）と連動。
-    @AppStorage("wheel.study.view") private var wheelStudyView = 0
+    @State private var shareImage: UIImage?
 
     private let cal = Calendar.current
 
     var body: some View {
-        let c = self.c
         VStack(spacing: 0) {
-            // ponytail: ヘッダ + ボタンは撤去。科目追加はホイール中心コアで発火。
-            S8TopBar("勉強", sub: "study hub · focus & streak") { EmptyView() }
-
-            HStack(spacing: 8) {
-                S8Chip("サマリ", selected: selectedTab == 0, action: { selectedTab = 0 })
-                S8Chip("詳細", selected: selectedTab == 1, action: { selectedTab = 1 })
-            }
-            .padding(.horizontal, 24).padding(.bottom, 12)
+            header
 
             ScrollView {
                 VStack(spacing: 0) {
-                    if selectedTab == 0 {
-                        summaryTab
+                    if sessions.isEmpty {
+                        emptyState(icon: "hourglass", title: "集中セッションがありません",
+                                   detail: "タイマーから集中セッションを記録しましょう")
                     } else {
-                        detailTab
+                        heroCard
+                            .padding(.horizontal, 24).padding(.top, 4)
+
+                        if !subjects.isEmpty {
+                            sectionHeader("GOALS", jp: "科目別 目標進捗")
+                            subjectGoalBars
+                        }
+
+                        sectionHeader("HEATMAP", jp: "集中ヒートマップ", trailing: "12 WEEKS")
+                        heatmap12Weeks
+                            .padding(.horizontal, 24)
+
+                        sectionHeader("LAST 7 DAYS", jp: "最近7日間")
+                        weeklyChart
                     }
-                    Color.clear.frame(height: 24)
+                    Color.clear.frame(height: 32)
                 }
             }
         }
-        // 背景はグローバル S8SamonPaper に任せる
         .sheet(isPresented: $showAddSubjectSheet) {
             AddSubjectSheet(isPresented: $showAddSubjectSheet, context: context)
         }
-        // ホイール中心の科目追加ボタンからの発火を購読
         .onReceive(NotificationCenter.default.publisher(for: .s8StudyAddSubject)) { _ in
             showAddSubjectSheet = true
         }
     }
 
-    // MARK: - S0: Summary Tab
+    // MARK: - Header (週レンジ + 共有)
 
-    @ViewBuilder
-    private var summaryTab: some View {
-        if sessions.isEmpty {
-            emptyState(icon: "hourglass.tophalf.filled", title: "集中セッションがありません",
-                       detail: "タイマーから集中セッションを記録しましょう")
-        } else {
-            streakBadge
-            summaryRow(title: "今日", tag: "TODAY", seconds: todayFocusSeconds)
-            summaryRow(title: "今週", tag: "WEEK", seconds: weeklyFocusSeconds)
-
-            if !subjects.isEmpty {
-                sectionHeader("GOALS", jp: "目標進捗")
-                subjectGoalProgress
-            }
-            if !subjects.isEmpty {
-                sectionHeader("SUBJECTS", jp: "科目")
-                subjectList
-            }
-        }
-    }
-
-    /// Handoff 05a: 火バッジ（丸 44px、accent-wash 背景、accent 縁）+ 日数 + STREAK · 0:00 RESET テレメトリ。
-    private var streakBadge: some View {
-        let streak = StudyStats.currentStreakDays(sessions, asOf: .now, calendar: cal)
-        let streakText = streak == 0 ? "ストリークなし" : "\(streak)日連続"
-        let active = streak > 0
-        return HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(active ? c.accentWash : c.surface2)
-                Circle().strokeBorder(active ? c.accent : c.line, lineWidth: 1.5)
-                S8Icon(name: "flame", size: 19, color: active ? c.accentInk : c.fg3)
-            }
-            .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(streakText).font(S8Font.jp(15, .bold)).foregroundColor(c.fg1)
-                Text("STREAK · 0:00 RESET")
-                    .font(S8Font.mono(9.5)).tracking(1.2).foregroundColor(c.fg3)
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("勉強").font(S8Font.jp(22, .bold)).foregroundColor(c.fg1)
+                Text("this week · \(Self.weekRangeText(now: .now, calendar: cal))")
+                    .font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
             }
             Spacer()
-        }
-        .padding(.horizontal, 24).padding(.vertical, 14)
-        .overlay(alignment: .top) { S8Rule() }
-        .accessibilityLabel("ストリーク")
-        .accessibilityValue(streakText)
-    }
-
-    private func summaryRow(title: String, tag: String, seconds: Int) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tag).font(S8Font.mono(10)).tracking(1.5).foregroundColor(c.fg3)
-                Text(title).font(S8Font.jp(14, .medium)).foregroundColor(c.fg2)
+            if !sessions.isEmpty, let img = shareImage {
+                ShareLink(item: Image(uiImage: img),
+                          preview: SharePreview("集中の振り返り", image: Image(uiImage: img))) {
+                    S8Icon(name: "share", size: 18, color: c.fg2)
+                        .frame(width: 40, height: 40)
+                        .accessibilityLabel("共有カードを書き出す")
+                }
+            } else if !sessions.isEmpty {
+                Button(action: renderShareImage) {
+                    S8Icon(name: "share", size: 18, color: c.fg2).frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("共有カードを生成")
             }
-            Spacer()
-            Text(durationText(Double(seconds))).font(S8Font.mono(17, .bold)).foregroundColor(c.fg1)
         }
-        .padding(.horizontal, 24).padding(.vertical, 14)
-        .overlay(alignment: .top) { S8Rule() }
-        .accessibilityLabel("\(title)の集中時間")
-        .accessibilityValue(durationText(Double(seconds)))
+        .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 10)
     }
 
-    private var subjectGoalProgress: some View {
-        VStack(spacing: 0) {
-            ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { subject in
-                VStack(alignment: .leading, spacing: 8) {
-                    subjectIndicator(subject)
+    /// ImageRenderer で B2 共有カードを PNG 化 → `shareImage` に保存。
+    @MainActor
+    private func renderShareImage() {
+        let card = StudyShareCard(
+            weekRange: Self.weekRangeText(now: .now, calendar: cal),
+            focusSeconds: weeklyFocusSeconds,
+            goalMinutes: totalWeeklyGoalMinutes,
+            persona: persona,
+            streakDays: streakDays,
+            oneLiner: heroOneLiner(remainingMinutes: remainingWeeklyMinutes)
+        )
+        .environment(\.colorScheme, scheme)
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 3
+        shareImage = renderer.uiImage
+    }
 
-                    if let dayInterval = cal.dateInterval(of: .day, for: .now) {
-                        let todaySubjectSeconds = StudyStats.focusSeconds(
-                            forSubject: subject.id, in: dayInterval, sessions
-                        )
-                        let goalSeconds = subject.dailyGoalMinutes * 60
-                        if goalSeconds > 0 {
-                            let progress = min(Double(todaySubjectSeconds) / Double(goalSeconds), 1.0)
-                            goalBar(progress: progress, text: "今日 \(todaySubjectSeconds / 60)/\(subject.dailyGoalMinutes)分")
-                                .accessibilityLabel("\(subject.name)の今日の目標進捗")
-                                .accessibilityValue("\(todaySubjectSeconds / 60)/\(subject.dailyGoalMinutes)分")
+    // MARK: - Hero card (persona + goal + one-liner + 3-stat)
+
+    private var heroCard: some View {
+        let focus = weeklyFocusSeconds
+        let goalM = totalWeeklyGoalMinutes
+        let progress = goalM > 0 ? min(Double(focus / 60) / Double(goalM), 1.0) : 0
+        let pct = Int((progress * 100).rounded())
+
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: S8Radius.lg).fill(c.surface)
+            RoundedRectangle(cornerRadius: S8Radius.lg).strokeBorder(c.lineStrong, lineWidth: 1)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(persona.illustrationName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 108, height: 108)
+                        .padding(.leading, -10).padding(.trailing, -2).padding(.top, -4)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("FOCUS PERSONA").font(S8Font.mono(9)).tracking(1.6).foregroundColor(c.fg3)
+                        Text(persona.name).font(S8Font.jp(14, .bold)).foregroundColor(c.fg1)
+                            .lineLimit(1).minimumScaleFactor(0.85)
+                        Text(heroOneLiner(remainingMinutes: remainingWeeklyMinutes))
+                            .font(S8Font.jp(13, .bold)).foregroundColor(c.accentInk)
+                            .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 6)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Goal progress bar
+                VStack(spacing: 6) {
+                    HStack(alignment: .lastTextBaseline) {
+                        Text("GOAL \(goalM > 0 ? "\(goalM / 60)H" : "未設定")")
+                            .font(S8Font.mono(8.5)).tracking(1.2).foregroundColor(c.fg3)
+                        Spacer()
+                        Text(hmText(TimeInterval(focus)))
+                            .font(S8Font.mono(12, .bold)).foregroundColor(c.fg1)
+                        Text("/ \(pct)%")
+                            .font(S8Font.mono(9)).foregroundColor(c.fg3)
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(c.surface2).frame(height: 5)
+                            Capsule().fill(c.accent).frame(width: geo.size.width * progress, height: 5)
                         }
                     }
+                    .frame(height: 5)
+                }
+                .padding(.top, 14)
 
-                    if let weekInterval = cal.dateInterval(of: .weekOfYear, for: .now) {
-                        let weekSubjectSeconds = StudyStats.focusSeconds(
-                            forSubject: subject.id, in: weekInterval, sessions
-                        )
-                        let goalSeconds = subject.weeklyGoalMinutes * 60
-                        if goalSeconds > 0 {
-                            let progress = min(Double(weekSubjectSeconds) / Double(goalSeconds), 1.0)
-                            goalBar(progress: progress, text: "今週 \(weekSubjectSeconds / 60)/\(subject.weeklyGoalMinutes)分")
-                                .accessibilityLabel("\(subject.name)の今週の目標進捗")
-                                .accessibilityValue("\(weekSubjectSeconds / 60)/\(subject.weeklyGoalMinutes)分")
+                // 3-stat panel
+                HStack(spacing: 1) {
+                    statCell(value: "\(sessionCountThisWeek)", label: "セッション", accent: false)
+                    statCell(value: remainingSessionsText, label: "残り", accent: remainingWeeklyMinutes > 0)
+                    statCell(value: "\(streakDays)", suffix: "d", label: "連続", accent: false)
+                }
+                .background(c.line)
+                .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.line, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                .padding(.top, 16)
+            }
+            .padding(20)
+        }
+    }
+
+    /// ドット環 + 中心にペルソナアイコンのバッジ。progress は 0..1。
+    private func personaBadge(progress: Double) -> some View {
+        let filled = 18
+        let onCount = Int(Double(filled) * progress)
+        return ZStack {
+            ForEach(0..<filled, id: \.self) { i in
+                let angle = Angle.degrees(-90 + Double(i) * 360.0 / Double(filled))
+                Circle()
+                    .fill(i < onCount ? c.accent : c.surface2)
+                    .frame(width: 5, height: 5)
+                    .offset(x: 40 * cos(angle.radians), y: 40 * sin(angle.radians))
+            }
+            Circle().fill(c.surface).frame(width: 60, height: 60)
+                .overlay(Circle().strokeBorder(c.lineStrong, lineWidth: 1))
+            S8Icon(name: persona.iconName, size: 22, color: c.accentInk)
+        }
+    }
+
+    /// 3-stat セルの1つ。
+    private func statCell(value: String, suffix: String? = nil, label: String, accent: Bool) -> some View {
+        VStack(spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 1) {
+                Text(value).font(S8Font.mono(16, .bold))
+                    .foregroundColor(accent ? c.accentInk : c.fg1)
+                if let suffix {
+                    Text(suffix).font(S8Font.mono(9)).foregroundColor(c.fg3)
+                }
+            }
+            Text(label).font(S8Font.mono(8)).tracking(1.2).foregroundColor(c.fg3)
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(c.surface)
+    }
+
+    // MARK: - Subject goal bars
+
+    private var subjectGoalBars: some View {
+        VStack(spacing: 16) {
+            ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { s in
+                let seconds = weeklySubjectSeconds[s.id] ?? 0
+                let goalM = max(s.weeklyGoalMinutes, 1)
+                let progress = min(Double(seconds / 60) / Double(goalM), 1.0)
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(hex: s.colorHex)).frame(width: 9, height: 9)
+                        Text(s.name).font(S8Font.jp(13.5, .medium)).foregroundColor(c.fg1)
+                        Spacer()
+                        Text("\(seconds / 60) / \(s.weeklyGoalMinutes)分")
+                            .font(S8Font.mono(10.5)).foregroundColor(c.fg3)
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(c.surface2).frame(height: 5)
+                            Capsule().fill(c.accent).frame(width: geo.size.width * progress, height: 5)
                         }
                     }
+                    .frame(height: 5)
                 }
-                .padding(.horizontal, 24).padding(.vertical, 12)
-                .overlay(alignment: .top) { S8Rule() }
             }
         }
+        .padding(.horizontal, 24)
     }
 
-    private func goalBar(progress: Double, text: String) -> some View {
-        HStack(spacing: 8) {
-            ProgressView(value: progress).tint(c.accent)
-            Text(text).font(S8Font.mono(11)).foregroundColor(c.fg3)
-        }
-    }
+    // MARK: - 12週ヒートマップ
 
-    private var subjectList: some View {
-        VStack(spacing: 0) {
-            ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { subject in
-                HStack(spacing: 10) {
-                    subjectIndicator(subject)
-                    Spacer()
-                    let subjectSeconds = focusSecondsBySubject[subject.id] ?? 0
-                    Text(durationText(Double(subjectSeconds)))
-                        .font(S8Font.mono(13)).foregroundColor(c.fg3)
-                    S8IconButton(icon: "trash", action: {
-                        context.delete(subject)
-                        try? context.save()
-                    })
-                    .accessibilityLabel("\(subject.name)を削除")
-                }
-                .padding(.horizontal, 24).padding(.vertical, 12)
-                .overlay(alignment: .top) { S8Rule() }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(subject.name)
-                .accessibilityValue(durationText(Double(focusSecondsBySubject[subject.id] ?? 0)))
-            }
-        }
-    }
-
-    // MARK: - S1: Detail Tab
-
-    @ViewBuilder
-    private var detailTab: some View {
-        if sessions.isEmpty {
-            emptyState(icon: "chart.line.uptrend.xyaxis", title: "データなし",
-                       detail: "集中セッションを記録すると統計が表示されます")
-        } else {
-            sectionHeader("HEATMAP", jp: "集中ヒートマップ")
-            HeatmapView(
-                year: cal.component(.year, from: .now),
-                values: focusSecondsByDayMap,
-                tint: c.info,
-                intensity: heatmapIntensity,
-                labelFor: heatmapLabel
-            )
-            .padding(.horizontal, 24).padding(.vertical, 8)
-            .accessibilityLabel("年間集中ヒートマップ")
-
-            sectionHeader("LAST 7 DAYS", jp: "最近7日間")
-            weeklyChart
-
-            if !subjects.isEmpty {
-                sectionHeader("BY SUBJECT", jp: "科目別集中時間")
-                subjectBreakdown
-            }
-        }
-    }
-
-    /// 直近7日の (日付, 集中秒)。ViewBuilder 外で計算して代入文を排除。
-    private var last7Days: [(date: Date, seconds: Int)] {
+    private var heatmap12Weeks: some View {
+        let secs = focusSecondsByDay
+        // 直近 12 週の全日を横方向、weekday を縦方向。26 列 × 3 行程度に落とし込む代わりに、
+        // シンプルに 12 週 × 7 曜日 = 84 セル。デザインは 26 列だが、7 曜日構造が意味的。
         let today = cal.startOfDay(for: .now)
-        return (0..<7).map { idx in
-            let date = cal.date(byAdding: .day, value: idx - 6, to: today) ?? today
-            return (date, focusSecondsByDay[date] ?? 0)
+        let daysBack = 12 * 7 - 1
+        let cells: [(Date, Int)] = (0...daysBack).map { i in
+            let d = cal.date(byAdding: .day, value: -daysBack + i, to: today) ?? today
+            return (d, secs[d] ?? 0)
+        }
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 12), spacing: 3) {
+            ForEach(0..<cells.count, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(heatColor(cells[i].1))
+                    .aspectRatio(1, contentMode: .fit)
+            }
         }
     }
+
+    private func heatColor(_ seconds: Int) -> Color {
+        let minutes = seconds / 60
+        switch minutes {
+        case 0: return c.surface2
+        case 1..<30: return c.accentWash
+        case 30..<90: return c.accent
+        default: return c.accentInk
+        }
+    }
+
+    // MARK: - Last 7 days bars
 
     private var weeklyChart: some View {
-        let maxSeconds = max(1, last7Days.map(\.seconds).max() ?? 3600)
+        let today = cal.startOfDay(for: .now)
+        let days: [(Date, Int)] = (0..<7).map { i in
+            let d = cal.date(byAdding: .day, value: i - 6, to: today) ?? today
+            return (d, focusSecondsByDay[d] ?? 0)
+        }
+        let maxSec = max(days.map(\.1).max() ?? 1, 3600)
         return HStack(alignment: .bottom, spacing: 8) {
-            ForEach(last7Days, id: \.date) { day in
-                VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: S8Radius.sm)
-                        .fill(c.info.opacity(0.7))
-                        .frame(height: max(CGFloat(day.seconds) / CGFloat(maxSeconds) * 100, 8))
-
-                    Text("\(cal.component(.day, from: day.date))")
-                        .font(S8Font.mono(10)).foregroundColor(c.fg3)
+            ForEach(0..<days.count, id: \.self) { idx in
+                let (d, sec) = days[idx]
+                let isToday = cal.isDate(d, inSameDayAs: today)
+                let h = max(CGFloat(sec) / CGFloat(maxSec), 0.05)
+                VStack(spacing: 5) {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(c.info.opacity(isToday ? 1.0 : 0.7))
+                        .frame(height: h * 88)
+                    Text("\(cal.component(.day, from: d))")
+                        .font(S8Font.mono(9.5, isToday ? .bold : .regular))
+                        .foregroundColor(isToday ? c.accentInk : c.fg3)
                 }
-                .accessibilityLabel(dayLabel(for: day.date))
-                .accessibilityValue(durationText(Double(day.seconds)))
+                .frame(maxWidth: .infinity)
             }
         }
-        .frame(height: 120)
-        .padding(.horizontal, 24).padding(.vertical, 12)
+        .frame(height: 108)
+        .padding(.horizontal, 24).padding(.top, 4)
     }
 
-    private var subjectBreakdown: some View {
-        VStack(spacing: 0) {
-            ForEach(subjects.sorted { $0.name < $1.name }, id: \.id) { subject in
-                let seconds = focusSecondsBySubject[subject.id] ?? 0
-                if seconds > 0 {
-                    HStack(spacing: 10) {
-                        subjectIndicator(subject)
-                        Spacer()
-                        Text(durationText(Double(seconds))).font(S8Font.mono(13)).foregroundColor(c.fg2)
-                    }
-                    .padding(.horizontal, 24).padding(.vertical, 12)
-                    .overlay(alignment: .top) { S8Rule() }
-                    .accessibilityLabel("\(subject.name)の集中時間")
-                    .accessibilityValue(durationText(Double(seconds)))
-                }
-            }
-        }
-    }
+    // MARK: - Computed data
 
-    // MARK: - Computed Properties
-
-    // 集計はすべて共有純関数 StudyStats（Subject.swift、selfcheck 検証済み）に委譲。
     private var focusSecondsByDay: [Date: Int] { StudyStats.focusSecondsByDay(sessions, calendar: cal) }
-
-    private var focusSecondsByDayMap: [Date: Double] {
-        Dictionary(uniqueKeysWithValues: focusSecondsByDay.map { ($0.key, Double($0.value)) })
-    }
-
-    private var focusSecondsBySubject: [UUID: Int] { StudyStats.focusSecondsBySubject(sessions) }
-
-    private var todayFocusSeconds: Int {
-        guard let day = cal.dateInterval(of: .day, for: .now) else { return 0 }
-        return StudyStats.totalFocusSeconds(sessions, in: day)
-    }
 
     private var weeklyFocusSeconds: Int {
         guard let week = cal.dateInterval(of: .weekOfYear, for: .now) else { return 0 }
         return StudyStats.totalFocusSeconds(sessions, in: week)
     }
 
-    private func heatmapIntensity(_ value: Double) -> Double {
-        // 秒を分に変換。30分で 0.3、120分で 1.0に飽和する線形
-        let minutes = value / 60.0
-        return min(minutes / 120.0, 1.0)
-    }
-
-    private func heatmapLabel(date: Date, value: Double) -> String {
-        let dateStr = dayLabel(for: date)
-        if value > 0 {
-            return "\(dateStr) \(durationText(value))集中"
-        } else {
-            return "\(dateStr) 記録なし"
+    private var weeklySubjectSeconds: [UUID: Int] {
+        guard let week = cal.dateInterval(of: .weekOfYear, for: .now) else { return [:] }
+        var map: [UUID: Int] = [:]
+        for s in subjects {
+            map[s.id] = StudyStats.focusSeconds(forSubject: s.id, in: week, sessions)
         }
+        return map
     }
 
-    private func dayLabel(for date: Date) -> String {
-        "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
+    private var totalWeeklyGoalMinutes: Int {
+        subjects.reduce(0) { $0 + $1.weeklyGoalMinutes }
     }
 
-    // MARK: - 共有パーツ
+    private var remainingWeeklyMinutes: Int {
+        max(0, totalWeeklyGoalMinutes - weeklyFocusSeconds / 60)
+    }
 
-    private func subjectIndicator(_ subject: Subject) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(Color(hex: subject.colorHex)).frame(width: 10, height: 10)
-            Text(subject.name).font(S8Font.jp(14, .medium)).foregroundColor(c.fg1)
+    private var sessionCountThisWeek: Int {
+        guard let week = cal.dateInterval(of: .weekOfYear, for: .now) else { return 0 }
+        return sessions.filter { week.contains($0.end) }.count
+    }
+
+    /// 残りセッション換算（デフォルトポモ 25 分単位で ceil）。目標未達なら残り、達成済みは "0"。
+    private var remainingSessionsText: String {
+        if totalWeeklyGoalMinutes == 0 { return "—" }
+        let mins = remainingWeeklyMinutes
+        if mins == 0 { return "0" }
+        return "\(Int(ceil(Double(mins) / 25.0)))"
+    }
+
+    private var streakDays: Int {
+        StudyStats.currentStreakDays(sessions, asOf: .now, calendar: cal)
+    }
+
+    private var persona: StudyPersona {
+        StudyPersona.from(sessions: sessions, now: .now, calendar: cal)
+    }
+
+    private func heroOneLiner(remainingMinutes: Int) -> String {
+        if totalWeeklyGoalMinutes == 0 {
+            return "科目に週目標を設定すると、\nここにひとことが出ます。"
         }
+        if remainingMinutes == 0 {
+            return "今週の目標を達成。\nお疲れさま。"
+        }
+        return "あと\(hmText(TimeInterval(remainingMinutes * 60)))。\n今日を積めば、届く。"
     }
 
-    /// mono UPPERCASE caption + JP ラベルの2段セクション見出し。
-    private func sectionHeader(_ tag: String, jp: String) -> some View {
+    // MARK: - Shared parts
+
+    private func sectionHeader(_ tag: String, jp: String, trailing: String? = nil) -> some View {
         HStack(spacing: 10) {
             Text(tag).font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
             Text(jp).font(S8Font.jp(13, .medium)).foregroundColor(c.fg2)
+            if let trailing {
+                Text(trailing).font(S8Font.mono(9)).foregroundColor(c.fg3)
+            }
             S8Rule()
         }
-        .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 8)
+        .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 10)
     }
 
     private func emptyState(icon: String, title: String, detail: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 34)).foregroundColor(c.fg3)
+            S8Icon(name: icon, size: 34, color: c.fg3)
             Text(title).font(S8Font.jp(15, .bold)).foregroundColor(c.fg1)
             Text(detail).font(S8Font.jp(13)).foregroundColor(c.fg3).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24).padding(.vertical, 48)
+    }
+
+    /// 週の月〜日レンジを "M/d – M/d" 形式で。
+    static func weekRangeText(now: Date, calendar: Calendar) -> String {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "M/d"
+        let start = f.string(from: week.start)
+        let end = f.string(from: calendar.date(byAdding: .day, value: -1, to: week.end) ?? week.end)
+        return "\(start) – \(end)"
+    }
+}
+
+// MARK: - B2 共有カード
+
+/// 300×534 の静止画。ImageRenderer で書き出して ShareLink 経由で SNS へ。
+private struct StudyShareCard: View {
+    let weekRange: String
+    let focusSeconds: Int
+    let goalMinutes: Int
+    let persona: StudyPersona
+    let streakDays: Int
+    let oneLiner: String
+
+    @Environment(\.colorScheme) private var scheme
+    private var c: S8Palette { S8Palette.of(scheme) }
+
+    var body: some View {
+        let pct = goalMinutes > 0 ? Int(Double(focusSeconds / 60) / Double(goalMinutes) * 100) : 0
+        let progress = goalMinutes > 0 ? min(Double(focusSeconds / 60) / Double(goalMinutes), 1.0) : 0
+        ZStack {
+            c.paper
+            VStack(alignment: .center, spacing: 0) {
+                // Top: week range
+                HStack {
+                    Text("THIS WEEK").font(S8Font.mono(9.5)).tracking(1.8).foregroundColor(c.fg3)
+                    Spacer()
+                    Text(weekRange).font(S8Font.mono(9.5)).tracking(1.0).foregroundColor(c.fg3)
+                }
+                // Persona illustration + big dot-ring overlay
+                ZStack {
+                    Image(persona == .unknown ? "study-think"
+                          : (progress >= 1.0 ? "study-achieve" : persona.illustrationName))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200, height: 200)
+                    bigDotRing(progress: progress)
+                        .frame(width: 224, height: 224)
+                }
+                .padding(.top, 12)
+                // Main time
+                Text(hmText(TimeInterval(focusSeconds)))
+                    .font(S8Font.mono(46, .bold))
+                    .foregroundColor(c.fg1)
+                    .padding(.top, 12)
+                Text("FOCUS · \(pct)% OF GOAL")
+                    .font(S8Font.mono(9)).tracking(1.6).foregroundColor(c.fg3)
+                    .padding(.top, 6)
+                // Persona
+                Text("FOCUS PERSONA")
+                    .font(S8Font.mono(9)).tracking(1.6).foregroundColor(c.fg3)
+                    .padding(.top, 18)
+                Text(persona.name)
+                    .font(S8Font.jp(21, .bold)).foregroundColor(c.fg1)
+                    .padding(.top, 4)
+                Text(oneLiner + "\n" + streakLine)
+                    .font(S8Font.jp(12.5)).foregroundColor(c.fg2)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 8)
+                Spacer(minLength: 0)
+                // Footer
+                HStack {
+                    HStack(spacing: 2) {
+                        Text("str").font(.system(size: 18, weight: .heavy)).foregroundColor(c.fg1)
+                        Text("(8)").font(.system(size: 18, weight: .heavy)).foregroundColor(c.accent)
+                    }
+                    Spacer()
+                    Text("STUDY HUB").font(S8Font.mono(8.5)).tracking(1.6).foregroundColor(c.fg3)
+                }
+                .padding(.top, 12)
+                .overlay(alignment: .top) { S8Rule() }
+                .padding(.top, 12)
+            }
+            .padding(28)
+        }
+        .frame(width: 300, height: 534)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(c.lineStrong, lineWidth: 1))
+    }
+
+    private var streakLine: String {
+        if streakDays > 0 { return "\(streakDays)日連続" }
+        return "今日から始めよう"
+    }
+
+    private func bigDotRing(progress: Double) -> some View {
+        let n = 24
+        let onCount = Int(Double(n) * progress)
+        return ZStack {
+            ForEach(0..<n, id: \.self) { i in
+                let angle = Angle.degrees(-90 + Double(i) * 360.0 / Double(n))
+                Circle()
+                    .fill(i < onCount ? c.accent : c.surface2)
+                    .frame(width: 8, height: 8)
+                    .offset(x: 84 * cos(angle.radians), y: 84 * sin(angle.radians))
+            }
+        }
     }
 }
 
@@ -359,7 +575,6 @@ struct AddSubjectSheet: View {
     var body: some View {
         let c = self.c
         VStack(spacing: 0) {
-            // Handoff ヘッダ: [キャンセル][タイトル][追加]
             HStack {
                 Button("キャンセル") { isPresented = false }
                     .font(S8Font.jp(14)).foregroundColor(c.fg2)
@@ -385,12 +600,8 @@ struct AddSubjectSheet: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    sectionCap("BASIC", jp: "基本情報")
-                        .padding(.top, 8)
-                    // 科目名
-                    S8Field(placeholder: "科目名（例: 統計学）", text: $name)
-                        .padding(.top, 8)
-                    // 色選択（Handoff: パレット直置き）
+                    sectionCap("BASIC", jp: "基本情報").padding(.top, 8)
+                    S8Field(placeholder: "科目名（例: 統計学）", text: $name).padding(.top, 8)
                     HStack(spacing: 10) {
                         Text("色").font(S8Font.jp(13.5)).foregroundColor(c.fg2)
                         Spacer()
@@ -405,13 +616,11 @@ struct AddSubjectSheet: View {
                     .padding(.vertical, 14)
                     .overlay(alignment: .top) { S8Rule() }
 
-                    sectionCap("GOALS", jp: "目標")
-                        .padding(.top, 20)
+                    sectionCap("GOALS", jp: "目標").padding(.top, 20)
                     stepperRow(label: "日目標", value: $dailyGoalMinutes, range: 5...480, step: 5, unit: "分")
                     stepperRow(label: "週目標", value: $weeklyGoalMinutes, range: 30...2400, step: 30, unit: "分")
 
-                    sectionCap("POMODORO", jp: "ポモドーロ")
-                        .padding(.top, 20)
+                    sectionCap("POMODORO", jp: "ポモドーロ").padding(.top, 20)
                     stepperRow(label: "セッション時間", value: $pomodoroMinutes, range: 5...60, step: 5, unit: "分")
 
                     Color.clear.frame(height: 24)

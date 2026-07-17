@@ -31,7 +31,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A116F6222FE51E57005A6590"
-               BuildableName = "str(8) ToDo.app"
+               BuildableName = "str8ToDo.app"
                BlueprintName = "str(8) ToDo"
                ReferencedContainer = "container:">
             </BuildableReference>
@@ -73,7 +73,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A116F6222FE51E57005A6590"
-            BuildableName = "str(8) ToDo.app"
+            BuildableName = "str8ToDo.app"
             BlueprintName = "str(8) ToDo"
             ReferencedContainer = "container:">
          </BuildableReference>
@@ -109,7 +109,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A116F6222FE51E57005A6590"
-            BuildableName = "str(8) ToDo.app"
+            BuildableName = "str8ToDo.app"
             BlueprintName = "str(8) ToDo"
             ReferencedContainer = "container:">
          </BuildableReference>

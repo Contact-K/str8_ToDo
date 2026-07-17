@@ -7,6 +7,16 @@
 
 import Foundation
 
+/// 秒 → "1h 32m" / "45m" / "12h" 形式。負値は 0 クランプ。
+func hmText(_ seconds: TimeInterval) -> String {
+    let total = max(0, Int(seconds.rounded()))
+    let h = total / 3600
+    let m = (total % 3600) / 60
+    if h > 0 && m > 0 { return "\(h)h \(m)m" }
+    if h > 0 { return "\(h)h" }
+    return "\(m)m"
+}
+
 /// 秒 → 「45分」「2時間」「2時間30分」形式。
 func durationText(_ seconds: TimeInterval) -> String {
     let minutes = Int(seconds) / 60

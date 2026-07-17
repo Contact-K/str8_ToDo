@@ -83,6 +83,8 @@ private struct RootView: View {
                 seedProfilesIfNeeded(modelContainer.mainContext)
                 // seed 後の初回 refresh
                 WidgetSnapshotService.refresh(modelContainer.mainContext)
+                // Phase 17: 起動直後にも Share Extension 経由の inbox を吸い上げ
+                ShareInboxDrainer.drain(into: modelContainer.mainContext)
                 // 起動時に通知権限を要求
                 _ = await NotificationService.requestAuthorization()
                 // P2P（承認/集中ルーム）用のローカルネットワーク & Bluetooth 権限を要求
@@ -93,7 +95,11 @@ private struct RootView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
-                case .active, .background:
+                case .active:
+                    // Phase 17: Share Extension が書いた inbox を吸い上げてタスク化
+                    ShareInboxDrainer.drain(into: modelContainer.mainContext)
+                    WidgetSnapshotService.refresh(modelContainer.mainContext)
+                case .background:
                     WidgetSnapshotService.refresh(modelContainer.mainContext)
                 case .inactive:
                     break

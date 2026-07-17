@@ -48,6 +48,9 @@ enum JPRuleLayer {
         extractDatePart(text, now: now, calendar: calendar, consumed: &consumed, into: &result, date: &datePart)
 
         var timeParts: [(hour: Int, minute: Int)] = []
+        // Phase 17: 「H時から N時間」duration パターンを time より先に消費（同じ範囲を time パーサが
+        // 再パースしないよう consumed に登録）。マッチすると times[0] + result.duration が同時に埋まる。
+        extractTimeRangeWithDuration(text, consumed: &consumed, into: &result, times: &timeParts)
         extractTimeParts(text, consumed: &consumed, into: &result, times: &timeParts)
 
         extractWho(text, consumed: &consumed, into: &result)
@@ -62,7 +65,9 @@ enum JPRuleLayer {
             now: now,
             calendar: calendar
         )
-        if let start = result.startDate, timeParts.count >= 2 {
+        // 2 個目の時刻を「終了」として duration 算出。ただし extractTimeRangeWithDuration が既に
+        // duration を確定していれば上書きしない。
+        if result.duration == nil, let start = result.startDate, timeParts.count >= 2 {
             let end = calendar.date(bySettingHour: timeParts[1].hour, minute: timeParts[1].minute, second: 0, of: start) ?? start
             let diff = end.timeIntervalSince(start)
             if diff > 0 && diff <= 24 * 3600 {
@@ -315,15 +320,25 @@ enum JPRuleLayer {
         "公園", "海", "山", "川", "湖", "森", "ビーチ",
         // 交通・宗教
         "空港", "駅", "港", "神社", "寺", "教会",
+        "駐車場", "ガソリンスタンド",
         // 施設・公共
         "図書館", "病院", "歯医者", "銀行", "郵便局", "役所", "警察署", "市役所",
+        "区役所", "公民館", "市民センター", "クリニック", "診療所", "薬局",
+        // 教育
+        "塾", "予備校", "学童", "保育園", "幼稚園", "小学校", "中学校", "高校",
+        "教室", "キャンパス",
         // 買い物
         "スーパー", "コンビニ", "デパート", "モール", "ドラッグストア", "本屋",
+        "ホームセンター", "家電量販店", "アウトレット", "コインランドリー",
         // 飲食
-        "カフェ", "レストラン", "居酒屋", "バー", "食堂",
+        "カフェ", "レストラン", "居酒屋", "バー", "食堂", "ラーメン屋", "喫茶店",
+        // 美容・健康
+        "美容室", "床屋", "サロン", "整体", "マッサージ", "ネイルサロン",
         // 運動・娯楽
-        "ジム", "スタジオ", "プール", "温泉", "銭湯",
-        "映画館", "美術館", "博物館", "動物園", "水族館",
+        "ジム", "スタジオ", "プール", "温泉", "銭湯", "サウナ",
+        "映画館", "美術館", "博物館", "動物園", "水族館", "ライブハウス",
+        // 会場系
+        "会場", "式場", "ホール", "スタジアム", "球場", "アリーナ",
     ]
 
     private static func extractWhere(_ text: String, consumed: inout [Range<String.Index>], into result: inout Result) {
@@ -436,6 +451,60 @@ enum JPRuleLayer {
            let d = toInt(hit.groups[1]), (1...31).contains(d) {
             date = nextDayOfMonth(day: d, from: now, calendar: calendar)
             result.chips.append((.when, "\(d)日"))
+            consumed.append(hit.range)
+            return
+        }
+    }
+
+    // MARK: - Time range with explicit duration (Phase 17: 15時から2時間 / 午後3時から30分 …)
+
+    /// 「<開始時刻>から<所要時間>」パターン。マッチすると times に開始時刻を append し、
+    /// result.duration を直接セット。開始時刻の書式は「(午前|午後)?H時(半|N分)?」を許容。
+    /// specific → generic 順で最初のヒットを採用（2時間30分 → 2時間半 → 2時間 → N分）。
+    private static func extractTimeRangeWithDuration(_ text: String, consumed: inout [Range<String.Index>], into result: inout Result, times: inout [(hour: Int, minute: Int)]) {
+        // 開始時刻部（4 グループ: ampm / hour / 半 / 分数字）
+        let timePart = #"(午前|午後)?(\#(anyDigits))時(?!間)(?:(半)|(\#(anyDigits))\s*分)?"#
+        // 継続時間部の各パターン（specific → generic）
+        struct DurationForm {
+            let regex: String
+            /// duration を計算。groups[groupBase], [groupBase+1] を参照。
+            let resolve: (RegexHit, Int) -> TimeInterval?
+        }
+        let forms: [DurationForm] = [
+            DurationForm(regex: #"(\#(anyDigits))\s*時間\s*(\#(anyDigits))\s*分"#, resolve: { h, i in
+                guard let hh = toInt(h.groups[i]), let mm = toInt(h.groups[i+1]) else { return nil }
+                return TimeInterval(hh * 3600 + mm * 60)
+            }),
+            DurationForm(regex: #"(\#(anyDigits))\s*時間半"#, resolve: { h, i in
+                guard let hh = toInt(h.groups[i]) else { return nil }
+                return TimeInterval(hh * 3600 + 1800)
+            }),
+            DurationForm(regex: #"(\#(anyDigits))\s*時間"#, resolve: { h, i in
+                guard let hh = toInt(h.groups[i]) else { return nil }
+                return TimeInterval(hh * 3600)
+            }),
+            DurationForm(regex: #"(\#(anyDigits))\s*分"#, resolve: { h, i in
+                guard let mm = toInt(h.groups[i]) else { return nil }
+                return TimeInterval(mm * 60)
+            }),
+        ]
+        for form in forms {
+            let pattern = "\(timePart)\\s*から\\s*\(form.regex)"
+            guard let hit = matches(in: text, pattern: pattern, avoiding: consumed).first else { continue }
+            // 開始時刻をパース
+            var h = toInt(hit.groups[2]) ?? -1
+            guard (0...25).contains(h) else { continue }
+            let ampm = hit.groups[1]
+            if ampm == "午後" && h < 12 { h += 12 }
+            if ampm == "午前" && h == 12 { h = 0 }
+            var m = 0
+            if hit.groups[3] == "半" { m = 30 }
+            else if let g4 = hit.groups[4], let mm = toInt(g4), (0...59).contains(mm) { m = mm }
+            // 継続時間
+            guard let dur = form.resolve(hit, 5), dur > 0 && dur <= 24 * 3600 else { continue }
+            times.append((h, m))
+            result.duration = dur
+            result.chips.append((.when, "\(h)時" + (m > 0 ? "\(m)分" : "") + "から"))
             consumed.append(hit.range)
             return
         }

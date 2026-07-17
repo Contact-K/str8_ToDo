@@ -15,6 +15,14 @@ private enum W {
     static let accent = Color(red: 0xDC/255, green: 0x8B/255, blue: 0x28/255)
     static let accentInk = Color(red: 0xB0/255, green: 0x6D/255, blue: 0x17/255)
     static let ok = Color(red: 0x3D/255, green: 0x5A/255, blue: 0x47/255)
+    /// Live Activity 用の温かい橙（darkContext で発光する）。
+    static let live = Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255)
+    /// Live Activity dim（未経過ドット）。
+    static let liveOff = Color.white.opacity(0.18)
+    /// Dark BG (StandBy / Live Activity)
+    static let darkBg = Color(red: 0x15/255, green: 0x14/255, blue: 0x0F/255)
+    static let darkFg = Color(red: 0xF1/255, green: 0xEF/255, blue: 0xE6/255)
+    static let darkLine = Color(red: 0x32/255, green: 0x2F/255, blue: 0x26/255)
 }
 
 private enum WF {
@@ -23,6 +31,50 @@ private enum WF {
     }
     static func jp(_ size: CGFloat, _ w: Font.Weight = .medium) -> Font {
         .system(size: size, weight: w)
+    }
+}
+
+// MARK: - Dot ring（C WIDGETS 共通ビジュアル。砂時計グリフを廃止してこれで統一）
+
+private struct DotRing: View {
+    let radius: CGFloat
+    let count: Int
+    /// 0..1。埋まるドット数比。
+    let progress: Double
+    let onColor: Color
+    let offColor: Color
+    let dotSize: CGFloat
+    /// 12時方向を基準とする角度オフセット。-90 = 12時から時計回り。
+    var startDegrees: Double = -90
+
+    var body: some View {
+        let k = Int((Double(count) * max(0, min(1, progress))).rounded())
+        ZStack {
+            ForEach(0..<count, id: \.self) { i in
+                let a = Angle.degrees(startDegrees + Double(i) * 360.0 / Double(count))
+                Circle()
+                    .fill(i < k ? onColor : offColor)
+                    .frame(width: dotSize, height: dotSize)
+                    .offset(x: radius * cos(a.radians), y: radius * sin(a.radians))
+            }
+        }
+    }
+}
+
+// MARK: - Samon backdrop（薄い砂紋。paper widget の底辺に敷く）
+
+private struct SamonBackdrop: Shape {
+    /// 高さ比 0..1 で 2〜3 本の緩やかな曲線を返す。
+    let curveRatios: [Double]
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        for r in curveRatios {
+            let y = rect.height * r
+            p.move(to: CGPoint(x: 0, y: y))
+            p.addQuadCurve(to: CGPoint(x: rect.width, y: y),
+                           control: CGPoint(x: rect.width / 2, y: y - rect.height * 0.03))
+        }
+        return p
     }
 }
 
@@ -49,12 +101,10 @@ struct StrTimelineProvider: TimelineProvider {
 
         var entries: [StrEntry] = [StrEntry(date: now, snapshot: snapshot)]
 
-        // 各カードの開始/終了境界でエントリを事前生成（WidgetShared の共有ロジック）。
         if let snapshot = snapshot {
             for boundary in snapshot.timelineBoundaries(after: now) {
                 entries.append(StrEntry(date: boundary, snapshot: snapshot))
             }
-            // 「今日の枠」の状態遷移（朝→昼→夜）が現在時刻で反映されるよう、band 境界にも entry を打つ。
             let cal = Calendar.current
             let today = cal.startOfDay(for: now)
             let bandBoundaries: [Date] = snapshot.bands.flatMap { band -> [Date] in
@@ -67,7 +117,6 @@ struct StrTimelineProvider: TimelineProvider {
             }
         }
 
-        // Reload at next day 00:00
         let reloadTime = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) ?? now.addingTimeInterval(86400)
         let timeline = Timeline(entries: entries, policy: .after(reloadTime))
         completion(timeline)
@@ -79,12 +128,10 @@ struct StrWidgetView: View {
     let entry: StrEntry
     @Environment(\.widgetFamily) var family
 
-    // Helper: current card based on entry.date（WidgetShared の共有ロジック）
     private var currentCard: WidgetSnapshot.Card? {
         entry.snapshot?.currentCard(at: entry.date)
     }
 
-    // Helper: snapshot が有効で新鮮か判定
     private var isCurrent: Bool {
         entry.snapshot != nil && entry.snapshot?.isStale == false
     }
@@ -112,148 +159,162 @@ struct StrWidgetView: View {
         }
     }
 
-    // MARK: - System Small / Medium 共通ヘッダー
-    @ViewBuilder
-    private func topHeadline() -> some View {
-        if let card = currentCard {
-            cardView(card)
-        } else if isCurrent {
-            Text("今日の予定は完了")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-        } else {
-            Text("アプリで更新")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-        }
-    }
+    // MARK: - System Small（C1: 砂紋 + ドット環 + NEXT）
 
-    /// 達成／未確定の統計チップ列。`isCurrent` が false の時は "—" を出す。
-    @ViewBuilder
-    private func statTiles(unconfirmedBold: Bool = false) -> some View {
-        let achieve = isCurrent ? "\(entry.snapshot?.achievementCount ?? 0)" : "—"
-        let unconfirm = isCurrent ? "\(entry.snapshot?.unconfirmedCount ?? 0)" : "—"
-        Text("達成 \(achieve)").font(.caption2)
-        Text("未確定 \(unconfirm)")
-            .font(.caption2)
-            .fontWeight(unconfirmedBold ? .semibold : .regular)
-    }
-
-    // MARK: - System Small （Handoff 08a）
     private var systemSmallView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // ヘッダ: dot + NEXT cap
-            HStack(spacing: 5) {
-                Circle().fill(W.accent).frame(width: 6, height: 6)
-                Text("NEXT").font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
-            }
-            if let card = currentCard {
-                Text(remainText(for: card))
-                    .font(WF.mono(21, .bold))
-                    .foregroundColor(W.accentInk)
-                    .padding(.top, 8)
-                Text(card.title)
-                    .font(WF.jp(12.5, .bold))
-                    .foregroundColor(W.fg1)
-                    .lineLimit(1)
-                    .padding(.top, 5)
-                Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
-                    .font(WF.mono(9.5))
-                    .foregroundColor(W.fg3)
-            } else if isCurrent {
-                Spacer(minLength: 0)
-                Text("今日の予定は完了").font(WF.jp(11)).foregroundColor(W.fg3)
-            } else {
-                Spacer(minLength: 0)
-                Text("アプリで更新").font(WF.jp(11)).foregroundColor(W.fg3)
-            }
-            Spacer(minLength: 0)
-            Divider().background(W.line)
-            HStack(spacing: 8) {
-                statPair(label: "達成", value: "\(entry.snapshot?.achievementCount ?? 0)", strong: false)
-                statPair(label: "未確定", value: "\(entry.snapshot?.unconfirmedCount ?? 0)", strong: true)
-            }
-            .padding(.top, 8)
-        }
-        .containerBackground(for: .widget) { W.paper }
-    }
-
-    // MARK: - System Medium （Handoff 08a）
-    private var systemMediumView: some View {
-        HStack(spacing: 14) {
-            // 左: NEXT
+        ZStack(alignment: .topLeading) {
+            SamonBackdrop(curveRatios: [0.75, 0.85, 0.95])
+                .stroke(W.line, lineWidth: 1)
+                .opacity(0.6)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
                     Circle().fill(W.accent).frame(width: 6, height: 6)
-                    Text("NEXT").font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
+                    Text(currentCard.map(remainLabel) ?? "NEXT")
+                        .font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
                 }
                 if let card = currentCard {
-                    Text(card.title)
-                        .font(WF.jp(14.5, .bold))
-                        .foregroundColor(W.fg1)
-                        .lineLimit(1)
-                        .padding(.top, 8)
-                    HStack(spacing: 4) {
-                        Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
-                            .font(WF.mono(10))
-                            .foregroundColor(W.fg3)
-                        Text("· あと\(remainMinutes(for: card))分")
-                            .font(WF.mono(10))
-                            .foregroundColor(W.fg3)
-                    }
-                    .padding(.top, 2)
-                    // 出発逆算は snapshot に無ければ省略
-                } else if isCurrent {
-                    Text("今日の予定は完了").font(WF.jp(12)).foregroundColor(W.fg3)
-                        .padding(.top, 8)
-                }
-                Spacer(minLength: 0)
-                HStack(spacing: 10) {
-                    statPair(label: "達成", value: "\(entry.snapshot?.achievementCount ?? 0)/\(bandsCount)", strong: false)
-                    statPair(label: "未確定", value: "\(entry.snapshot?.unconfirmedCount ?? 0)", strong: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Rectangle().fill(W.line).frame(width: 1)
-
-            // 右: 今日の枠（entry.date の分位で past/current/future を判定。旧: i の位置固定で常時「1つ目達成／2つ目次」だったバグを修正）
-            VStack(alignment: .leading, spacing: 5) {
-                Text("今日の枠").font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
-                ForEach(Array((entry.snapshot?.bands ?? []).prefix(3).enumerated()), id: \.offset) { _, band in
-                    HStack(spacing: 6) {
-                        let phase = bandPhase(for: band, at: entry.date)
-                        switch phase {
-                        case .past:
-                            ZStack {
-                                Circle().fill(W.ok)
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(W.paper)
-                            }
-                            .frame(width: 16, height: 16)
-                            Text(band.name).font(WF.jp(10.5)).foregroundColor(W.fg3).strikethrough()
-                        case .current:
-                            Circle().strokeBorder(W.accent, lineWidth: 1.5).frame(width: 16, height: 16)
-                            Text(band.name).font(WF.jp(10.5, .bold)).foregroundColor(W.fg1)
-                        case .future:
-                            Circle().strokeBorder(W.lineStrong, lineWidth: 1).frame(width: 16, height: 16)
-                            Text(band.name).font(WF.jp(10.5)).foregroundColor(W.fg2)
+                    HStack(spacing: 12) {
+                        smallRing(for: card)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(card.title)
+                                .font(WF.jp(13, .bold)).foregroundColor(W.fg1)
+                                .lineLimit(1)
+                            Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
+                                .font(WF.mono(9)).foregroundColor(W.fg3).lineLimit(1)
                         }
                     }
+                    .padding(.top, 8)
+                } else if isCurrent {
+                    Spacer(minLength: 0)
+                    Text("今日の予定は完了").font(WF.jp(11)).foregroundColor(W.fg3)
+                } else {
+                    Spacer(minLength: 0)
+                    Text("アプリで更新").font(WF.jp(11)).foregroundColor(W.fg3)
                 }
                 Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    statPair(label: "達成", value: "\(entry.snapshot?.achievementCount ?? 0)", strong: false)
+                    statPair(label: "未確定", value: "\(entry.snapshot?.unconfirmedCount ?? 0)", strong: true)
+                }
+                .padding(.top, 8)
+                .overlay(alignment: .top) { Rectangle().fill(W.line).frame(height: 1).offset(y: -4) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .containerBackground(for: .widget) { W.paper }
+    }
+
+    /// Small 用 52pt ドット環（残り分数を中央表示）。
+    private func smallRing(for card: WidgetSnapshot.Card) -> some View {
+        let mins = remainMinutes(for: card)
+        let progress = ringProgress(for: card)
+        return ZStack {
+            DotRing(radius: 20, count: 12, progress: progress,
+                    onColor: W.accent, offColor: W.lineStrong, dotSize: 2.4)
+            VStack(spacing: 0) {
+                Text("\(mins)").font(WF.mono(11, .bold)).foregroundColor(W.accentInk)
+                Text("分").font(WF.mono(6.5)).foregroundColor(W.fg3)
+            }
+        }
+        .frame(width: 52, height: 52)
+    }
+
+    // MARK: - System Medium（C1: 大きめドット環 + 今日の枠）
+
+    private var systemMediumView: some View {
+        ZStack {
+            SamonBackdrop(curveRatios: [0.80, 0.90])
+                .stroke(W.line, lineWidth: 1)
+                .opacity(0.55)
+            HStack(spacing: 16) {
+                // 左: 74pt ドット環
+                if let card = currentCard {
+                    mediumRing(for: card)
+                        .frame(width: 74, height: 74)
+                } else {
+                    ZStack {
+                        DotRing(radius: 29, count: 12, progress: 0,
+                                onColor: W.accent, offColor: W.lineStrong, dotSize: 3)
+                        Text("—").font(WF.mono(14, .bold)).foregroundColor(W.fg3)
+                    }
+                    .frame(width: 74, height: 74)
+                }
+
+                // 中: タイトル + 時刻 + 出発逆算 + 統計
+                VStack(alignment: .leading, spacing: 3) {
+                    if let card = currentCard {
+                        Text(card.title)
+                            .font(WF.jp(14, .bold)).foregroundColor(W.fg1)
+                            .lineLimit(1)
+                        Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
+                            .font(WF.mono(9.5)).foregroundColor(W.fg3)
+                    } else if isCurrent {
+                        Text("今日の予定は完了").font(WF.jp(12)).foregroundColor(W.fg3)
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 6) {
+                        Text("達成 \(entry.snapshot?.achievementCount ?? 0)/\(bandsCount)")
+                            .font(WF.mono(8.5)).tracking(0.8).foregroundColor(W.fg2).lineLimit(1)
+                        Text("·").foregroundColor(W.fg3).font(WF.mono(8.5))
+                        Text("未確定 \(entry.snapshot?.unconfirmedCount ?? 0)")
+                            .font(WF.mono(8.5, .bold)).tracking(0.8)
+                            .foregroundColor(W.accentInk).lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Rectangle().fill(W.line).frame(width: 1)
+
+                // 右: 今日の枠
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("今日の枠").font(WF.mono(8, .regular)).tracking(1.4).foregroundColor(W.fg3)
+                    ForEach(Array((entry.snapshot?.bands ?? []).prefix(3).enumerated()), id: \.offset) { _, band in
+                        HStack(spacing: 6) {
+                            let phase = bandPhase(for: band, at: entry.date)
+                            switch phase {
+                            case .past:
+                                ZStack {
+                                    Circle().fill(W.ok)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(W.paper)
+                                }
+                                .frame(width: 14, height: 14)
+                                Text(band.name).font(WF.jp(10)).foregroundColor(W.fg3).strikethrough().lineLimit(1)
+                            case .current:
+                                Circle().strokeBorder(W.accent, lineWidth: 1.5).frame(width: 14, height: 14)
+                                Text(band.name).font(WF.jp(10, .bold)).foregroundColor(W.fg1).lineLimit(1)
+                            case .future:
+                                Circle().strokeBorder(W.lineStrong, lineWidth: 1).frame(width: 14, height: 14)
+                                Text(band.name).font(WF.jp(10)).foregroundColor(W.fg2).lineLimit(1)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .containerBackground(for: .widget) { W.paper }
+    }
+
+    /// Medium 用 74pt ドット環。
+    private func mediumRing(for card: WidgetSnapshot.Card) -> some View {
+        let mins = remainMinutes(for: card)
+        let progress = ringProgress(for: card)
+        return ZStack {
+            DotRing(radius: 29, count: 12, progress: progress,
+                    onColor: W.accent, offColor: W.lineStrong, dotSize: 3)
+            VStack(spacing: 0) {
+                Text("\(mins)").font(WF.mono(14, .bold)).foregroundColor(W.accentInk)
+                Text("分").font(WF.mono(7.5)).foregroundColor(W.fg3)
+                Text(remainLabel(for: card)).font(WF.mono(6)).tracking(1).foregroundColor(W.fg3).padding(.top, 1)
+            }
+        }
     }
 
     private var bandsCount: Int { entry.snapshot?.bands.count ?? 0 }
 
-    /// 「今日の枠」用: entry の時刻を基準に枠の状態を判定。
     private enum BandPhase { case past, current, future }
     private func bandPhase(for band: WidgetSnapshot.BandInfo, at date: Date) -> BandPhase {
         let cal = Calendar.current
@@ -263,33 +324,54 @@ struct StrWidgetView: View {
         return .future
     }
 
-    /// 残り分（分未満なら「0」）。
+    /// 進行中か（開始 <= entry < 終了）。
+    private func isInProgress(_ card: WidgetSnapshot.Card) -> Bool {
+        entry.date >= card.start && entry.date < card.end
+    }
+
+    /// 進行中なら「終了までの残り分」、それ以外なら「開始までの残り分」。0 未満は 0 にクランプ。
     private func remainMinutes(for card: WidgetSnapshot.Card) -> Int {
-        let mins = Int(card.start.timeIntervalSince(entry.date) / 60)
-        return max(0, mins)
+        let target = isInProgress(card) ? card.end : card.start
+        return max(0, Int(target.timeIntervalSince(entry.date) / 60))
     }
 
-    /// Handoff 08a: -45分 のような差分表示。過去なら +N。
-    private func remainText(for card: WidgetSnapshot.Card) -> String {
-        let mins = Int((card.start.timeIntervalSince(entry.date) / 60).rounded())
-        return mins >= 0 ? "−\(mins)分" : "+\(-mins)分"
+    /// ラベル: 進行中は NOW / 予定前は NEXT。
+    private func remainLabel(for card: WidgetSnapshot.Card) -> String {
+        isInProgress(card) ? "NOW" : "NEXT"
     }
 
-    /// 達成 X / 未確定 Y の mono キャップ + 値。
-    private func statPair(label: String, value: String, strong: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(label).font(WF.mono(8.5)).tracking(1.0).foregroundColor(W.fg3)
-            Text(value)
-                .font(WF.mono(8.5, strong ? .bold : .regular))
-                .foregroundColor(strong ? W.accentInk : W.fg1)
+    /// ドット環 progress。
+    /// - 進行中カード: 経過率 = (now - start) / (end - start)。時間が進むほど埋まる。
+    /// - 予定前カード: 1 - (残り分 / 120)。2時間+先の予定は空、開始直前で満杯。
+    private func ringProgress(for card: WidgetSnapshot.Card) -> Double {
+        if isInProgress(card) {
+            let total = card.end.timeIntervalSince(card.start)
+            guard total > 0 else { return 1 }
+            let elapsed = entry.date.timeIntervalSince(card.start)
+            return max(0, min(1, elapsed / total))
+        } else {
+            let remaining = card.start.timeIntervalSince(entry.date) / 60
+            return max(0, min(1, 1.0 - remaining / 120.0))
         }
     }
 
-    // MARK: - Accessory Rectangular（Handoff 08b: NEXT · DEPART の集約リードアウト）
+    private func statPair(label: String, value: String, strong: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(label).font(WF.mono(8.5)).tracking(1.0).foregroundColor(W.fg3).lineLimit(1)
+            Text(value)
+                .font(WF.mono(8.5, strong ? .bold : .regular))
+                .foregroundColor(strong ? W.accentInk : W.fg1)
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    // MARK: - Accessory Rectangular
+
     private var accessoryRectangularView: some View {
         VStack(alignment: .leading, spacing: 3) {
             if let card = currentCard {
-                Text("NEXT · あと\(remainMinutes(for: card))分")
+                Text("\(remainLabel(for: card)) · あと\(remainMinutes(for: card))分")
                     .font(.system(size: 8, weight: .regular, design: .monospaced))
                     .textCase(.uppercase)
                     .opacity(0.6)
@@ -307,7 +389,6 @@ struct StrWidgetView: View {
     }
 
     // MARK: - Accessory Inline
-    // accessoryInline はシステムが描画するため containerBackground 非対応。
     private var accessoryInlineView: some View {
         Group {
             if let card = currentCard {
@@ -319,17 +400,15 @@ struct StrWidgetView: View {
         }
     }
 
-    // MARK: - Accessory Circular（Handoff 08b: 達成ゲージ）
+    // MARK: - Accessory Circular（達成ゲージをドット環に）
+
     private var accessoryCircularView: some View {
         let done = entry.snapshot?.achievementCount ?? 0
         let bandsN = max(1, bandsCount)
         let fraction = min(Double(done) / Double(bandsN), 1)
         return ZStack {
-            Circle().stroke(Color.white.opacity(0.25), lineWidth: 5)
-            Circle()
-                .trim(from: 0, to: fraction)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            DotRing(radius: 24, count: 14, progress: fraction,
+                    onColor: Color.white, offColor: Color.white.opacity(0.22), dotSize: 2.7)
             VStack(spacing: -1) {
                 HStack(alignment: .lastTextBaseline, spacing: 0) {
                     Text("\(done)").font(.system(size: 15, weight: .bold, design: .monospaced))
@@ -339,31 +418,6 @@ struct StrWidgetView: View {
             }
         }
         .containerBackground(for: .widget) { Color.clear }
-    }
-
-    // MARK: - Helper
-    private func cardView(_ card: WidgetSnapshot.Card) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Text(card.title)
-                    .font(.subheadline)
-                    .lineLimit(2)
-                if card.isTimePinned {
-                    Image(systemName: "pin.fill")
-                        .font(.caption2)
-                        .accessibilityLabel("時刻厳守")
-                }
-            }
-            Text("\(timeFormatter.string(from: card.start))–\(timeFormatter.string(from: card.end))")
-                .font(.caption)
-                .opacity(0.7)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            card.colorHex.map { Color(hex: $0).opacity(0.15) } ?? Color.gray.opacity(0.1)
-        )
-        .cornerRadius(6)
     }
 }
 
@@ -381,35 +435,41 @@ struct str8Widget: Widget {
     }
 }
 
-// MARK: - Live Activity（Handoff 08c: ロック画面バナー + Dynamic Island）
+// MARK: - Live Activity（C3: 砂時計グリフ廃止 → ドット環 / ドット列で表現）
 
 @available(iOS 16.1, *)
 struct TimerLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TimerAttributes.self) { context in
-            // ロック画面バナー
             lockBanner(context: context)
-                .activityBackgroundTint(Color(red: 0x1a/255, green: 0x19/255, blue: 0x14/255))
-                .activitySystemActionForegroundColor(Color(red: 0xF1/255, green: 0xEF/255, blue: 0xE6/255))
+                .activityBackgroundTint(W.darkBg)
+                .activitySystemActionForegroundColor(W.darkFg)
         } dynamicIsland: { context in
             DynamicIsland {
-                // 展開時（左/右/中央/下）
                 DynamicIslandExpandedRegion(.leading) {
-                    ringGauge(context: context, size: 44)
+                    liveRing(context: context, size: 44)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    remainDisplay(context: context, size: 26)
-                        .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                    // trailing 領域はやや狭い。18pt 横一列 + minimumScaleFactor で必要なら自動縮小。
+                    // 縦 3 段組は TimelineView.periodic が iOS に throttle されて数秒で止まるため不採用。
+                    // Text(timerInterval:) は OS 特別処理で throttle されず秒毎に更新される。
+                    remainDisplay(context: context, size: 18)
+                        .foregroundColor(W.live)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(context.attributes.taskTitle)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Text("FOCUS" + (context.attributes.subjectName.map { " · \($0)" } ?? ""))
                             .font(.system(size: 9, design: .monospaced))
                             .tracking(1.2)
                             .foregroundColor(.white.opacity(0.6))
+                            .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -418,24 +478,24 @@ struct TimerLiveActivity: Widget {
                         .padding(.top, 4)
                 }
             } compactLeading: {
-                Image(systemName: "hourglass")
-                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
-            } compactTrailing: {
+                // デザイン C3 通り: 時間 LEFT / ドット RIGHT。
                 remainDisplay(context: context, size: 13)
-                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                    .foregroundColor(W.live)
+            } compactTrailing: {
+                compactDots(context: context, count: 4)
             } minimal: {
-                Image(systemName: "hourglass")
-                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                // minimal 表示: 経過を単一ドット環で
+                liveRing(context: context, size: 18, dotSize: 1.6)
             }
-            .keylineTint(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+            .keylineTint(W.live)
         }
     }
 
-    /// Handoff 08c ロック画面バナー: ring ゲージ + タスク名 + 大きな残時間。
+    /// C3 ロック画面バナー: ドット環 + タスク名 + 大きな残時間。
     @ViewBuilder
     private func lockBanner(context: ActivityViewContext<TimerAttributes>) -> some View {
         HStack(spacing: 14) {
-            ringGauge(context: context, size: 56)
+            liveRing(context: context, size: 60)
             VStack(alignment: .leading, spacing: 3) {
                 Text("STR(8) · FOCUS")
                     .font(.system(size: 8.5, design: .monospaced))
@@ -455,7 +515,7 @@ struct TimerLiveActivity: Widget {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 2) {
                 remainDisplay(context: context, size: 30)
-                    .foregroundColor(Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255))
+                    .foregroundColor(W.live)
                 Text("/ \(String(format: "%02d:00", context.state.totalMinutes))")
                     .font(.system(size: 8, design: .monospaced))
                     .tracking(1.4)
@@ -466,12 +526,16 @@ struct TimerLiveActivity: Widget {
     }
 
     /// 残時間表示（endDate ベースで OS が自動更新 or 一時停止時は固定表示）。
+    /// endDate 経過後は「00:00」を固定表示（Text(timerInterval:) は negative を表示し続けるため）。
     @ViewBuilder
     private func remainDisplay(context: ActivityViewContext<TimerAttributes>, size: CGFloat) -> some View {
         if context.state.isPaused {
             let m = context.state.pausedRemainingSec / 60
             let s = context.state.pausedRemainingSec % 60
             Text(String(format: "%02d:%02d", m, s))
+                .font(.system(size: size, weight: .bold, design: .monospaced))
+        } else if context.state.endDate <= Date.now {
+            Text("00:00")
                 .font(.system(size: size, weight: .bold, design: .monospaced))
         } else {
             Text(timerInterval: Date.now...context.state.endDate, countsDown: true, showsHours: false)
@@ -480,44 +544,55 @@ struct TimerLiveActivity: Widget {
         }
     }
 
-    /// 円形 ring ゲージ（残時間比を弧で表示。一時停止時は色を薄く）。
+    /// C3 のドット環（砂時計を廃した中心の主役ビジュアル）。
+    /// 中心には何も置かず、環そのもので「経過」を見せる（沈んだドット = 消化した時間）。
     @ViewBuilder
-    private func ringGauge(context: ActivityViewContext<TimerAttributes>, size: CGFloat) -> some View {
-        let accent = Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255)
-        ZStack {
-            Circle().stroke(Color.white.opacity(0.2), lineWidth: 3)
-            // ring 進捗（endDate から算出する trim は Widget が自動更新しないため、
-            // ProgressView で「timerInterval」を利用して OS 側の再描画に任せる）。
-            if context.state.isPaused {
-                let done = 1.0 - Double(context.state.pausedRemainingSec)
-                                    / Double(max(1, context.state.totalMinutes * 60))
-                Circle()
-                    .trim(from: 0, to: max(0, min(1, done)))
-                    .stroke(accent.opacity(0.5), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            } else {
-                // ProgressView は自動で timerInterval を秒毎に進める（OS 提供）。
-                ProgressView(timerInterval: Date.now...context.state.endDate,
-                             countsDown: false,
-                             label: { EmptyView() },
-                             currentValueLabel: { EmptyView() })
-                    .progressViewStyle(.circular)
-                    .tint(accent)
-            }
-            Image(systemName: "hourglass")
-                .font(.system(size: size * 0.35, weight: .regular))
-                .foregroundColor(.white)
-        }
+    private func liveRing(context: ActivityViewContext<TimerAttributes>, size: CGFloat, dotSize: CGFloat? = nil) -> some View {
+        let r = size * 0.42
+        let n = 16
+        // isPaused 時: pausedRemainingSec から progress 固定。
+        // 非 paused 時: endDate - now / total で progress。widget は 1s ごとには再描画されないので
+        // Timeline との併用が理想だが、Live Activity は system が概ね 15s 単位で refresh するのに任せる。
+        let totalSec = Double(max(1, context.state.totalMinutes * 60))
+        let remain: Double = context.state.isPaused
+            ? Double(context.state.pausedRemainingSec)
+            : max(0, context.state.endDate.timeIntervalSinceNow)
+        let progress = max(0, min(1, 1.0 - remain / totalSec))
+        DotRing(
+            radius: r,
+            count: n,
+            progress: progress,
+            onColor: W.live.opacity(context.state.isPaused ? 0.5 : 1.0),
+            offColor: W.liveOff,
+            dotSize: dotSize ?? max(size * 0.06, 2.4)
+        )
         .frame(width: size, height: size)
     }
 
-    /// 8 セグメントの離散進捗バー（Handoff 08c 下段）。
+    /// Dynamic Island compact leading: 4 ドット水平列。
+    @ViewBuilder
+    private func compactDots(context: ActivityViewContext<TimerAttributes>, count: Int) -> some View {
+        let totalSec = Double(max(1, context.state.totalMinutes * 60))
+        let remain: Double = context.state.isPaused
+            ? Double(context.state.pausedRemainingSec)
+            : max(0, context.state.endDate.timeIntervalSinceNow)
+        let progress = max(0, min(1, 1.0 - remain / totalSec))
+        let filled = Int((Double(count) * progress).rounded())
+        HStack(spacing: 3) {
+            ForEach(0..<count, id: \.self) { i in
+                Circle()
+                    .fill(i < filled ? W.live : W.liveOff)
+                    .frame(width: 5, height: 5)
+            }
+        }
+    }
+
+    /// 8 セグメント離散進捗バー（Expanded 下段）。
     @ViewBuilder
     private func progressBar(context: ActivityViewContext<TimerAttributes>) -> some View {
-        let accent = Color(red: 0xED/255, green: 0xA9/255, blue: 0x48/255)
         let total = 8
+        let totalSec = Double(context.state.totalMinutes * 60)
         let doneFrac: Double = {
-            let totalSec = Double(context.state.totalMinutes * 60)
             if context.state.isPaused {
                 let remain = Double(context.state.pausedRemainingSec)
                 return max(0, min(1, 1 - remain / max(1, totalSec)))
@@ -531,7 +606,7 @@ struct TimerLiveActivity: Widget {
             HStack(spacing: 3) {
                 ForEach(0..<total, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(i < filled ? accent : Color.white.opacity(0.2))
+                        .fill(i < filled ? W.live : Color.white.opacity(0.2))
                         .frame(height: 4)
                 }
             }

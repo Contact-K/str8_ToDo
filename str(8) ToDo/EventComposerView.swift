@@ -2,17 +2,20 @@
 //  EventComposerView.swift
 //  str8ToDo
 //
-//  イベント作成シート（企画書 2026-07-07 新設）E0+E1。旧 AddTaskSheet の項目連続 Form を、
-//  what（タイトル）常時表示 + when/where/which/who/how/other の概要タイル + フォーカス編集
-//  シートへ置き換える（P15）。
+//  イベント作成シート。UI改善（str8 UI改善.dc.html A1/A2）:
+//    - 大きな 1 行入力を主役化、下に認識チップ（確定 = 緑チェック / 辞書候補 = 破線）
+//    - 「確認」インライン展開行（いつ/どこ/どれ/誰と/どのくらい/メモ）
+//    - タイトルは必須バッジ付き行、タップで編集
+//    - タイル + フォーカスシートを廃止（ComposerFocusView は削除、ここに統合）
+//    - タイトルさえあれば常時「追加する」可能
 //
 
 import Foundation
 import SwiftUI
 import SwiftData
+import PhotosUI
 
-/// タイルグリッド ⇄ フォーカス編集シートが共有する編集中の草稿。
-/// @Observable にして EventComposerView と ComposerFocusView の両方から @Bindable で参照する。
+/// インライン展開行と NL 入力の両方から参照する編集中の草稿。
 @Observable
 final class ComposerDraft {
     var title: String = ""
@@ -43,6 +46,8 @@ final class ComposerDraft {
     // other
     var notes: String = ""
     var colorHex: String?
+    /// Phase 17: 添付画像。App Group `attachments/` からの相対ファイル名。
+    var attachmentPaths: [String] = []
 
     /// 新規作成（空きカード等からのプリフィル対応）。
     init(defaultDate: Date, prefillDuration: TimeInterval?) {
@@ -69,10 +74,10 @@ final class ComposerDraft {
         paymentMethod = task.paymentMethod ?? ""
         notes = task.notes
         colorHex = task.colorHex
+        attachmentPaths = task.attachmentPaths
     }
 
-    /// 金額入力の正規化＋パース（AddTaskSheet から踏襲）。全角数字→半角、カンマ・空白除去。
-    /// マイナスや 0 以下は集計対象外なのでパース失敗扱い。
+    /// 金額入力の正規化＋パース。全角数字→半角、カンマ・空白除去。マイナスや 0 以下は集計対象外。
     var parsedAmount: Decimal? {
         let normalized = amountText
             .applyingTransform(.fullwidthToHalfwidth, reverse: false)?
@@ -87,7 +92,7 @@ final class ComposerDraft {
     }
 }
 
-/// .sheet(item:) で使うため Identifiable 化（モデル層の WHCategory 自体は変更しない）。
+/// .sheet(item:) で使うため Identifiable 化。
 extension WHCategory: Identifiable {
     var id: String { rawValue }
 }
@@ -101,16 +106,19 @@ struct EventComposerView: View {
     @Query private var aliases: [PhraseAlias]
     @Query private var categories: [Category]
     @Query private var placeTags: [PlaceTag]
+    @Query(sort: \Profile.name) private var profiles: [Profile]
 
     private let existingTask: TaskItem?
     @State private var draft: ComposerDraft
-    @State private var focusedCategory: WHCategory?
-    /// P18 M13: prefillPlace（場所名の文字列ヒント）は init 時点では modelContext が使えないため、
-    /// PlaceTag への解決を body 表示後の .task に遅延する。
+    /// 現在展開中の行（1 個のみ、nil = すべて閉じる）。
+    @State private var expandedRow: WHCategory?
+    /// タイトル行を展開中かどうか（title は WHCategory.what に相当、別 state で扱う）。
+    @State private var editingTitle: Bool = false
+    /// P18 M13: prefillPlace（場所名の文字列ヒント）は init 時点では modelContext が使えないため遅延解決。
     @State private var pendingPlaceHint: String?
-    /// P18 H2: 金額が上限（1兆円）を超えた保存操作を弾いた時に表示するアラート。
     @State private var showAmountTooLargeAlert = false
-    /// 自然文パース入力（Phase 16 の QuickAddParserView をカレンダー作成側にも接続）。
+
+    // Natural language input
     @State private var nlInput: String = ""
     @State private var nlDebounceTask: Task<Void, Never>? = nil
     @State private var recognizedChips: [(WHCategory, String)] = []
@@ -118,13 +126,19 @@ struct EventComposerView: View {
     @State private var aliasDraftWord: AliasCandidateWord? = nil
     @FocusState private var nlFieldFocused: Bool
 
+    // Editor states (旧 ComposerFocusView から移設)
+    @State private var newParticipant: String = ""
+    @State private var customNotificationMinutes: Int = 5
+    @State private var showCategoryPicker: Bool = false
+    @State private var pickerItems: [PhotosPickerItem] = []
+
     /// サジェスト機能の ON/OFF。QuickAddParserView と共有。
     @AppStorage(AppSettingsKey.enableDictionarySuggestions)
     private var enableDictionarySuggestions = AppSettingsKey.enableDictionarySuggestionsDefault
 
+    private static let colorPresets: [String] = ["4F8DFD", "34C759", "FF9500", "FF2D55", "AF52DE", "8E8E93"]
+
     /// 新規作成。空きカードタップ経由のプリフィル対応（initialDuration ありなら when を時刻指定済みで開く）。
-    /// P18 M13: QuickAddParserView「詳細を追加」から ParseResult の全ヒントを渡すための一括プリフィル拡張
-    /// （既存呼び出し元はデフォルト値でそのまま動く）。
     init(
         initialStart: Date? = nil,
         initialDuration: TimeInterval? = nil,
@@ -145,8 +159,6 @@ struct EventComposerView: View {
         newDraft.profile = prefillProfile
         newDraft.participantNames = prefillParticipants
         newDraft.notes = prefillNotes
-        // Phase 16 拡張: JPRuleLayer 由来の rrule / reminder / priority を反映。
-        // rrule はプリセット一覧に無ければ "none" にフォールバック（生 rrule は composer で編集不可）。
         newDraft.repeatPattern = EventComposerView.repeatOptions.first { $0.2 == prefillRRule }?.0 ?? "none"
         newDraft.notificationOffsets = prefillNotificationOffsets
         newDraft.isImportant = prefillIsImportant
@@ -154,20 +166,14 @@ struct EventComposerView: View {
         _pendingPlaceHint = State(initialValue: prefillPlace)
     }
 
-    /// 既存タスクの編集。TaskDetailView のペンアイコンから接続（P18）。
-    /// initialFocus 指定時はタイルグリッドを経由せず、そのトピックのフォーカスシートを起動直後に開く
-    /// （focusedCategory の初期値を非 nil にするだけで .sheet(item:) が appear 時に発火する）。
+    /// 既存タスクの編集。initialFocus 指定時はその行を展開状態で開く。
     init(task: TaskItem, initialFocus: WHCategory? = nil) {
         existingTask = task
         _draft = State(initialValue: ComposerDraft(task: task))
-        _focusedCategory = State(initialValue: initialFocus)
+        _expandedRow = State(initialValue: initialFocus)
     }
 
-    /// what 以外の6分類。タイルグリッド・フォーカス内ジャンプバー共通の並び順。
-    static let tileCategories: [WHCategory] = WHCategory.allCases.filter { $0 != .what }
-
     /// RRULE プリセット。TaskItem.occurs() が解釈できる形のみ。
-    /// 授業/バイト等の定期イベント作成に対応（毎週/毎月/毎年）。
     static let repeatOptions: [(String, String, String?)] = [
         ("none", "なし", nil),
         ("daily", "毎日", "FREQ=DAILY"),
@@ -179,111 +185,43 @@ struct EventComposerView: View {
         ("yearly", "毎年", "FREQ=YEARLY")
     ]
 
-    private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    /// what 以外の 6 分類。インライン行の並び順（when/where/which/who/how/other）。
+    static let rowCategories: [WHCategory] = [.when, .where_, .which, .who, .how, .other]
+
+    // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
-            S8TopBar(existingTask == nil ? "タスク追加" : "タスク編集", sub: existingTask == nil ? "new · what/when/where" : "edit · what/when/where") {
-                HStack(spacing: 6) {
-                    S8IconButton(icon: "x", action: { dismiss() })
-                        .accessibilityLabel("キャンセル")
-                    S8IconButton(icon: "check", accent: !isSaveDisabled, action: save)
-                        .disabled(isSaveDisabled)
-                        .accessibilityLabel(existingTask == nil ? "追加" : "保存")
-                }
-            }
-
-            // 自然文パース入力（新規作成のみ表示。編集時は不要）
-            if existingTask == nil {
-                VStack(alignment: .leading, spacing: 4) {
-                    TextField("自然文で入力（例: 明日 14:00 大学でレポート）", text: $nlInput, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...2)
-                        .focused($nlFieldFocused)
-                        .padding(10)
-                        .background(c.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: S8Radius.md)
-                                .stroke(nlFieldFocused ? c.accent : c.lineStrong, lineWidth: nlFieldFocused ? 1.5 : 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                        .onChange(of: nlInput) { _, newValue in
-                            scheduleParse(newValue)
-                        }
-                    if !recognizedChips.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
-                                    Text("\(chip.0.label): \(chip.1)")
-                                        .font(S8Font.mono(11)).tracking(1.5)
-                                        .foregroundStyle(c.fg2)
-                                        .padding(.horizontal, 11)
-                                        .padding(.vertical, 6)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: S8Radius.md)
-                                                .stroke(c.lineStrong, lineWidth: 1)
-                                        )
-                                }
-                            }
-                        }
-                    }
-                    // 未認識語の辞書登録サジェスト。QuickAddParserView と同じ UI で「+ 分類選択」ボタンを
-                    // 出し、その場で PhraseAlias に登録できる。
-                    if enableDictionarySuggestions && !nlUnrecognizedWords.isEmpty {
-                        HStack(spacing: 6) {
-                            Text("DICT").font(S8Font.mono(9)).tracking(1.4).foregroundColor(c.fg3)
-                            Text("辞書に登録できそうな語").font(S8Font.jp(10.5)).foregroundColor(c.fg3)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.top, 6)
-                        VStack(spacing: 0) {
-                            ForEach(nlUnrecognizedWords, id: \.self) { word in
-                                HStack {
-                                    Text(word).font(S8Font.jp(13)).foregroundColor(c.fg1)
-                                    Spacer()
-                                    Button(action: { aliasDraftWord = AliasCandidateWord(word: word) }) {
-                                        Text("+ 分類選択")
-                                            .font(S8Font.jp(10.5)).foregroundColor(c.fg2)
-                                            .padding(.horizontal, 9).padding(.vertical, 4)
-                                            .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .padding(.vertical, 8)
-                                .overlay(alignment: .top) { S8Rule() }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
-            }
-
-            S8Field(placeholder: "タスク名", text: $draft.title)
-                .padding(.horizontal, 24).padding(.bottom, 8)
-
-            S8Rule()
+            header
 
             ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 12) {
-                    ForEach(Self.tileCategories) { category in
-                        tileButton(for: category)
+                VStack(spacing: 0) {
+                    if existingTask == nil {
+                        nlInputSection
+                            .padding(.horizontal, 24).padding(.top, 4)
                     }
+
+                    confirmationDivider
+                        .padding(.top, existingTask == nil ? 18 : 8)
+
+                    titleRow
+                    ForEach(Self.rowCategories, id: \.self) { cat in
+                        inlineRow(cat)
+                    }
+                    Color.clear.frame(height: 14)
                 }
-                .padding(24)
             }
+
+            bottomBar
         }
         .background(c.paper.ignoresSafeArea())
-        .sheet(item: $aliasDraftWord) { draft in
-            NewAliasSheet(word: draft.word)
+        .sheet(item: $aliasDraftWord) { d in
+            NewAliasSheet(word: d.word)
         }
-        .sheet(item: $focusedCategory) { category in
-            ComposerFocusView(category: category, draft: draft) { focusedCategory = $0 }
+        .sheet(isPresented: $showCategoryPicker) {
+            NavigationStack { CategoryPickerView(selection: $draft.category) }
         }
-        .task {
-            resolvePlaceHintIfNeeded()
-        }
+        .task { resolvePlaceHintIfNeeded() }
         .alert("金額が大きすぎます", isPresented: $showAmountTooLargeAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -291,358 +229,309 @@ struct EventComposerView: View {
         }
     }
 
-    /// P18 M13: prefillPlace（文字列）を PlaceTag に解決する。modelContext は init 時点では
-    /// 使えないため body 表示後に一度だけ実行する。
-    private func resolvePlaceHintIfNeeded() {
-        guard let hint = pendingPlaceHint, draft.place == nil else { return }
-        let fetch = FetchDescriptor<PlaceTag>(predicate: #Predicate<PlaceTag> { $0.name == hint })
-        draft.place = try? modelContext.fetch(fetch).first
-        pendingPlaceHint = nil
-    }
+    // MARK: - Header
 
-    /// 自然文入力の 300ms デバウンス。空文字ならクリア。
-    private func scheduleParse(_ text: String) {
-        nlDebounceTask?.cancel()
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else {
-            recognizedChips = []
-            nlUnrecognizedWords = []
-            return
-        }
-        nlDebounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            applyParse(trimmed)
-        }
-    }
-
-    /// PhraseParser 結果を draft に反映。既存の手動編集を尊重しつつヒントを埋める。
-    private func applyParse(_ text: String) {
-        let result = PhraseParser.parse(text, aliases: aliases)
-        // タイトル: 残り文字列があるときだけ反映（全て消費されたら元の入力をタイトルにフォールバック）。
-        // これで「午後一時」だけ入力→タイトル空欄で保存できない、を回避しつつ、
-        // 「明日 14時 会議」→titleRemainder="会議" は従来通り上書きされる。
-        if !result.titleRemainder.isEmpty {
-            draft.title = result.titleRemainder
-        } else if draft.title.isEmpty {
-            draft.title = text
-        }
-        // when
-        if let start = result.startDate {
-            draft.isTimeSpecified = true
-            draft.startDate = start
-        }
-        if let duration = result.duration {
-            draft.duration = duration
-            draft.isTimeSpecified = true
-        }
-        // where: PlaceTag 名でマッチ、無ければ pendingPlaceHint に置く（後で解決）
-        if let placeHint = result.placeHint {
-            if let match = placeTags.first(where: { $0.name == placeHint }) {
-                draft.place = match
-            } else {
-                pendingPlaceHint = placeHint
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(existingTask == nil ? "追加" : "編集")
+                    .font(S8Font.jp(22, .bold))
+                    .foregroundColor(c.fg1)
+                Text(existingTask == nil ? "type one line" : "edit in place")
+                    .font(S8Font.mono(10)).tracking(1.6)
+                    .foregroundColor(c.fg3)
             }
+            Spacer()
+            S8IconButton(icon: "x", action: { dismiss() })
+                .accessibilityLabel("閉じる")
         }
-        // which
-        if let categoryHint = result.categoryHint,
-           let match = categories.first(where: { $0.name == categoryHint }) {
-            draft.category = match
-        }
-        // who / other は既存 EventComposer プリフィル経路と同じ
-        if let who = result.whoHint, !draft.participantNames.contains(who) {
-            draft.participantNames.append(who)
-        }
-        if let other = result.otherHint {
-            if draft.notes.isEmpty { draft.notes = other }
-            else if !draft.notes.contains(other) { draft.notes += "\n" + other }
-        }
-        recognizedChips = result.recognizedChips
-        nlUnrecognizedWords = result.unrecognizedWords
-        // QuickAddParserView と同じく、未認識語を「登録待ち」キューに投入する。
-        if enableDictionarySuggestions {
-            result.unrecognizedWords.forEach(SuggestionQueue.enqueue)
-        }
+        .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 10)
     }
 
-    private var isSaveDisabled: Bool {
-        draft.title.trimmingCharacters(in: .whitespaces).isEmpty
-            || (!draft.amountText.isEmpty && draft.parsedAmount == nil)
-    }
+    // MARK: - Natural language input (A1 の主役)
 
-    private func tileButton(for category: WHCategory) -> some View {
-        Button(action: { focusedCategory = category }) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: category.iconName)
-                        .foregroundStyle(isSet(category) ? c.accent : c.fg2)
-                    Text(category.label)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(c.fg1)
-                    Spacer()
+    private var nlInputSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("一行でいい。あとから直せる。")
+                .font(S8Font.jp(12)).foregroundColor(c.fg3)
+
+            TextField("明日 14:00 大学図書館でレポート", text: $nlInput, axis: .vertical)
+                .font(S8Font.jp(17, .medium))
+                .foregroundColor(c.fg1)
+                .lineLimit(1...4)
+                .focused($nlFieldFocused)
+                .padding(.horizontal, 15).padding(.vertical, 16)
+                .background(c.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: S8Radius.md)
+                        .stroke(c.lineStrong, lineWidth: 1)
+                )
+                .overlay(alignment: .bottom) {
+                    // A1: 底辺だけ accent の 2.5px。focus 中は色を強調。
+                    Rectangle().fill(c.accent).frame(height: 2.5)
                 }
-                Text(preview(for: category))
-                    .font(.caption)
-                    .foregroundStyle(isSet(category) ? c.fg1 : c.fg3)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
-            .background(c.surface)
-            .overlay(RoundedRectangle(cornerRadius: S8Radius.lg).stroke(c.line, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: S8Radius.lg))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(category.label): \(preview(for: category))")
-        // P18 M10: how タイルはフォーカスを開かずに重要度だけ切替できるインラインの星アイコンを重ねる。
-        .overlay(alignment: .bottomTrailing) {
-            if category == .how {
-                Image(systemName: draft.isImportant ? "star.fill" : "star")
-                    .font(.caption)
-                    .foregroundStyle(draft.isImportant ? c.accent : c.fg3)
-                    .padding(8)
-                    .onTapGesture { draft.isImportant.toggle() }
-                    .accessibilityLabel(draft.isImportant ? "重要を解除" : "重要に設定")
+                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                .onChange(of: nlInput) { _, newValue in scheduleParse(newValue) }
+
+            if !recognizedChips.isEmpty || (enableDictionarySuggestions && !nlUnrecognizedWords.isEmpty) {
+                recognitionChipsRow
             }
         }
     }
 
-    private func isSet(_ category: WHCategory) -> Bool {
-        preview(for: category) != "未設定"
-    }
-
-    private func preview(for category: WHCategory) -> String {
-        switch category {
-        case .what:
-            return draft.title
-        case .when:
-            guard draft.isTimeSpecified else { return "未設定" }
-            let start = Self.previewFormatter.string(from: draft.startDate)
-            let end = Self.previewEndFormatter.string(from: draft.startDate.addingTimeInterval(draft.duration))
-            return "\(start)–\(end)"
-        case .where_:
-            // 自然文由来のヒント（PlaceTag 未登録名: 公園/海 等）も表示する。実際の PlaceTag は
-            // save() で必要に応じて materialize する。
-            return draft.place?.name ?? pendingPlaceHint ?? "未設定"
-        case .which:
-            let parts = [draft.category?.name, draft.profile?.name].compactMap { $0 }
-            return parts.isEmpty ? "未設定" : parts.joined(separator: "・")
-        case .who:
-            return draft.participantNames.isEmpty ? "未設定" : draft.participantNames.joined(separator: ", ")
-        case .how:
-            var parts: [String] = []
-            if draft.isImportant { parts.append("★重要") }
-            if let amount = draft.parsedAmount { parts.append(currencyText(amount)) }
-            return parts.isEmpty ? "未設定" : parts.joined(separator: " ")
-        case .other:
-            return draft.notes.isEmpty ? "未設定" : draft.notes
-        }
-    }
-
-    private static let previewFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "M/d HH:mm"
-        return f
-    }()
-
-    private static let previewEndFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
-    /// 保存：新規時は TaskItem を insert、編集時は既存を in-place 更新。
-    /// ワークフロー系フィールド（status/phase/sortIndex/snoozeUntil 等）はここでは触らない。
-    private func save() {
-        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespaces)
-        guard !trimmedTitle.isEmpty else { return }
-        guard draft.amountText.isEmpty || draft.parsedAmount != nil else { return }
-        // P18 H2: 金額の上限バリデーション（1兆円超は拒否）。
-        if let amount = draft.parsedAmount, amount > 1_000_000_000_000 {
-            showAmountTooLargeAlert = true
-            return
-        }
-
-        let rruleStr = Self.repeatOptions.first { $0.0 == draft.repeatPattern }?.2
-        let amount = draft.parsedAmount
-        let trimmedPayment = draft.paymentMethod.trimmingCharacters(in: .whitespaces)
-        let paymentMethod = amount != nil && !trimmedPayment.isEmpty ? trimmedPayment : nil
-
-        // ponytail: WH カテゴリに対応しない phase は新規時のみ .today 固定（TodoListView.quickAdd と同じ既定値）。
-        let task = existingTask ?? TaskItem(title: trimmedTitle, phase: .today)
-
-        // P18: reschedule/recompute を「実際に変わった時だけ」呼ぶための保存前スナップショット。
-        // 新規タスクは全フィールドがデフォルト値（nil/0/[]）なので、そのまま「変更あり」判定に使える。
-        let oldStart = task.startDate
-        let oldDuration = task.duration
-        let oldOffsets = task.notificationOffsets
-        let oldAmount = task.amount
-
-        // 自然文ヒント（公園/海 等）で PlaceTag が未確定の場合、save 時に placeholder として作成。
-        // 座標なしで保持しておき、後で LocationPicker から座標を付けられる。
-        if draft.place == nil, let hint = pendingPlaceHint {
-            let placeholder = PlaceTag(name: hint)
-            modelContext.insert(placeholder)
-            draft.place = placeholder
-        }
-
-        task.title = trimmedTitle
-        task.category = draft.category
-        task.startDate = draft.isTimeSpecified ? draft.startDate : nil
-        task.duration = draft.isTimeSpecified ? draft.duration : 0
-        task.place = draft.place
-        task.notes = draft.notes
-        task.isImportant = draft.isImportant
-        task.colorHex = draft.colorHex
-        task.notificationOffsets = draft.notificationOffsets.sorted()
-        task.timeZoneIdentifier = draft.isTimeSpecified ? TimeZone.current.identifier : nil
-        task.amount = amount
-        task.paymentMethod = paymentMethod
-        task.isTimePinned = draft.isTimeSpecified && draft.isTimePinned
-        task.rrule = rruleStr
-        task.profile = draft.profile
-        task.participantNames = draft.participantNames
-
-        if existingTask == nil {
-            modelContext.insert(task)
-        }
-        do {
-            try modelContext.save()
-        } catch {
-            // ponytail: save 失敗を可視化。sheet を閉じずユーザーが失敗に気付ける
-            print("[EventComposer] save failed: \(error)")
-            assertionFailure("EventComposer save failed: \(error)")
-            return
-        }
-
-        // P18: when（startDate/duration/通知設定）が変わった時だけ再スケジュール。
-        // 新規タスクは old が空なので必ず走り、既存の挙動（常時 reschedule）を保つ。
-        if task.startDate != oldStart || task.duration != oldDuration || task.notificationOffsets != oldOffsets {
-            NotificationService.reschedule(for: task)
-        }
-        // P18: P8 debate-review 繰り越しの解消（金額編集時 recompute）。amount の
-        // nil→値／値→nil／値→別値のいずれの変化でも対象にする（旧実装は amount != nil の時しか呼ばず、
-        // 編集で金額を消したケースで月次キャッシュが更新されない問題があった）。
-        if task.amount != oldAmount {
-            MoneyStats.recompute(for: task, context: modelContext)
-        }
-
-        dismiss()
-    }
-}
-
-// MARK: - フォーカス編集シート（s8 化）
-
-/// トピック1つの内容を全画面表示するフォーカス編集画面。上部ジャンプバーで他タイルへ横移動。
-/// SettingsRootView 流儀（S8SectionLabel + S8SetRow + s8 プリミティブ）で iOS 標準 Form/Toggle/Slider/Picker/DatePicker を排除。
-private struct ComposerFocusView: View {
-    let category: WHCategory
-    @Bindable var draft: ComposerDraft
-    var onNavigate: (WHCategory) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
-    private var c: S8Palette { S8Palette.of(scheme) }
-    @Query(sort: \Profile.name) private var profiles: [Profile]
-
-    @State private var newParticipant: String = ""
-    @State private var customNotificationMinutes: Int = 5
-    @State private var showCategoryPicker: Bool = false
-
-    private static let colorPresets: [String] = ["4F8DFD", "34C759", "FF9500", "FF2D55", "AF52DE", "8E8E93"]
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        return f
-    }()
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Text(category.label).font(S8Font.jp(16, .bold)).foregroundColor(c.fg1)
-                Spacer()
-            }
-            .padding(.horizontal, 24).padding(.top, 14)
-            .overlay(alignment: .trailing) {
-                Button("閉じる") { dismiss() }
-                    .font(S8Font.jp(14)).foregroundColor(c.accentInk)
-                    .padding(.trailing, 20).padding(.top, 14)
-            }
-            jumpBar
-                .padding(.top, 8)
-            S8Rule()
-            contentContainer
-        }
-        .background(c.paper.ignoresSafeArea())
-        .sheet(isPresented: $showCategoryPicker) {
-            NavigationStack { CategoryPickerView(selection: $draft.category) }
-        }
-    }
-
-    /// 他タイルへの直接ジャンプアイコン列。
-    private var jumpBar: some View {
+    /// 確定チップ（緑チェック + accent-wash 塗り）＋ サジェストチップ（破線）。
+    private var recognitionChipsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
-                ForEach(EventComposerView.tileCategories) { cat in
-                    Button(action: { onNavigate(cat) }) {
-                        VStack(spacing: 3) {
-                            S8Icon(name: whCategoryToS8Icon(cat), size: 16,
-                                   color: cat == category ? c.accentInk : c.fg3)
-                            Text(cat.label)
-                                .font(S8Font.jp(10, cat == category ? .bold : .regular))
-                                .foregroundColor(cat == category ? c.accentInk : c.fg3)
-                        }
+            HStack(spacing: 6) {
+                ForEach(Array(recognizedChips.enumerated()), id: \.offset) { _, chip in
+                    HStack(spacing: 5) {
+                        S8Icon(name: "check", size: 12, color: c.accentInk)
+                        Text("\(chipLabel(chip.0)) · \(chip.1)")
+                            .font(S8Font.jp(11.5))
+                            .foregroundColor(c.accentInk)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(cat.label)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(c.accentWash)
+                    .overlay(Capsule().stroke(c.accent, lineWidth: 1))
+                    .clipShape(Capsule())
+                }
+                if enableDictionarySuggestions {
+                    ForEach(nlUnrecognizedWords, id: \.self) { word in
+                        Button(action: { aliasDraftWord = AliasCandidateWord(word: word) }) {
+                            Text("「\(word)」を登録?")
+                                .font(S8Font.jp(11.5))
+                                .foregroundColor(c.fg3)
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .overlay(Capsule().stroke(c.lineStrong, style: StrokeStyle(lineWidth: 1, dash: [3])))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 4)
         }
     }
 
-    private func whCategoryToS8Icon(_ cat: WHCategory) -> String {
+    private func howSummaryText() -> String {
+        var parts: [String] = []
+        if draft.isImportant { parts.append("★重要") }
+        if draft.duration > 0 { parts.append("\(Int(draft.duration/60))分") }
+        if let amount = draft.parsedAmount { parts.append(currencyText(amount)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func chipLabel(_ cat: WHCategory) -> String {
         switch cat {
-        case .what:   return "text-cursor"
+        case .what: return "何を"
+        case .when: return "いつ"
+        case .where_: return "どこ"
+        case .which: return "どれ"
+        case .who: return "誰と"
+        case .how: return "どのくらい"
+        case .other: return "その他"
+        }
+    }
+
+    // MARK: - 「確認」divider
+
+    private var confirmationDivider: some View {
+        HStack(spacing: 10) {
+            Text("確認").font(S8Font.mono(10)).tracking(1.6).foregroundColor(c.fg3)
+            Text("すべて任意 · タップで直す").font(S8Font.jp(12)).foregroundColor(c.fg3)
+            S8Rule()
+        }
+        .padding(.horizontal, 24).padding(.vertical, 8)
+    }
+
+    // MARK: - Title row (必須バッジ、accent-wash 塗り)
+
+    private var titleRow: some View {
+        VStack(spacing: 0) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    editingTitle.toggle()
+                    if editingTitle { expandedRow = nil }
+                }
+            }) {
+                HStack(spacing: 13) {
+                    HStack(spacing: 8) {
+                        S8Icon(name: "type", size: 15, color: c.accent)
+                        Text("タイトル").font(S8Font.jp(12.5, .medium)).foregroundColor(c.fg2)
+                    }
+                    .frame(width: 88, alignment: .leading)
+                    Text(draft.title.isEmpty ? "未入力" : draft.title)
+                        .font(S8Font.jp(14, draft.title.isEmpty ? .regular : .bold))
+                        .foregroundColor(draft.title.isEmpty ? c.fg3 : c.fg1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("必須")
+                        .font(S8Font.mono(8.5)).tracking(1.2)
+                        .foregroundColor(c.accentInk)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(c.accent, lineWidth: 1))
+                }
+                .padding(.horizontal, 24).padding(.vertical, 15)
+                .background(c.accentWash)
+                .overlay(alignment: .top) { S8Rule() }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if editingTitle {
+                titleEditor
+                    .padding(.horizontal, 24).padding(.vertical, 12)
+                    .background(c.accentWash.opacity(0.6))
+                    .overlay(alignment: .top) { Rectangle().fill(c.accent).frame(height: 1) }
+            }
+        }
+    }
+
+    // MARK: - Inline expandable row
+
+    private func inlineRow(_ cat: WHCategory) -> some View {
+        VStack(spacing: 0) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    editingTitle = false
+                    expandedRow = (expandedRow == cat) ? nil : cat
+                }
+            }) {
+                HStack(spacing: 13) {
+                    HStack(spacing: 8) {
+                        S8Icon(name: iconName(for: cat), size: 15,
+                               color: expandedRow == cat ? c.accentInk : c.fg2)
+                        Text(chipLabel(cat)).font(S8Font.jp(12.5, .medium))
+                            .foregroundColor(expandedRow == cat ? c.accentInk : c.fg2)
+                    }
+                    .frame(width: 88, alignment: .leading)
+                    summary(for: cat)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    S8Icon(name: expandedRow == cat ? "chevron-down" : "chevron-right",
+                           size: 15, color: c.fg3)
+                }
+                .padding(.horizontal, 24).padding(.vertical, 15)
+                .background(expandedRow == cat ? c.accentWash : c.paper)
+                .overlay(alignment: .top) { S8Rule() }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if expandedRow == cat {
+                editor(for: cat)
+                    .background(c.accentWash.opacity(0.35))
+                    .overlay(alignment: .top) { Rectangle().fill(c.accent).frame(height: 1) }
+                    .overlay(alignment: .bottom) { Rectangle().fill(c.accent).frame(height: 1) }
+            }
+        }
+    }
+
+    private func iconName(for cat: WHCategory) -> String {
+        switch cat {
+        case .what:   return "type"
         case .when:   return "clock"
         case .where_: return "map-pin"
         case .which:  return "tag"
         case .who:    return "users"
         case .how:    return "gauge"
-        case .other:  return "file"
+        case .other:  return "file-text"
         }
     }
 
+    // MARK: - Row summary（closed 表示）
+
     @ViewBuilder
-    private var contentContainer: some View {
-        switch category {
+    private func summary(for cat: WHCategory) -> some View {
+        switch cat {
         case .what:
-            EmptyView() // 到達しない
+            Text(draft.title.isEmpty ? "未入力" : draft.title)
+                .font(S8Font.jp(14, draft.title.isEmpty ? .regular : .bold))
+                .foregroundColor(draft.title.isEmpty ? c.fg3 : c.fg1)
+                .lineLimit(1)
         case .when:
-            ScrollView { whenContent; Color.clear.frame(height: 24) }
+            if draft.isTimeSpecified {
+                let start = Self.previewFormatter.string(from: draft.startDate)
+                let end = Self.previewEndFormatter.string(from: draft.startDate.addingTimeInterval(draft.duration))
+                Text("\(start) – \(end)")
+                    .font(S8Font.jp(14)).foregroundColor(c.fg1)
+                    .lineLimit(1)
+            } else {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            }
         case .where_:
-            // LocationPickerView は S8 スタイルで ScrollView + S8SectionLabel/S8SetRow を積む
-            // 構成に統一（他カテゴリと同じ contentContainer 直下）。ヘッダ・NavigationStack は不要。
-            LocationPickerView(place: $draft.place)
+            if let placeName = draft.place?.name ?? pendingPlaceHint {
+                Text(placeName).font(S8Font.jp(14)).foregroundColor(c.fg1).lineLimit(1)
+            } else {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            }
         case .which:
-            ScrollView { whichContent; Color.clear.frame(height: 24) }
+            let parts = [draft.category?.name, draft.profile?.name].compactMap { $0 }
+            if parts.isEmpty {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            } else {
+                HStack(spacing: 6) {
+                    if let cat = draft.category {
+                        Circle().fill(Color(hex: cat.colorHex)).frame(width: 8, height: 8)
+                    }
+                    Text(parts.joined(separator: "・")).font(S8Font.jp(14)).foregroundColor(c.fg1).lineLimit(1)
+                }
+            }
         case .who:
-            ScrollView { whoContent; Color.clear.frame(height: 24) }
+            if draft.participantNames.isEmpty {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            } else {
+                Text(draft.participantNames.joined(separator: ", ")).font(S8Font.jp(14)).foregroundColor(c.fg1).lineLimit(1)
+            }
         case .how:
-            ScrollView { howContent; Color.clear.frame(height: 24) }
+            let howText = howSummaryText()
+            if howText.isEmpty {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            } else {
+                Text(howText).font(S8Font.jp(14)).foregroundColor(c.fg1).lineLimit(1)
+            }
         case .other:
-            ScrollView { otherContent; Color.clear.frame(height: 24) }
+            if draft.notes.isEmpty && draft.attachmentPaths.isEmpty && draft.colorHex == nil {
+                Text("任意").font(S8Font.jp(14)).foregroundColor(c.fg3)
+            } else {
+                let bits = [
+                    draft.notes.isEmpty ? nil : "メモ",
+                    draft.attachmentPaths.isEmpty ? nil : "画像 \(draft.attachmentPaths.count)",
+                    draft.colorHex == nil ? nil : "色"
+                ].compactMap { $0 }
+                Text(bits.joined(separator: " · "))
+                    .font(S8Font.jp(14)).foregroundColor(c.fg1).lineLimit(1)
+            }
         }
     }
 
-    // MARK: - when
+    // MARK: - Row editor（open 表示）
 
     @ViewBuilder
-    private var whenContent: some View {
+    private func editor(for cat: WHCategory) -> some View {
+        switch cat {
+        case .what: EmptyView()
+        case .when: whenEditor
+        case .where_: whereEditor
+        case .which: whichEditor
+        case .who: whoEditor
+        case .how: howEditor
+        case .other: otherEditor
+        }
+    }
+
+    // MARK: - Title editor
+
+    private var titleEditor: some View {
+        HStack(spacing: 10) {
+            S8Field(placeholder: "タスク名", text: $draft.title)
+            S8IconButton(icon: "check", accent: true, action: {
+                withAnimation(.easeInOut(duration: 0.15)) { editingTitle = false }
+            })
+            .accessibilityLabel("タイトル決定")
+        }
+    }
+
+    // MARK: - When editor
+
+    @ViewBuilder
+    private var whenEditor: some View {
         let notifPresets: [(Int, String)] = [(5, "5分前"), (15, "15分前"), (60, "1時間前"), (1440, "前日")]
         VStack(spacing: 0) {
             S8SectionLabel(text: "時刻")
@@ -732,6 +621,7 @@ private struct ComposerFocusView: View {
                 }
             }
         }
+        .padding(.vertical, 4)
     }
 
     private func offsetLabel(_ minutes: Int) -> String {
@@ -740,10 +630,17 @@ private struct ComposerFocusView: View {
         return "\(minutes)分前"
     }
 
-    // MARK: - which
+    // MARK: - Where editor
+
+    private var whereEditor: some View {
+        LocationPickerView(place: $draft.place)
+            .frame(minHeight: 320)
+    }
+
+    // MARK: - Which editor
 
     @ViewBuilder
-    private var whichContent: some View {
+    private var whichEditor: some View {
         VStack(spacing: 0) {
             S8SectionLabel(text: "カテゴリ")
             S8SetRow(icon: "tag", label: "カテゴリ", trailing: {
@@ -783,12 +680,13 @@ private struct ComposerFocusView: View {
                 }
             }
         }
+        .padding(.vertical, 4)
     }
 
-    // MARK: - who
+    // MARK: - Who editor
 
     @ViewBuilder
-    private var whoContent: some View {
+    private var whoEditor: some View {
         VStack(spacing: 0) {
             S8SectionLabel(text: "参加者を追加")
             HStack(spacing: 8) {
@@ -826,10 +724,10 @@ private struct ComposerFocusView: View {
                 .padding(.vertical, 6)
             }
         }
+        .padding(.vertical, 4)
     }
 
     private func addParticipant() {
-        // P18 H2: 改行除去→trim→50文字上限、既存重複はスキップ。
         let noNewlines = newParticipant.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
         let trimmed = String(noNewlines.trimmingCharacters(in: .whitespaces).prefix(50))
         guard !trimmed.isEmpty, !draft.participantNames.contains(trimmed) else { return }
@@ -841,10 +739,10 @@ private struct ComposerFocusView: View {
         draft.participantNames.removeAll { $0 == name }
     }
 
-    // MARK: - how
+    // MARK: - How editor
 
     @ViewBuilder
-    private var howContent: some View {
+    private var howEditor: some View {
         VStack(spacing: 0) {
             S8SectionLabel(text: "金額")
             VStack(alignment: .leading, spacing: 10) {
@@ -859,16 +757,17 @@ private struct ComposerFocusView: View {
             .padding(.horizontal, 24).padding(.vertical, 12)
 
             S8SectionLabel(text: "重要度")
-            S8SetRow(icon: draft.isImportant ? "star" : "star", label: "重要") {
+            S8SetRow(icon: "star", label: "重要") {
                 S8Toggle(on: draft.isImportant) { draft.isImportant.toggle() }
             }
         }
+        .padding(.vertical, 4)
     }
 
-    // MARK: - other
+    // MARK: - Other editor（メモ + 画像 + 色）
 
     @ViewBuilder
-    private var otherContent: some View {
+    private var otherEditor: some View {
         VStack(spacing: 0) {
             S8SectionLabel(text: "メモ")
             TextEditor(text: $draft.notes)
@@ -878,8 +777,49 @@ private struct ComposerFocusView: View {
                 .background(c.surface)
                 .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
-                .frame(minHeight: 160)
+                .frame(minHeight: 120)
                 .padding(.horizontal, 24).padding(.vertical, 10)
+
+            S8SectionLabel(text: "添付")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(draft.attachmentPaths, id: \.self) { path in
+                        ZStack(alignment: .topTrailing) {
+                            if let img = AttachmentStore.image(named: path) {
+                                Image(uiImage: img)
+                                    .resizable().scaledToFill()
+                                    .frame(width: 84, height: 84)
+                                    .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                                    .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                            } else {
+                                RoundedRectangle(cornerRadius: S8Radius.md)
+                                    .fill(c.surface2).frame(width: 84, height: 84)
+                                    .overlay(S8Icon(name: "image", size: 22, color: c.fg3))
+                            }
+                            Button(action: { removeAttachment(path) }) {
+                                ZStack {
+                                    Circle().fill(c.paper).frame(width: 22, height: 22)
+                                    S8Icon(name: "x", size: 12, color: c.fg2)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 6, y: -6)
+                            .accessibilityLabel("画像を外す")
+                        }
+                    }
+                    PhotosPicker(selection: $pickerItems, matching: .images) {
+                        RoundedRectangle(cornerRadius: S8Radius.md)
+                            .stroke(c.lineStrong, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                            .frame(width: 84, height: 84)
+                            .overlay(S8Icon(name: "plus", size: 22, color: c.fg2))
+                    }
+                    .accessibilityLabel("画像を追加")
+                }
+                .padding(.horizontal, 24).padding(.vertical, 10)
+            }
+            .onChange(of: pickerItems) { _, newItems in
+                Task { await ingestPickerItems(newItems) }
+            }
 
             S8SectionLabel(text: "色")
             ScrollView(.horizontal, showsIndicators: false) {
@@ -912,6 +852,205 @@ private struct ComposerFocusView: View {
                 .padding(.horizontal, 24).padding(.vertical, 8)
             }
         }
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Bottom bar
+
+    private var bottomBar: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(existingTask == nil ? "タイトルだけで追加できます" : "変更を保存します")
+                    .font(S8Font.jp(13.5, .bold))
+                    .foregroundColor(c.fg1)
+                Text(existingTask == nil ? "REST IS OPTIONAL" : "SAVE CHANGES")
+                    .font(S8Font.mono(9)).tracking(1.6)
+                    .foregroundColor(c.fg3)
+            }
+            Spacer()
+            S8Button(existingTask == nil ? "追加する" : "保存",
+                     icon: "check",
+                     variant: .primary,
+                     fillWidth: false,
+                     action: save)
+            .disabled(isSaveDisabled)
+            .opacity(isSaveDisabled ? 0.4 : 1.0)
+        }
+        .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 20)
+        .background(c.surface)
+        .overlay(alignment: .top) { S8Rule() }
+    }
+
+    // MARK: - Attachment helpers
+
+    private func ingestPickerItems(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data),
+                  let name = AttachmentStore.writeJPEG(image) else { continue }
+            draft.attachmentPaths.append(name)
+        }
+        pickerItems.removeAll()
+    }
+
+    private func removeAttachment(_ path: String) {
+        draft.attachmentPaths.removeAll { $0 == path }
+        AttachmentStore.remove(paths: [path])
+    }
+
+    // MARK: - Natural language parse
+
+    private func resolvePlaceHintIfNeeded() {
+        guard let hint = pendingPlaceHint, draft.place == nil else { return }
+        let fetch = FetchDescriptor<PlaceTag>(predicate: #Predicate<PlaceTag> { $0.name == hint })
+        draft.place = try? modelContext.fetch(fetch).first
+        pendingPlaceHint = nil
+    }
+
+    private func scheduleParse(_ text: String) {
+        nlDebounceTask?.cancel()
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            recognizedChips = []
+            nlUnrecognizedWords = []
+            return
+        }
+        nlDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            applyParse(trimmed)
+        }
+    }
+
+    private func applyParse(_ text: String) {
+        let result = PhraseParser.parse(text, aliases: aliases)
+        if !result.titleRemainder.isEmpty {
+            draft.title = result.titleRemainder
+        } else if draft.title.isEmpty {
+            draft.title = text
+        }
+        if let start = result.startDate {
+            draft.isTimeSpecified = true
+            draft.startDate = start
+        }
+        if let duration = result.duration {
+            draft.duration = duration
+            draft.isTimeSpecified = true
+        }
+        if let placeHint = result.placeHint {
+            if let match = placeTags.first(where: { $0.name == placeHint }) {
+                draft.place = match
+            } else {
+                pendingPlaceHint = placeHint
+            }
+        }
+        if let categoryHint = result.categoryHint,
+           let match = categories.first(where: { $0.name == categoryHint }) {
+            draft.category = match
+        }
+        if let who = result.whoHint, !draft.participantNames.contains(who) {
+            draft.participantNames.append(who)
+        }
+        if let other = result.otherHint {
+            if draft.notes.isEmpty { draft.notes = other }
+            else if !draft.notes.contains(other) { draft.notes += "\n" + other }
+        }
+        recognizedChips = result.recognizedChips
+        nlUnrecognizedWords = result.unrecognizedWords
+        if enableDictionarySuggestions {
+            result.unrecognizedWords.forEach(SuggestionQueue.enqueue)
+        }
+    }
+
+    // MARK: - Save
+
+    private var isSaveDisabled: Bool {
+        draft.title.trimmingCharacters(in: .whitespaces).isEmpty
+            || (!draft.amountText.isEmpty && draft.parsedAmount == nil)
+    }
+
+    private static let previewFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d HH:mm"
+        return f
+    }()
+
+    private static let previewEndFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
+    private func save() {
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespaces)
+        guard !trimmedTitle.isEmpty else { return }
+        guard draft.amountText.isEmpty || draft.parsedAmount != nil else { return }
+        if let amount = draft.parsedAmount, amount > 1_000_000_000_000 {
+            showAmountTooLargeAlert = true
+            return
+        }
+
+        let rruleStr = Self.repeatOptions.first { $0.0 == draft.repeatPattern }?.2
+        let amount = draft.parsedAmount
+        let trimmedPayment = draft.paymentMethod.trimmingCharacters(in: .whitespaces)
+        let paymentMethod = amount != nil && !trimmedPayment.isEmpty ? trimmedPayment : nil
+
+        let task = existingTask ?? TaskItem(title: trimmedTitle, phase: .today)
+
+        let oldStart = task.startDate
+        let oldDuration = task.duration
+        let oldOffsets = task.notificationOffsets
+        let oldAmount = task.amount
+
+        if draft.place == nil, let hint = pendingPlaceHint {
+            let placeholder = PlaceTag(name: hint)
+            modelContext.insert(placeholder)
+            draft.place = placeholder
+        }
+
+        task.title = trimmedTitle
+        task.category = draft.category
+        task.startDate = draft.isTimeSpecified ? draft.startDate : nil
+        task.duration = draft.isTimeSpecified ? draft.duration : 0
+        task.place = draft.place
+        task.notes = draft.notes
+        task.isImportant = draft.isImportant
+        task.colorHex = draft.colorHex
+        task.attachmentPaths = draft.attachmentPaths
+        task.notificationOffsets = draft.notificationOffsets.sorted()
+        task.timeZoneIdentifier = draft.isTimeSpecified ? TimeZone.current.identifier : nil
+        task.amount = amount
+        task.paymentMethod = paymentMethod
+        task.isTimePinned = draft.isTimeSpecified && draft.isTimePinned
+        task.rrule = rruleStr
+        task.profile = draft.profile
+        task.participantNames = draft.participantNames
+
+        if existingTask == nil {
+            modelContext.insert(task)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("[EventComposer] save failed: \(error)")
+            assertionFailure("EventComposer save failed: \(error)")
+            return
+        }
+
+        if task.startDate != oldStart || task.duration != oldDuration || task.notificationOffsets != oldOffsets {
+            NotificationService.reschedule(for: task)
+        }
+        if task.amount != oldAmount {
+            MoneyStats.recompute(for: task, context: modelContext)
+        }
+
+        dismiss()
     }
 }
 

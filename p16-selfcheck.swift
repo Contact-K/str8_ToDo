@@ -330,6 +330,71 @@ struct P16SelfCheck {
             assert(r.rrule == "FREQ=MONTHLY;BYMONTHDAY=10", "JP36 毎月十日, got \(r.rrule ?? "nil")")
         }
 
+        // JP37: 「15時から2時間 会議」→ 今日15:00 (now=10:00 なので未来), duration=7200
+        do {
+            let r = JPRuleLayer.extract("15時から2時間 会議", now: now, calendar: cal)
+            assertEqual(r.startDate, date(cal, y: 2026, m: 7, d: 16, h: 15, min: 0)!, "JP37 15時から2時間 開始")
+            assert(r.duration == 7200, "JP37 duration=7200, got \(String(describing: r.duration))")
+        }
+
+        // JP38: 「午後3時から30分 通話」→ 今日15:00, duration=1800
+        do {
+            let r = JPRuleLayer.extract("午後3時から30分 通話", now: now, calendar: cal)
+            assertEqual(r.startDate, date(cal, y: 2026, m: 7, d: 16, h: 15, min: 0)!, "JP38 午後3時から30分 開始")
+            assert(r.duration == 1800, "JP38 duration=1800, got \(String(describing: r.duration))")
+        }
+
+        // JP39: 「10時から1時間半 打ち合わせ」→ 今日10:00 (now と同刻、未来扱い), duration=5400
+        do {
+            let r = JPRuleLayer.extract("10時から1時間半 打ち合わせ", now: now, calendar: cal)
+            assertEqual(r.startDate, date(cal, y: 2026, m: 7, d: 16, h: 10, min: 0)!, "JP39 10時から1時間半 開始")
+            assert(r.duration == 5400, "JP39 duration=5400, got \(String(describing: r.duration))")
+        }
+
+        // JP40: 「9時半から2時間15分 授業」→ 9:30 は now(10:00) より過去なので翌日 07-17 9:30
+        do {
+            let r = JPRuleLayer.extract("9時半から2時間15分 授業", now: now, calendar: cal)
+            assertEqual(r.startDate, date(cal, y: 2026, m: 7, d: 17, h: 9, min: 30)!, "JP40 9時半から2時間15分 開始")
+            assert(r.duration == 8100, "JP40 duration=8100, got \(String(describing: r.duration))")
+        }
+
+        // JP41: 「3時から5時 会議」→ 3時 過去 → 翌日、2 時刻 range 由来 duration=7200
+        do {
+            let r = JPRuleLayer.extract("3時から5時 会議", now: now, calendar: cal)
+            assertEqual(r.startDate, date(cal, y: 2026, m: 7, d: 17, h: 3, min: 0)!, "JP41 3時から5時 開始")
+            assert(r.duration == 7200, "JP41 duration=7200, got \(String(describing: r.duration))")
+        }
+
+        // JP42: 場所テンプレ拡張 —「塾に行く」→ whereHint=塾
+        do {
+            let r = JPRuleLayer.extract("塾に行く", now: now, calendar: cal)
+            assert(r.whereHint == "塾", "JP42 whereHint 塾, got \(r.whereHint ?? "nil")")
+        }
+
+        // JP43: 場所テンプレ長い順 —「美容室 予約」→ 美容室（室 単独ではない）
+        do {
+            let r = JPRuleLayer.extract("美容室 予約", now: now, calendar: cal)
+            assert(r.whereHint == "美容室", "JP43 whereHint 美容室, got \(r.whereHint ?? "nil")")
+        }
+
+        // JP44: 場所テンプレ —「駐車場に停める」→ 駐車場
+        do {
+            let r = JPRuleLayer.extract("駐車場に停める", now: now, calendar: cal)
+            assert(r.whereHint == "駐車場", "JP44 whereHint 駐車場, got \(r.whereHint ?? "nil")")
+        }
+
+        // Formatting.hmText: 秒 → "1h 32m" / "45m" / "12h"
+        do {
+            assert(hmText(0) == "0m", "hmText(0)")
+            assert(hmText(-100) == "0m", "hmText 負値は 0m")
+            assert(hmText(45 * 60) == "45m", "hmText 45分")
+            assert(hmText(3600) == "1h", "hmText 1h ちょうど")
+            assert(hmText(3661) == "1h 1m", "hmText 1h 1m")
+            assert(hmText(5400) == "1h 30m", "hmText 1h 30m")
+            assert(hmText(43200) == "12h", "hmText 12h ちょうど")
+            assert(hmText(60 + 30) == "1m", "hmText 端数秒切り捨て (90s→1m)")
+        }
+
         print("P16 self-check: ALL PASS")
     }
 

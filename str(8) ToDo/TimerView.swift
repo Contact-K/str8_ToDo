@@ -616,10 +616,10 @@ struct TimerView: View {
         Task { await activity.update(.init(state: state, staleDate: nil)) }
     }
 
-    /// Activity を終了（final state はロック画面に薄く残す）。
+    /// Activity を終了。self.activity ハンドルだけでなく、システムに残っている全 TimerAttributes
+    /// activity を強制的に end する（activity handle が nil でもゴースト Live Activity が消える）。
     private func endActivity() {
         guard #available(iOS 16.1, *) else { return }
-        guard let activity else { return }
         self.activity = nil
         let state = TimerAttributes.ContentState(
             endDate: .now,
@@ -627,7 +627,13 @@ struct TimerView: View {
             isPaused: true,
             pausedRemainingSec: 0
         )
-        Task { await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate) }
+        Task {
+            // Activity<TimerAttributes>.activities はシステムに登録済みの全 activity を返す。
+            // ゴースト（前セッションの残りや handle 消失）も含めて確実に dismiss する。
+            for act in Activity<TimerAttributes>.activities {
+                await act.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate)
+            }
+        }
     }
 
     private func timeText(_ interval: TimeInterval) -> String {

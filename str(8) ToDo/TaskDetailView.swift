@@ -59,6 +59,11 @@ struct TaskDetailView: View {
                         notesSection
                     }
 
+                    // Phase 17: 添付画像
+                    if !task.attachmentPaths.isEmpty {
+                        attachmentsSection
+                    }
+
                     // MARK: - 承認フロー & アクション
                     approvalSection
 
@@ -356,6 +361,33 @@ struct TaskDetailView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Attachments Section (Phase 17)
+    private var attachmentsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeaderRow(tag: "ATTACH", jp: "添付", pencilTopic: .other)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(task.attachmentPaths, id: \.self) { path in
+                        if let img = AttachmentStore.image(named: path) {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 96, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
+                                .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.lineStrong, lineWidth: 1))
+                        } else {
+                            RoundedRectangle(cornerRadius: S8Radius.md)
+                                .fill(c.surface2)
+                                .frame(width: 96, height: 96)
+                                .overlay(S8Icon(name: "image", size: 22, color: c.fg3))
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
             }
         }
     }

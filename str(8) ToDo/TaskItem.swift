@@ -116,6 +116,10 @@ final class TaskItem {
     /// 参加者名（who）。CNContactPicker で選択した表示名の保持のみ、連携なし（P15）。
     var participantNames: [String] = []
 
+    /// 添付ファイル（画像）の App Group 内相対パス（Share Extension や手動添付から生成）。
+    /// ファイル本体は `group.str8.todo.str8/attachments/<uuid>.<ext>` に保持。
+    var attachmentPaths: [String] = []
+
     /// 週報の approvedCount 集計（WeekReportSource）や日別集計が startDate/completedAt の範囲 fetch で
     /// 年単位に線形劣化しないための Index。
     #Index<TaskItem>([\.completedAt], [\.startDate])
@@ -152,7 +156,8 @@ final class TaskItem {
         snoozeUntil: Date? = nil,
         subjectID: UUID? = nil,
         profile: Profile? = nil,
-        participantNames: [String] = []
+        participantNames: [String] = [],
+        attachmentPaths: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -186,6 +191,7 @@ final class TaskItem {
         self.subjectID = subjectID
         self.profile = profile
         self.participantNames = participantNames
+        self.attachmentPaths = attachmentPaths
     }
 }
 

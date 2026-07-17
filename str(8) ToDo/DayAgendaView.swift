@@ -344,7 +344,7 @@ struct DayAgendaView: View {
                 nowSubPanel(
                     cap: "NEXT",
                     big: nextMinutesText(next: next, now: now),
-                    unit: nextMinutesUnit(next: next, now: now),
+                    unit: nil,
                     hint: nextHintText(next: next),
                     bigColor: c.accentInk,
                     c: c
@@ -389,13 +389,7 @@ struct DayAgendaView: View {
 
     private func nextMinutesText(next: TaskItem?, now: Date) -> String {
         guard let n = next, let start = n.startDate else { return "—" }
-        let mins = Int((start.timeIntervalSince(now) / 60).rounded())
-        return String(mins > 0 ? "−\(mins)" : "\(mins)")
-    }
-
-    private func nextMinutesUnit(next: TaskItem?, now: Date) -> String? {
-        guard next?.startDate != nil else { return nil }
-        return "分"
+        return hmText(start.timeIntervalSince(now))
     }
 
     private func nextHintText(next: TaskItem?) -> String {
@@ -434,38 +428,34 @@ struct DayAgendaView: View {
     }
 
     private func travelRow(task: TaskItem, departure: Date, eta: TimeInterval) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "car.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("移動")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    Text(formatDurationShort(eta))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Text("・\(formatTime(departure))に出発")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+        let c = S8Palette.of(scheme)
+        return HStack(spacing: 12) {
+            S8Icon(name: "car", size: 15, color: c.accentInk)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("移動 → \(task.title)")
+                        .font(S8Font.jp(12.5, .bold))
+                        .foregroundColor(c.fg1)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text("DEPART").font(S8Font.mono(8.5)).tracking(1.4).foregroundColor(c.fg3)
+                }
+                HStack(spacing: 6) {
+                    Text(formatTime(departure))
+                        .font(S8Font.mono(12, .bold))
+                        .foregroundColor(c.accentInk)
+                    Text("に出発 · \(formatDurationShort(eta))")
+                        .font(S8Font.mono(10))
+                        .foregroundColor(c.fg3)
+                    Spacer(minLength: 0)
                 }
             }
-
-            Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-        )
-        .background(Color(.systemBackground))
-        .cornerRadius(8)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(c.accentWash)
+        .overlay(RoundedRectangle(cornerRadius: S8Radius.md).stroke(c.accent, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: S8Radius.md))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("移動 \(formatDurationShort(eta)) \(formatTime(departure))に出発")
     }
