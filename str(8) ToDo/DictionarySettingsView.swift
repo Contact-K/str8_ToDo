@@ -2,7 +2,7 @@
 //  DictionarySettingsView.swift
 //  str8ToDo
 //
-//  辞書管理画面（企画書 E3 / P17）。CalendarSettingsView から遷移。
+//  辞書管理画面（企画書 E3 / P17）。SettingsRootView から遷移。
 //  既定表現（isBuiltIn）は ON/OFF のみ、ユーザー登録分は追加/編集/削除可能、
 //  クイック追加（P16）のサジェスト経由で貯まった未認識ワードは SuggestionQueue から
 //  「登録待ち」として表示し、分類選択で PhraseAlias に確定するとキューから消える。
@@ -83,6 +83,14 @@ struct DictionarySettingsView: View {
                         ForEach(pendingWords, id: \.self) { word in
                             pendingRow(word)
                         }
+                        Button(action: {
+                            SuggestionQueue.clear()
+                            pendingWords = []
+                        }) {
+                            Text("すべてクリア")
+                                .font(S8Font.jp(11.5)).foregroundColor(c.fg3)
+                        }
+                        .buttonStyle(.plain)
                     }
                     Color.clear.frame(height: 24)
                 }
@@ -169,6 +177,13 @@ struct DictionarySettingsView: View {
                     .font(S8Font.jp(11.5)).foregroundColor(c.fg2)
                     .padding(.horizontal, 11).padding(.vertical, 5)
                     .overlay(Capsule().stroke(c.lineStrong, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            Button(action: {
+                SuggestionQueue.dequeue(word)
+                pendingWords = SuggestionQueue.all()
+            }) {
+                S8Icon(name: "trash", size: 14, color: c.fg3).padding(5)
             }
             .buttonStyle(.plain)
         }

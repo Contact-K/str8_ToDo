@@ -114,7 +114,7 @@ struct CalendarRootView: View {
                             .offset(x: 2, y: -2)
                     }
                 }
-                // 詳細設定（マイ時間割・曜日割当・特定日差替）は Calendar タブへ集約（2026-07-14）。
+                // 時間割設定（マイ時間割・曜日割当・特定日差替）は Calendar タブへ集約（2026-07-14）。
                 S8IconButton(icon: "settings") { showSettings = true }
                     .accessibilityLabel("カレンダー詳細設定")
             }
@@ -159,7 +159,7 @@ struct CalendarRootView: View {
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
-                CalendarSettingsView()
+                TimetableSettingsView()
             }
         }
         .sheet(isPresented: $showYear) {
@@ -176,10 +176,10 @@ struct CalendarRootView: View {
             EventComposerView(initialStart: selectedDate)
         }
         .task {
-            if eventKit.authState == .authorized {
-                eventKit.sync(into: context)
-                eventKit.observeChanges(into: context)
-            }
+            guard UserDefaults.standard.bool(forKey: AppSettingsKey.syncSystemCalendar),
+                  eventKit.authState == .authorized else { return }
+            eventKit.sync(into: context)
+            eventKit.observeChanges(into: context)
         }
         // ホイール MODE ダイヤルからのモード切替を購読（現状は wheel が中心作成発火に切替済で MODE ホイールは開かないが、
         // 将来復活時のために互換）。

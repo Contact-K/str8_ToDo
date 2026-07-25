@@ -7,21 +7,66 @@
 //
 
 import UIKit
-import Social
+import SwiftUI
 
-class ShareViewController: SLComposeServiceViewController {
-    override func isContentValid() -> Bool { true }
+final class ShareViewController: UIViewController {
+    private var inputItems: [NSExtensionItem] = []
+    private var isCompleting = false
 
-    override func didSelectPost() {
-        let text = self.contentText
-        let items = (self.extensionContext?.inputItems as? [NSExtensionItem]) ?? []
-        // extensionContext は didSelectPost 内で参照して閉じる必要があるため即キャプチャ。
-        let ctx = self.extensionContext
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        inputItems = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        let items = inputItems
         Task {
-            await ShareInboxWriter.write(text: text, items: items)
-            ctx?.completeRequest(returningItems: nil)
+            let preview = await ShareInboxWriter.extractPreview(items: items)
+            showCompose(preview: preview)
         }
     }
 
-    override func configurationItems() -> [Any]! { [] }
+    private func showCompose(preview: (text: String, imageProviders: [NSItemProvider])) {
+        let root = ShareComposeView(
+            text: preview.text,
+            imageProviders: preview.imageProviders,
+            onSave: { [weak self] title, notes, startDate, durationMin in
+                self?.save(title: title, notes: notes, startDate: startDate, durationMin: durationMin)
+            },
+            onCancel: { [weak self] in self?.cancel() }
+        )
+        let host = UIHostingController(rootView: root)
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        host.didMove(toParent: self)
+    }
+
+    private func save(title: String, notes: String, startDate: Date?, durationMin: Int?) {
+        guard !isCompleting else { return }
+        isCompleting = true
+        let context = extensionContext
+        let items = inputItems
+        Task {
+            await ShareInboxWriter.write(
+                title: title,
+                notes: notes,
+                items: items,
+                startDate: startDate,
+                durationMin: durationMin
+            )
+            context?.completeRequest(returningItems: nil)
+        }
+    }
+
+    private func cancel() {
+        guard !isCompleting else { return }
+        isCompleting = true
+        extensionContext?.cancelRequest(
+            withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)
+        )
+    }
 }

@@ -87,7 +87,7 @@
 3. **枠スナップイベント**: RRULE イベントは開始時刻の包含判定で該当枠セルに着地。正確な時刻はセル内に小さく表示。タップで詳細へ。
 4. **横断キャプセル**: 時刻固定イベント(isTimePinned)をスパイクのマッピングで枠の上に縦断オーバーレイ。枠線付きで「時刻厳守」を示す。移動セグメントのサブビューはデータがある時のみ描画(P7 で点灯)。
 5. **Morph ペアリング**: 週チップ⇄日カードは同じ `"evt-<uuid>"` ID を共有。キャプセル⇄時刻厳守カードも接続。フォーカス日アンカー(切替前に見ていた日に着地)。スプリングをチューニング。**Morph 品質はこのフェーズの明示的な受け入れゲート**。
-6. **枠テンプレートエディタ(最小版)**: `CalendarSettingsView` に枠(名前・時間帯)・テンプレ・曜日割当の編集を追加。`AppSettings.swift` の `weekStartMinutes`/`weekEndMinutes`/`weekBandIntervalHours` と `makeWeekBands` を削除。磨き込みは P9。
+6. **枠テンプレートエディタ(最小版)**: `TimetableSettingsView` に枠(名前・時間帯)・テンプレ・曜日割当の編集を追加。`AppSettings.swift` の `weekStartMinutes`/`weekEndMinutes`/`weekBandIntervalHours` と `makeWeekBands` を削除。磨き込みは P9。
 
 **受け入れ基準**: ユーザー定義の枠が行として描画される。時刻固定イベントが正しい行範囲をキャプセルとして縦断し、スクロールしてもズレない。週→日/日→週の Morph でカードが 1:1 で追随する(クロスフェード落ちしない)。特定日の差し替えでその列だけ枠構成が変わる。
 
@@ -247,7 +247,7 @@ Round 2 で合意した High/Medium/Low の未対応項目。Critical 4件（Wee
 - [x] **`moneyTotal` を新規集計にするか `MonthMoneyStat` 参照にするか**: **オーナー判断（2026-07-11）** — 都度計算のままで OK。週単位の按分ロジックを追加するコストに対してリターンが薄いため見送り。`WeekReportSource.moneyTotal` にコメントで明記。
 - [x] **`WeekReview` の履歴閲覧画面 or モデル廃止**: **オーナー判断（2026-07-11）** — モデル廃止。閲覧 UI なし＋書き込み専用は不要のため、`WeekReview.swift` 削除、スキーマ登録から除去、`BackupService` の DTO/書き込み経路も削除。旧 `.str8` の `weekReviews` キーは `BackupPayload` が対応フィールドを持たないため JSONDecoder が無視して読み飛ぶ（互換維持）。**注**: スキーマから `@Model` を削除すると既存ライブストアとの互換が崩れるため、開発端末はシミュレータ再起動（ストア破棄）で対応すること（P6 メモ参照）。
 - [x] `ShareSheet` ラッパを `ShareLink` に置換
-- [x] `UserDefaults.register(defaults:)` で AppSettings の `??` フォールバックを削除（`str_8__ToDoApp.init()` で `AppSettingsKey.registerDefaults()` 実施。`CalendarSettingsView` 側の同パターンも合わせて簡素化）
+- [x] `UserDefaults.register(defaults:)` で AppSettings の `??` フォールバックを削除（`str_8__ToDoApp.init()` で `AppSettingsKey.registerDefaults()` 実施。設定画面側の同パターンも合わせて簡素化）
 - [x] `WeekReviewView.nextRange` の inline 計算を `WeekMath.weekRange` 再利用に
 - [x] 両 `ToolbarItem` が `.primaryAction` になっている問題、エクスポート側を `.secondaryAction` に
 - [x] 命名揺れ `doneCount` vs `completedCount` を `approvedCount` で統一
@@ -308,7 +308,7 @@ Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Criti
    - 残り 6 分類（when/where/which/who/how/other）を 2 列グリッドのアイコン付きタイルで表示、プレビュー付き（未設定は淡色）。
    - タイルタップで該当トピックのフォーカス編集画面へ。フォーカス内は他タイルへの直接ジャンプアイコン列を上部常設。
    - when は時間帯バー、where はサムネ＋最近使った場所チップ、who はイニシャル丸、which はカテゴリ/プロフィール併記チップ。
-6. **既存呼び出し側の切替**: `TodoListView.quickAdd`（クイック追加は Phase 16 で改修、Phase 15 はまず「詳細を追加」経由）、`DayAgendaView` 空きカードタップ、`CalendarSettingsView` 等の `AddTaskSheet` 呼び出しを `EventComposerView` に差し替え。**旧 `AddTaskSheet.swift` は削除**（1 タイミングで置換、両立させない）。
+6. **既存呼び出し側の切替**: `TodoListView.quickAdd`（クイック追加は Phase 16 で改修、Phase 15 はまず「詳細を追加」経由）、`DayAgendaView` 空きカードタップ、設定画面等の `AddTaskSheet` 呼び出しを `EventComposerView` に差し替え。**旧 `AddTaskSheet.swift` は削除**（1 タイミングで置換、両立させない）。
 
 **受け入れ基準**: タイル 7 枚（タイトル固定 + 6 タイル）が表示される。タップでフォーカス編集に遷移、他タイルへ横移動できる。when で時間帯バー・where でチップ・which でチップが選べる。既存の全 CRUD（新規作成・詳細編集導線）が回帰なしで動く。xcodebuild build 通過。
 
@@ -336,7 +336,7 @@ Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Criti
 
 企画書 E3。認識精度の天井を「ユーザーが埋められる」仕組みにする。
 
-1. **`DictionarySettingsView`（新規、`CalendarSettingsView` から遷移）**:
+1. **`DictionarySettingsView`（新規、`SettingsRootView` から遷移）**:
    - 既定表現（`isBuiltIn=true`）は ON/OFF のみ可能（削除不可）
    - ユーザー登録分は追加/編集/削除可能
    - カテゴリ/場所の別名もこの画面から追加（既存 `Category`/`PlaceTag` 名にチップで別名を紐付け、内部的には `PhraseAlias` として保存）
@@ -381,7 +381,7 @@ Phase 14 完成後の debate-review（4 視点衝突）で追加検出。**Criti
 | `TaskDetailView.swift` | P0 ステータス UI、P8 お金 |
 | `AddTaskSheet.swift` | P1 空きプレフィル、P8 お金 |
 | `YearView.swift` | P0 enum、P5 未確定表示、P9 DayStat 化+ヒートマップ部品化 |
-| `CalendarSettingsView.swift` | P2 枠エディタ、P7 天気(2026-07-11 廃止)、P9 磨き込み |
+| `TimetableSettingsView.swift` | P2 枠エディタ、P7 天気(2026-07-11 廃止)、P9 磨き込み |
 | `AppSettings.swift` | P2(WeekBand/makeWeekBands/hhmm 削除)、P7 廃止分の現在地キャッシュ取得を移設 |
 
 **作り直し**: `DayView.swift` → カード式アジェンダ(P1、`DayTaskBlock` は廃棄)、`WeekView.swift` → 枠グリッド+キャプセル(P2、スクロール骨格とヘッダは概ね残る)

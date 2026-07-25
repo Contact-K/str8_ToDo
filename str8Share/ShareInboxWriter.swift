@@ -38,15 +38,37 @@ enum ShareInboxWriter {
         return dir
     }
 
-    /// NSItemProvider 群からテキストと画像を抽出、App Group に永続化して JSON メタを inbox に書く。
-    static func write(text: String?, items: [NSExtensionItem]) async {
+    /// 共有 UI の初期値用にテキストと画像 provider を抽出する。
+    static func extractPreview(items: [NSExtensionItem]) async -> (text: String, imageProviders: [NSItemProvider]) {
+        var textParts: [String] = []
+        var imageProviders: [NSItemProvider] = []
+
+        for item in items {
+            for provider in item.attachments ?? [] {
+                if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                    imageProviders.append(provider)
+                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                    if let text = await loadURL(from: provider) { textParts.append(text) }
+                } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+                    if let text = await loadText(from: provider) { textParts.append(text) }
+                }
+            }
+        }
+
+        return (textParts.joined(separator: "\n"), imageProviders)
+    }
+
+    /// 入力済みタイトル・メモと画像を App Group に永続化して JSON メタを inbox に書く。
+    static func write(
+        title: String,
+        notes: String,
+        items: [NSExtensionItem],
+        startDate: Date? = nil,
+        durationMin: Int? = nil
+    ) async {
         guard let inbox = inboxDirectoryURL(),
               let attachDir = attachmentsDirectoryURL() else { return }
 
-        var textParts: [String] = []
-        if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
-            textParts.append(t)
-        }
         var attachmentRelativePaths: [String] = []
         let id = UUID().uuidString
 
@@ -56,28 +78,23 @@ enum ShareInboxWriter {
                     if let path = await copyImage(from: provider, into: attachDir, idPrefix: id) {
                         attachmentRelativePaths.append(path)
                     }
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    if let s = await loadURL(from: provider) { textParts.append(s) }
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                    if let s = await loadText(from: provider) { textParts.append(s) }
                 }
             }
         }
 
-        // タイトルは先頭の 1 行、残りは notes に。空でも保存（画像だけ共有もあり得る）。
-        let joined = textParts.joined(separator: "\n")
-        let firstLine = joined.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? ""
-        let rest = joined.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).dropFirst().first.map(String.init) ?? ""
-        let title = firstLine.isEmpty
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedTitle = normalizedTitle.isEmpty
             ? (attachmentRelativePaths.isEmpty ? "共有アイテム" : "共有された画像")
-            : firstLine
+            : normalizedTitle
 
         let item = ShareInboxItem(
             id: id,
-            title: title,
-            notes: rest,
+            title: savedTitle,
+            notes: notes,
             attachmentPaths: attachmentRelativePaths,
-            createdAt: Date()
+            createdAt: Date(),
+            startDate: startDate,
+            durationMin: durationMin
         )
 
         let jsonURL = inbox.appendingPathComponent("\(id).json")
@@ -128,6 +145,8 @@ struct ShareInboxItem: Codable {
     /// attachments/ からの相対パス（ファイル名のみ）。
     var attachmentPaths: [String]
     var createdAt: Date
+    var startDate: Date? = nil
+    var durationMin: Int? = nil
 }
 
 extension JSONEncoder {

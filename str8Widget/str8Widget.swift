@@ -475,14 +475,29 @@ struct TimerLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     progressBar(context: context)
-                        .padding(.top, 4)
                 }
             } compactLeading: {
-                // デザイン C3 通り: 時間 LEFT / ドット RIGHT。
+                // デザイン C3 通り: 時間 LEFT / 進捗 RIGHT。
                 remainDisplay(context: context, size: 13)
                     .foregroundColor(W.live)
+                    .frame(width: 44)
             } compactTrailing: {
-                compactDots(context: context, count: 4)
+                let start = context.state.endDate.addingTimeInterval(-Double(context.state.totalMinutes * 60))
+                Group {
+                    if context.state.isPaused {
+                        ProgressView(value: doneFrac(context: context))
+                    } else {
+                        ProgressView(
+                            timerInterval: start...context.state.endDate,
+                            countsDown: false,
+                            label: { EmptyView() },
+                            currentValueLabel: { EmptyView() }
+                        )
+                    }
+                }
+                .progressViewStyle(.circular)
+                .tint(W.live)
+                .frame(width: 16, height: 16)
             } minimal: {
                 // minimal 表示: 経過を単一ドット環で
                 liveRing(context: context, size: 18, dotSize: 1.6)
@@ -550,18 +565,11 @@ struct TimerLiveActivity: Widget {
     private func liveRing(context: ActivityViewContext<TimerAttributes>, size: CGFloat, dotSize: CGFloat? = nil) -> some View {
         let r = size * 0.42
         let n = 16
-        // isPaused 時: pausedRemainingSec から progress 固定。
-        // 非 paused 時: endDate - now / total で progress。widget は 1s ごとには再描画されないので
-        // Timeline との併用が理想だが、Live Activity は system が概ね 15s 単位で refresh するのに任せる。
-        let totalSec = Double(max(1, context.state.totalMinutes * 60))
-        let remain: Double = context.state.isPaused
-            ? Double(context.state.pausedRemainingSec)
-            : max(0, context.state.endDate.timeIntervalSinceNow)
-        let progress = max(0, min(1, 1.0 - remain / totalSec))
+        // ponytail: 装飾用の静的リング。更新頻度は OS の Live Activity 再描画に依存する。
         DotRing(
             radius: r,
             count: n,
-            progress: progress,
+            progress: doneFrac(context: context),
             onColor: W.live.opacity(context.state.isPaused ? 0.5 : 1.0),
             offColor: W.liveOff,
             dotSize: dotSize ?? max(size * 0.06, 2.4)
@@ -569,59 +577,47 @@ struct TimerLiveActivity: Widget {
         .frame(width: size, height: size)
     }
 
-    /// Dynamic Island compact leading: 4 ドット水平列。
-    @ViewBuilder
-    private func compactDots(context: ActivityViewContext<TimerAttributes>, count: Int) -> some View {
+    private func doneFrac(context: ActivityViewContext<TimerAttributes>) -> Double {
         let totalSec = Double(max(1, context.state.totalMinutes * 60))
         let remain: Double = context.state.isPaused
             ? Double(context.state.pausedRemainingSec)
             : max(0, context.state.endDate.timeIntervalSinceNow)
-        let progress = max(0, min(1, 1.0 - remain / totalSec))
-        let filled = Int((Double(count) * progress).rounded())
-        HStack(spacing: 3) {
-            ForEach(0..<count, id: \.self) { i in
-                Circle()
-                    .fill(i < filled ? W.live : W.liveOff)
-                    .frame(width: 5, height: 5)
-            }
-        }
+        return max(0, min(1, 1.0 - remain / totalSec))
     }
 
-    /// 8 セグメント離散進捗バー（Expanded 下段）。
+    /// Expanded 下段の自動更新プログレス。
     @ViewBuilder
     private func progressBar(context: ActivityViewContext<TimerAttributes>) -> some View {
-        let total = 8
-        let totalSec = Double(context.state.totalMinutes * 60)
-        let doneFrac: Double = {
-            if context.state.isPaused {
-                let remain = Double(context.state.pausedRemainingSec)
-                return max(0, min(1, 1 - remain / max(1, totalSec)))
-            } else {
-                let remain = max(0, context.state.endDate.timeIntervalSinceNow)
-                return max(0, min(1, 1 - remain / max(1, totalSec)))
-            }
-        }()
-        let filled = Int((doneFrac * Double(total)).rounded())
+        let start = context.state.endDate.addingTimeInterval(-Double(context.state.totalMinutes * 60))
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 3) {
-                ForEach(0..<total, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(i < filled ? W.live : Color.white.opacity(0.2))
-                        .frame(height: 4)
+            Group {
+                if context.state.isPaused {
+                    ProgressView(value: doneFrac(context: context))
+                } else {
+                    ProgressView(
+                        timerInterval: start...context.state.endDate,
+                        countsDown: false,
+                        label: { EmptyView() },
+                        currentValueLabel: { EmptyView() }
+                    )
                 }
             }
+            .progressViewStyle(.linear)
+            .tint(W.live)
+            .scaleEffect(y: 0.8)
             HStack {
                 Text(context.state.isPaused ? "PAUSED" : "RUNNING")
-                    .font(.system(size: 8, design: .monospaced))
-                    .tracking(1.4)
+                    .font(.system(size: 9, design: .monospaced))
+                    .tracking(1.0)
                     .foregroundColor(.white.opacity(0.55))
                 Spacer()
                 Text("FOCUS貫通")
-                    .font(.system(size: 8, design: .monospaced))
-                    .tracking(1.4)
+                    .font(.system(size: 9, design: .monospaced))
+                    .tracking(1.0)
                     .foregroundColor(.white.opacity(0.55))
             }
         }
+        .padding(.bottom, 2)
     }
 }
 

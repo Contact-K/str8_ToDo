@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		FF0000000000000000000104 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* AppSettings.swift */; };
-		FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000105 /* CalendarSettingsView.swift */; };
 		FF0000000000000000000108 /* CategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* CategoryPickerView.swift */; };
 		FF000000000000000000010A /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* Color+Hex.swift */; };
 		FF000000000000000000010C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* ContentView.swift */; };
@@ -66,6 +65,9 @@
 		FF0000000000000000000909 /* ShareInboxWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000904 /* ShareInboxWriter.swift */; };
 		FF000000000000000000090A /* ShareInboxWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000904 /* ShareInboxWriter.swift */; };
 		FF000000000000000000090B /* ShareInboxDrainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000907 /* ShareInboxDrainer.swift */; };
+		FF0000000000000000000921 /* S8Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000304 /* S8Tokens.swift */; };
+		FF0000000000000000000922 /* S8Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000306 /* S8Components.swift */; };
+		FF0000000000000000000923 /* ShareComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000920 /* ShareComposeView.swift */; };
 		FF0000000000000000000917 /* AttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000916 /* AttachmentStore.swift */; };
 		FF0000000000000000000204 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000203 /* WidgetShared.swift */; };
 		FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000205 /* WidgetSnapshotService.swift */; };
@@ -91,6 +93,10 @@
 		FF0000000000000000000502 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
 		FF0000000000000000000503 /* TimerActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000501 /* TimerActivity.swift */; };
 		FF0000000000000000000602 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000601 /* SettingsRootView.swift */; };
+		FF0000000000000000000604 /* TimetableSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000603 /* TimetableSettingsView.swift */; };
+		FF0000000000000000000606 /* CategoryColorSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000605 /* CategoryColorSettingsView.swift */; };
+		FF0000000000000000000608 /* BackupSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000607 /* BackupSettingsView.swift */; };
+		FF000000000000000000060A /* CalendarSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000609 /* CalendarSelectionView.swift */; };
 		FF0000000000000000000702 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000701 /* PermissionManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -130,7 +136,6 @@
 		A116F6232FE51E57005A6590 /* str(8) ToDo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "str(8) ToDo.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A116F6B42FECC2F5005A6590 /* str(8) ToDo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "str(8) ToDo.entitlements"; sourceTree = "<group>"; };
 		FF0000000000000000000103 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
-		FF0000000000000000000105 /* CalendarSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000107 /* CategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPickerView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000109 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		FF000000000000000000010B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -191,6 +196,7 @@
 		FF0000000000000000000902 /* str8Share.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = str8Share.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000000000000000000903 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		FF0000000000000000000904 /* ShareInboxWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInboxWriter.swift; sourceTree = "<group>"; };
+		FF0000000000000000000920 /* ShareComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposeView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000905 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FF0000000000000000000906 /* str8Share.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = str8Share.entitlements; sourceTree = "<group>"; };
 		FF0000000000000000000907 /* ShareInboxDrainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInboxDrainer.swift; sourceTree = "<group>"; };
@@ -213,6 +219,10 @@
 		FF0000000000000000000308 /* S8Wheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S8Wheel.swift; sourceTree = "<group>"; };
 		FF0000000000000000000501 /* TimerActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivity.swift; sourceTree = "<group>"; };
 		FF0000000000000000000601 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000603 /* TimetableSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimetableSettingsView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000605 /* CategoryColorSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryColorSettingsView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000607 /* BackupSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSettingsView.swift; sourceTree = "<group>"; };
+		FF0000000000000000000609 /* CalendarSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSelectionView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000701 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -266,6 +276,7 @@
 			children = (
 				FF0000000000000000000903 /* ShareViewController.swift */,
 				FF0000000000000000000904 /* ShareInboxWriter.swift */,
+				FF0000000000000000000920 /* ShareComposeView.swift */,
 				FF0000000000000000000905 /* Info.plist */,
 				FF0000000000000000000906 /* str8Share.entitlements */,
 			);
@@ -283,7 +294,6 @@
 				FF0000000000000000000152 /* BackupService.swift */,
 				FF000000000000000000012C /* BandModels.swift */,
 				FF0000000000000000000156 /* DepartureService.swift */,
-				FF0000000000000000000105 /* CalendarSettingsView.swift */,
 				FF0000000000000000000136 /* CapsuleOverlay.swift */,
 				FF000000000000000000014A /* ChopDetector.swift */,
 				FF0000000000000000000107 /* CategoryPickerView.swift */,
@@ -342,6 +352,10 @@
 				FF0000000000000000000203 /* WidgetShared.swift */,
 				FF0000000000000000000501 /* TimerActivity.swift */,
 				FF0000000000000000000601 /* SettingsRootView.swift */,
+				FF0000000000000000000603 /* TimetableSettingsView.swift */,
+				FF0000000000000000000605 /* CategoryColorSettingsView.swift */,
+				FF0000000000000000000607 /* BackupSettingsView.swift */,
+				FF0000000000000000000609 /* CalendarSelectionView.swift */,
 				FF0000000000000000000701 /* PermissionManager.swift */,
 				FF0000000000000000000205 /* WidgetSnapshotService.swift */,
 				FF0000000000000000000304 /* S8Tokens.swift */,
@@ -505,7 +519,6 @@
 				FF0000000000000000000153 /* BackupService.swift in Sources */,
 				FF000000000000000000012D /* BandModels.swift in Sources */,
 				FF0000000000000000000157 /* DepartureService.swift in Sources */,
-				FF0000000000000000000106 /* CalendarSettingsView.swift in Sources */,
 				FF0000000000000000000137 /* CapsuleOverlay.swift in Sources */,
 				FF000000000000000000014B /* ChopDetector.swift in Sources */,
 				FF0000000000000000000108 /* CategoryPickerView.swift in Sources */,
@@ -562,6 +575,10 @@
 				FF0000000000000000000204 /* WidgetShared.swift in Sources */,
 				FF0000000000000000000502 /* TimerActivity.swift in Sources */,
 				FF0000000000000000000602 /* SettingsRootView.swift in Sources */,
+				FF0000000000000000000604 /* TimetableSettingsView.swift in Sources */,
+				FF0000000000000000000606 /* CategoryColorSettingsView.swift in Sources */,
+				FF0000000000000000000608 /* BackupSettingsView.swift in Sources */,
+				FF000000000000000000060A /* CalendarSelectionView.swift in Sources */,
 				FF0000000000000000000702 /* PermissionManager.swift in Sources */,
 				FF0000000000000000000206 /* WidgetSnapshotService.swift in Sources */,
 				FF0000000000000000000305 /* S8Tokens.swift in Sources */,
@@ -591,6 +608,9 @@
 			files = (
 				FF0000000000000000000908 /* ShareViewController.swift in Sources */,
 				FF0000000000000000000909 /* ShareInboxWriter.swift in Sources */,
+				FF0000000000000000000921 /* S8Tokens.swift in Sources */,
+				FF0000000000000000000922 /* S8Components.swift in Sources */,
+				FF0000000000000000000923 /* ShareComposeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

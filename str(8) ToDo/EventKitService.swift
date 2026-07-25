@@ -35,6 +35,10 @@ final class EventKitService {
     private let pastDays = 7
     private let futureDays = 60
 
+    var eventCalendars: [EKCalendar] {
+        store.calendars(for: .event)
+    }
+
     init() {
         refreshAuthState()
     }
@@ -76,6 +80,7 @@ final class EventKitService {
     /// 端末カレンダーを読み取り、SwiftData にミラーする。
     /// - Parameter context: 書き込み先の ModelContext。
     func sync(into context: ModelContext) {
+        guard UserDefaults.standard.bool(forKey: AppSettingsKey.syncSystemCalendar) else { return }
         guard authState == .authorized else { return }
 
         let now = Date.now
@@ -85,8 +90,9 @@ final class EventKitService {
             let end = cal.date(byAdding: .day, value: futureDays, to: now)
         else { return }
 
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        let events = store.events(matching: predicate)
+        let excluded = Set(UserDefaults.standard.stringArray(forKey: AppSettingsKey.excludedCalendarIDs) ?? [])
+        let calendars = store.calendars(for: .event).filter { !excluded.contains($0.calendarIdentifier) }
+        let events = calendars.isEmpty ? [] : store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: calendars))
 
         // 既存ミラーを複合キー（eventIdentifier#開始秒）で索引化。
         // 同一キーが複数あれば最初の1件を残して掃除（過去の増殖分の後始末）。
@@ -143,6 +149,12 @@ final class EventKitService {
             context.delete(task)
         }
 
+        try? context.save()
+    }
+
+    func purgeMirrors(from context: ModelContext) {
+        let mirrors = (try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.isFromEventKit }))) ?? []
+        for t in mirrors { context.delete(t) }
         try? context.save()
     }
 

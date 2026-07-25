@@ -26,6 +26,8 @@ enum ShareInboxDrainer {
             }
             let task = TaskItem(
                 title: item.title,
+                startDate: item.startDate,
+                duration: item.startDate != nil ? Double((item.durationMin ?? 60) * 60) : 0,
                 phase: .today,
                 notes: item.notes,
                 attachmentPaths: item.attachmentPaths

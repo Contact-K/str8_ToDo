@@ -3,8 +3,8 @@
 //  str(8) ToDo
 //
 //  ホイール6番目タブの設定画面。str(8)_Talk S8Profile.swift の S8SetRow パターンに倣った
-//  Handoff スタイル（トップバー + セクション + 各行）。旧 CalendarSettingsView の複雑な機能
-//  （時間割編集・バックアップ・カテゴリ色編集）は NavigationLink 経由で呼び出す。
+//  Handoff スタイル（トップバー + セクション + 各行）。時間割編集・バックアップ・
+//  カテゴリ色編集は専用シート経由で呼び出す。
 //
 
 import SwiftUI
@@ -27,7 +27,11 @@ struct SettingsRootView: View {
 
     @State private var eventKit = EventKitService()
     @State private var showDictionary = false
-    @State private var showAdvancedSettings = false
+    @State private var showTimetableSettings = false
+    @State private var showCategoryColorSettings = false
+    @State private var showBackupSettings = false
+    @State private var showCalendarSelection = false
+    @State private var showOtherCalendars = false
     // プロフィール編集シート。nil=非表示、"new"=新規追加、Profile=既存編集。
     @State private var editingProfile: Profile? = nil
     @State private var showNewProfile: Bool = false
@@ -48,13 +52,45 @@ struct SettingsRootView: View {
                         S8Toggle(on: syncSystemCalendar) {
                             syncSystemCalendar.toggle()
                             if syncSystemCalendar {
-                                Task { _ = await eventKit.requestAccess() }
+                                Task {
+                                    if await eventKit.requestAccess() {
+                                        eventKit.sync(into: context)
+                                    }
+                                }
+                            } else {
+                                eventKit.purgeMirrors(from: context)
                             }
                         }
+                    }
+                    if syncSystemCalendar {
+                        S8Rule()
+                        S8SetRow(icon: "calendar", label: "同期するカレンダー", trailing: {
+                            S8Icon(name: "chevron-right", size: 16, color: c.fg3)
+                        }, onTap: { showCalendarSelection = true })
                     }
                     S8Rule()
                     S8SetRow(icon: "bell", label: "通知を有効化") {
                         S8Toggle(on: enableNotifications) { enableNotifications.toggle() }
+                    }
+                    S8Rule()
+                    S8SetRow(icon: "info", label: "他のカレンダー（Google・Outlook等）", trailing: {
+                        S8Icon(name: showOtherCalendars ? "chevron-down" : "chevron-right", size: 16, color: c.fg3)
+                    }, onTap: { showOtherCalendars.toggle() })
+                    if showOtherCalendars {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("iOSの「設定 > アプリ > カレンダー > アカウント」でGoogleやOutlookのアカウントを追加すると、そのカレンダーの予定もこのアプリに自動で表示されます。")
+                                .font(S8Font.jp(13))
+                                .foregroundColor(c.fg2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            S8Button("カレンダー設定を開く", icon: "settings", variant: .secondary) {
+                                // ponytail: 非公開スキーム（App Store申請時は openSettingsURLString のみに戻す）。開けなければ自アプリ設定へフォールバック
+                                UIApplication.shared.open(URL(string: "App-Prefs:com.apple.mobilecal")!) { ok in
+                                    if !ok { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 15)
                     }
 
                     // MARK: - 表示
@@ -68,7 +104,16 @@ struct SettingsRootView: View {
                     }
 
                     // タイマープリセットは Timer タブ内へ移設（2026-07-14）。
-                    // マイ時間割・曜日割当は Calendar タブ内 週ビューヘッダから開く CalendarSettingsView へ集約。
+
+                    // MARK: - カレンダー
+                    S8SectionLabel(text: "カレンダー")
+                    S8SetRow(icon: "calendar", label: "時間割", trailing: {
+                        S8Icon(name: "chevron-right", size: 16, color: c.fg3)
+                    }, onTap: { showTimetableSettings = true })
+                    S8Rule()
+                    S8SetRow(icon: "palette", label: "カテゴリ色", trailing: {
+                        S8Icon(name: "chevron-right", size: 16, color: c.fg3)
+                    }, onTap: { showCategoryColorSettings = true })
 
                     // MARK: - 入力
                     S8SectionLabel(text: "入力の設定")
@@ -94,12 +139,10 @@ struct SettingsRootView: View {
                     }, onTap: { showNewProfile = true })
 
                     // MARK: - バックアップ
-                    // ponytail 2026-07-14: 詳細シートを「バックアップ」に集約。マイ時間割は Calendar タブへ移設済。
-                    // フル抽出は次サイクル（現状は同じ CalendarSettingsView を開いてバックアップ操作のみ想定）。
                     S8SectionLabel(text: "バックアップ")
                     S8SetRow(icon: "share", label: "エクスポート／インポート", trailing: {
                         S8Icon(name: "chevron-right", size: 16, color: c.fg3)
-                    }, onTap: { showAdvancedSettings = true })
+                    }, onTap: { showBackupSettings = true })
 
                     Color.clear.frame(height: 32)
                 }
@@ -109,8 +152,17 @@ struct SettingsRootView: View {
         .sheet(isPresented: $showDictionary) {
             NavigationStack { DictionarySettingsView() }
         }
-        .sheet(isPresented: $showAdvancedSettings) {
-            NavigationStack { CalendarSettingsView() }
+        .sheet(isPresented: $showTimetableSettings) {
+            NavigationStack { TimetableSettingsView() }
+        }
+        .sheet(isPresented: $showCategoryColorSettings) {
+            NavigationStack { CategoryColorSettingsView() }
+        }
+        .sheet(isPresented: $showBackupSettings) {
+            NavigationStack { BackupSettingsView() }
+        }
+        .sheet(isPresented: $showCalendarSelection) {
+            NavigationStack { CalendarSelectionView(eventKit: eventKit) }
         }
         .sheet(item: $editingProfile) { profile in
             ProfileEditSheet(profile: profile, isNew: false)

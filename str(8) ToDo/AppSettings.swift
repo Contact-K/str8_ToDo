@@ -5,6 +5,7 @@ import CoreLocation
 enum AppSettingsKey {
     static let syncSystemCalendar = "syncSystemCalendar"
     static let syncSystemCalendarDefault = false
+    static let excludedCalendarIDs = "excludedCalendarIDs"
 
     static let enableNotifications = "enableNotifications"
     static let enableNotificationsDefault = true
@@ -25,7 +26,7 @@ enum AppSettingsKey {
     static let enableDictionarySuggestions = "enableDictionarySuggestions"
     static let enableDictionarySuggestionsDefault = true
 
-    /// タイマープリセット分数（設定画面から編集）。SettingsRootView/CalendarSettingsView が参照。
+    /// タイマープリセット分数（設定画面から編集）。SettingsRootView/TimerView が参照。
     /// ショップで枠を購入すると 4/5/6 番目が有効になる（ShopManager.presetCap）。
     static let timerPreset1 = "timerPreset1"
     static let timerPreset1Default = 25
